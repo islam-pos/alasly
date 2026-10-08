@@ -20,6 +20,7 @@ import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { exportToExcel, exportToPdf } from '../../utils/exports';
 import { readExcelRows } from '../../utils/excelImport';
+import { printBarcodeLabels } from '../../utils/barcodePrint';
 
 const itemExportColumns = [
   ['SKU', (item: any) => item.sku],
@@ -180,6 +181,16 @@ export const ItemsCatalog: React.FC = () => {
     }
   };
 
+  const handlePrintBarcodes = (selectedItems: any[]) => {
+    try {
+      const result = printBarcodeLabels(selectedItems);
+      if (result === 'empty') error('لا توجد أصناف لطباعة باركودها');
+      if (result === 'blocked') error('يرجى السماح بالنوافذ المنبثقة لطباعة ملصقات الباركود');
+    } catch (printError: any) {
+      error(printError.message || 'تعذرت طباعة ملصقات الباركود');
+    }
+  };
+
   const handleImportItems = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -259,6 +270,14 @@ export const ItemsCatalog: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => handlePrintBarcodes(filteredItems)}
+            disabled={filteredItems.length === 0}
+            className="flex items-center gap-2 px-3 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-xs font-bold disabled:opacity-50"
+          >
+            <Barcode className="w-4 h-4" />
+            <span>طباعة باركود النتائج</span>
+          </button>
           <input
             ref={importInputRef}
             type="file"
@@ -364,18 +383,19 @@ export const ItemsCatalog: React.FC = () => {
                 <th className="p-3.5">سعر البيع</th>
                 <th className="p-3.5">المخزون المتاح</th>
                 <th className="p-3.5">حد الطلب</th>
+                <th className="p-3.5">الباركود</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-slate-400">
+                  <td colSpan={10} className="p-8 text-center text-slate-400">
                     جاري تحميل كتالوج الأصناف...
                   </td>
                 </tr>
               ) : filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center text-slate-400">
+                  <td colSpan={10} className="p-12 text-center text-slate-400">
                     لا توجد أصناف مطابقة للبحث
                   </td>
                 </tr>
@@ -409,6 +429,17 @@ export const ItemsCatalog: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-3.5 text-slate-400 font-mono">{item.minStock}</td>
+                    <td className="p-3.5">
+                      <button
+                        type="button"
+                        onClick={() => handlePrintBarcodes([item])}
+                        aria-label={`طباعة باركود ${item.nameAr}`}
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-blue-700 hover:bg-blue-50"
+                      >
+                        <Printer className="h-4 w-4" />
+                        <span>طباعة</span>
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}

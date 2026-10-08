@@ -64,9 +64,9 @@ async function main() {
       name: 'مركز المحترف لصيانة السيارات وقطع الغيار',
       taxNumber: '310245897100003',
       commercialRegister: '1010892341',
-      address: 'طريق الملك عبدالعزيز، حي المروج',
-      city: 'الرياض',
-      country: 'المملكة العربية السعودية',
+      address: 'القاهرة، جمهورية مصر العربية',
+      city: 'القاهرة',
+      country: 'جمهورية مصر العربية',
       phone: '0112345678',
       mobile: '0501234567',
       email: 'info@autocare-center.com',
@@ -85,8 +85,8 @@ async function main() {
   const branchRiyadh = await prisma.branch.create({
     data: {
       code: 'BR-01',
-      name: 'الفرع الرئيسي - الرياض (طريق الملك عبدالعزيز)',
-      address: 'حي المروج، تقاطع الملك عبدالعزيز مع الإمام سعود',
+      name: 'الفرع الرئيسي - القاهرة',
+      address: 'القاهرة، جمهورية مصر العربية',
       phone: '0112345678',
       isMain: true,
       active: true,
@@ -96,8 +96,8 @@ async function main() {
   const branchJeddah = await prisma.branch.create({
     data: {
       code: 'BR-02',
-      name: 'فرع الصيانة السريعة - جدة (حي الصفا)',
-      address: 'شارع الأربعين، حي الصفا',
+      name: 'فرع الصيانة السريعة - الإسكندرية',
+      address: 'الإسكندرية، جمهورية مصر العربية',
       phone: '0129876543',
       isMain: false,
       active: true,

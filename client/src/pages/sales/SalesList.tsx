@@ -18,6 +18,7 @@ import {
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { exportToExcel, exportToPdf, formatExportDate } from '../../utils/exports';
+import { printSalesInvoice } from '../../utils/invoicePrint';
 
 export const SalesList: React.FC = () => {
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -25,6 +26,7 @@ export const SalesList: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [company, setCompany] = useState<any>(null);
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [returnReason, setReturnReason] = useState('');
 
@@ -36,6 +38,12 @@ export const SalesList: React.FC = () => {
     if (typeParam) setTypeFilter(typeParam);
     loadInvoices();
   }, [searchParams]);
+
+  useEffect(() => {
+    api.master.getCompany()
+      .then((response) => setCompany(response.data))
+      .catch((err: any) => error(err.message || 'تعذر تحميل إعدادات الطباعة'));
+  }, []);
 
   const loadInvoices = async () => {
     setLoading(true);
@@ -107,6 +115,15 @@ export const SalesList: React.FC = () => {
       exportToExcel('فواتير-المبيعات', rows.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']))));
     } else {
       exportToPdf('فواتير المبيعات', headers, rows);
+    }
+  };
+
+  const handlePrintInvoice = (invoice: any) => {
+    try {
+      const result = printSalesInvoice(invoice, company, company?.printSettings);
+      if (result === 'blocked') error('يرجى السماح بالنوافذ المنبثقة لطباعة الفاتورة');
+    } catch (printError: any) {
+      error(printError.message || 'تعذرت طباعة الفاتورة');
     }
   };
 
@@ -332,7 +349,7 @@ export const SalesList: React.FC = () => {
 
             <div className="flex justify-between pt-2">
               <button
-                onClick={() => window.print()}
+                onClick={() => handlePrintInvoice(selectedInvoice)}
                 className="px-4 py-2 bg-slate-900 text-white font-bold rounded-xl text-xs flex items-center gap-1.5"
               >
                 <Printer className="w-4 h-4" />

@@ -20,6 +20,10 @@ Supplier and customer creation forms can create a linked account for the other r
 
 The global search and text-entry fields provide live suggestions from matching customer, supplier, employee, vehicle, item, stock-location, invoice, and repair-order data. The item catalog can be exported to Excel-compatible `.xls` or printable PDF, and imports `.xlsx` workbooks or the system's Excel `.xls` format. Download the Excel template first; rows with duplicate SKU/barcodes or invalid category/unit values are skipped and included in the import report.
 
+## Egypt location and printing
+
+Company and branch defaults use Egypt. Existing seeded company and branch locations are migrated to Cairo and Alexandria at server startup; customer and supplier records are left unchanged. Company settings include paper size (A4, A5, 80 mm, or 58 mm), standard or thermal layout, company-name visibility, and invoice-field visibility. Browser print dialogs still control the physical printer selection. Barcode labels use scannable Code 128 and can be printed individually or for the filtered item results from the item catalog and inventory pages; item storage locations can also be edited from the inventory table.
+
 ## Local builds
 
 ```powershell

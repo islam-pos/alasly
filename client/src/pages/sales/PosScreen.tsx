@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { printSalesInvoice } from '../../utils/invoicePrint';
 
 export const PosScreen: React.FC = () => {
   const [items, setItems] = useState<any[]>([]);
@@ -33,6 +34,7 @@ export const PosScreen: React.FC = () => {
   const [cashPaid, setCashPaid] = useState<number>(0);
   const [cardPaid, setCardPaid] = useState<number>(0);
   const [completedInvoice, setCompletedInvoice] = useState<any>(null);
+  const [company, setCompany] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const { success, error } = useToast();
@@ -44,14 +46,16 @@ export const PosScreen: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [itemsRes, catRes, cusRes] = await Promise.all([
+      const [itemsRes, catRes, cusRes, companyRes] = await Promise.all([
         api.getItems(),
         api.getCategories(),
         api.getCustomers(),
+        api.master.getCompany(),
       ]);
       setItems(itemsRes.data);
       setCategories(catRes.data);
       setCustomers(cusRes.data);
+      setCompany(companyRes.data);
     } catch (err) {
       console.error(err);
     }
@@ -180,6 +184,15 @@ export const PosScreen: React.FC = () => {
       error(err.message || 'فشلت عملية البيع');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePrintInvoice = () => {
+    try {
+      const result = printSalesInvoice(completedInvoice, company, company?.printSettings);
+      if (result === 'blocked') error('يرجى السماح بالنوافذ المنبثقة لطباعة الفاتورة');
+    } catch (printError: any) {
+      error(printError.message || 'تعذرت طباعة الفاتورة');
     }
   };
 
@@ -595,7 +608,7 @@ export const PosScreen: React.FC = () => {
 
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => window.print()}
+                onClick={handlePrintInvoice}
                 className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5"
               >
                 <Printer className="w-4 h-4" />

@@ -4,6 +4,31 @@ import { logAudit } from '../middleware/audit';
 
 const router = Router();
 
+router.put('/items/:id/location', async (req, res) => {
+  const location = req.body?.location;
+  if (typeof location !== 'string' || location.length > 120) {
+    return res.status(400).json({ error: 'موقع الصنف يجب أن يكون نصاً لا يتجاوز 120 حرفاً' });
+  }
+
+  try {
+    const item = await prisma.item.update({
+      where: { id: req.params.id },
+      data: { defaultLocation: location.trim() || null },
+      select: { id: true, nameAr: true, defaultLocation: true },
+    });
+    await logAudit({
+      action: 'UPDATE',
+      entity: 'Item',
+      entityId: item.id,
+      details: `تحديث موقع تخزين الصنف: ${item.nameAr}`,
+    });
+    res.json(item);
+  } catch (err: any) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'الصنف غير موجود' });
+    res.status(500).json({ error: 'تعذر تحديث موقع الصنف' });
+  }
+});
+
 // --- Live Stock Balances across Warehouses ---
 router.get('/balances', async (req, res) => {
   try {

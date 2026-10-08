@@ -13,9 +13,9 @@ model CompanySetting {
   logoUrl            String?
   taxNumber          String   @default("310245897100003")
   commercialRegister String   @default("1010892341")
-  address            String   @default("طريق الملك عبدالعزيز، حي المروج")
-  city               String   @default("الرياض")
-  country            String   @default("المملكة العربية السعودية")
+  address            String   @default("القاهرة، جمهورية مصر العربية")
+  city               String   @default("القاهرة")
+  country            String   @default("جمهورية مصر العربية")
   phone              String   @default("0112345678")
   mobile             String   @default("0501234567")
   email              String   @default("info@autocare-center.com")
@@ -26,6 +26,7 @@ model CompanySetting {
   invoiceHeader      String?  @default("أهلاً بكم في مركز المحترف لخدمات وصيانة السيارات")
   invoiceFooter      String?  @default("الضمان يشمل قطع الغيار الأصلية لمدة شهر من تاريخ الفاتورة")
   termsAndConditions String?
+  printSettings      String   @default("{}")
   updatedAt          DateTime @updatedAt
 }
 

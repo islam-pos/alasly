@@ -1,3 +1,5 @@
+import { getPaperSizeCss, parsePrintSettings } from './printSettings';
+
 export type ExportRow = Record<string, string | number | boolean | null | undefined>;
 
 export const exportToExcel = (filename: string, rows: ExportRow[]) => {
@@ -60,6 +62,11 @@ export const exportToPdf = (title: string, headers: string[], rows: unknown[][])
   const bodyHtml = rows
     .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
     .join('');
+  const printSettings = parsePrintSettings(localStorage.getItem('alasly-print-settings'));
+  const companyData = localStorage.getItem('alasly-print-company');
+  const companyName = printSettings.showCompanyName && companyData
+    ? escapeHtml(JSON.parse(companyData).name || '')
+    : '';
   printWindow.document.open();
   printWindow.document.write(`<!doctype html>
     <html lang="ar" dir="rtl">
@@ -68,14 +75,17 @@ export const exportToPdf = (title: string, headers: string[], rows: unknown[][])
         <title>${escapeHtml(title)}</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
+          .company { font-size: 14px; font-weight: bold; margin-bottom: 8px; }
           h1 { font-size: 20px; margin-bottom: 18px; }
           table { border-collapse: collapse; width: 100%; font-size: 12px; }
           th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: right; }
           th { background: #f1f5f9; }
-          @media print { body { margin: 10mm; } }
+          @page { size: ${getPaperSizeCss(printSettings.paperSize)}; margin: ${printSettings.printerType === 'THERMAL' ? '4mm' : '14mm'}; }
+          @media print { body { margin: 0; } }
         </style>
       </head>
       <body>
+        ${companyName ? `<div class="company">${companyName}</div>` : ''}
         <h1>${escapeHtml(title)}</h1>
         <table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>
         <script>window.addEventListener('load', () => setTimeout(() => window.print(), 150));</script>

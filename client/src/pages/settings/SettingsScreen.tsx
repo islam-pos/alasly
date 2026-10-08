@@ -2,12 +2,36 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Settings, Building, ShieldCheck, History, 
-  Save, Plus, MapPin, Phone, Mail, CheckCircle2, 
+  Save, Plus, MapPin, Phone, Mail, CheckCircle2, Printer,
   Users, Key, FileText, Search
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import { defaultPrintSettings, parsePrintSettings, type PrintSettings } from '../../utils/printSettings';
+
+const invoicePrintFieldLabels: { key: keyof PrintSettings['invoiceFields']; label: string }[] = [
+  { key: 'companyAddress', label: 'عنوان المنشأة' },
+  { key: 'companyPhone', label: 'هاتف المنشأة' },
+  { key: 'companyTaxNumber', label: 'الرقم الضريبي للمنشأة' },
+  { key: 'commercialRegister', label: 'السجل التجاري' },
+  { key: 'invoiceDate', label: 'تاريخ ووقت الفاتورة' },
+  { key: 'customerName', label: 'اسم العميل' },
+  { key: 'customerPhone', label: 'هاتف العميل' },
+  { key: 'customerTaxNumber', label: 'الرقم الضريبي للعميل' },
+  { key: 'vehicleDetails', label: 'بيانات المركبة' },
+  { key: 'paymentMethod', label: 'طريقة الدفع' },
+  { key: 'itemCode', label: 'كود الصنف' },
+  { key: 'quantity', label: 'الكمية' },
+  { key: 'unitPrice', label: 'سعر الوحدة' },
+  { key: 'lineTax', label: 'ضريبة كل بند' },
+  { key: 'lineTotal', label: 'إجمالي كل بند' },
+  { key: 'subtotal', label: 'المجموع الفرعي' },
+  { key: 'discount', label: 'الخصم' },
+  { key: 'taxTotal', label: 'إجمالي الضريبة' },
+  { key: 'grandTotal', label: 'الإجمالي النهائي' },
+  { key: 'footer', label: 'تذييل الفاتورة' },
+];
 
 export const SettingsScreen: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -33,7 +57,7 @@ export const SettingsScreen: React.FC = () => {
     code: '',
     phone: '',
     address: '',
-    city: 'الرياض'
+    city: 'القاهرة'
   });
 
   const [auditFilterAction, setAuditFilterAction] = useState('');
@@ -48,7 +72,10 @@ export const SettingsScreen: React.FC = () => {
         api.settings.getPermissions(),
         api.settings.getAuditLogs({ action: auditFilterAction })
       ]);
-      setCompany(compRes.data);
+      const printSettings = parsePrintSettings(compRes.data.printSettings || defaultPrintSettings);
+      setCompany({ ...compRes.data, printSettings });
+      localStorage.setItem('alasly-print-settings', JSON.stringify(printSettings));
+      localStorage.setItem('alasly-print-company', JSON.stringify(compRes.data));
       setBranches(brRes.data);
       setRoles(rRes.data);
       setPermissions(permRes.data);
@@ -95,7 +122,15 @@ export const SettingsScreen: React.FC = () => {
   const handleSaveCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.master.updateCompany(company);
+      const printSettings = parsePrintSettings(company.printSettings);
+      const companyForPrint = { ...company, printSettings };
+      await api.master.updateCompany({
+        ...companyForPrint,
+        printSettings: JSON.stringify(printSettings),
+      });
+      setCompany(companyForPrint);
+      localStorage.setItem('alasly-print-settings', JSON.stringify(printSettings));
+      localStorage.setItem('alasly-print-company', JSON.stringify(companyForPrint));
       showToast('تم حفظ بيانات المنشأة والضريبة بنجاح', 'success');
     } catch (err: any) {
       showToast(err.response?.data?.error || 'فشل حفظ البيانات', 'error');
@@ -109,7 +144,7 @@ export const SettingsScreen: React.FC = () => {
       await api.master.createBranch(branchForm);
       showToast('تمت إضافة الفرع بنجاح', 'success');
       setIsBranchModalOpen(false);
-      setBranchForm({ name: '', code: '', phone: '', address: '', city: 'الرياض' });
+      setBranchForm({ name: '', code: '', phone: '', address: '', city: 'القاهرة' });
       loadData();
     } catch (err: any) {
       showToast(err.response?.data?.error || 'فشل إضافة الفرع', 'error');
@@ -294,16 +329,122 @@ export const SettingsScreen: React.FC = () => {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">المدينة:</label>
+                <input
+                  type="text"
+                  value={company.city || ''}
+                  onChange={(e) => setCompany({ ...company, city: e.target.value })}
+                  placeholder="القاهرة"
+                  className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">الدولة:</label>
+                <input
+                  type="text"
+                  value={company.country || ''}
+                  onChange={(e) => setCompany({ ...company, country: e.target.value })}
+                  placeholder="جمهورية مصر العربية"
+                  className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">العنوان الوطني / التفصيلي:</label>
               <input
                 type="text"
                 value={company.address || ''}
                 onChange={(e) => setCompany({ ...company, address: e.target.value })}
-                placeholder="الرياض - حي الصناعية القديمة - شارع المنتزه..."
+                placeholder="القاهرة، جمهورية مصر العربية"
                 className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
               />
             </div>
+
+            <section className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="flex items-center gap-2">
+                <Printer className="h-5 w-5 text-blue-700" />
+                <div>
+                  <h3 className="font-bold text-slate-900">إعدادات الطباعة</h3>
+                  <p className="text-xs text-slate-500">تؤثر على الفواتير وملصقات الباركود. اختيار الطابعة الفعلية يتم من نافذة الطباعة بالمتصفح.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="space-y-1 text-xs font-bold text-slate-700">
+                  <span className="block">نوع الطابعة</span>
+                  <select
+                    value={company.printSettings?.printerType || defaultPrintSettings.printerType}
+                    onChange={(e) => setCompany({
+                      ...company,
+                      printSettings: { ...parsePrintSettings(company.printSettings), printerType: e.target.value as PrintSettings['printerType'] },
+                    })}
+                    className="w-full rounded-xl border bg-white px-3 py-2 text-sm font-normal"
+                  >
+                    <option value="STANDARD">عادية (ليزر / نفث حبر)</option>
+                    <option value="THERMAL">حرارية</option>
+                  </select>
+                </label>
+
+                <label className="space-y-1 text-xs font-bold text-slate-700">
+                  <span className="block">مقاس الورق</span>
+                  <select
+                    value={company.printSettings?.paperSize || defaultPrintSettings.paperSize}
+                    onChange={(e) => setCompany({
+                      ...company,
+                      printSettings: { ...parsePrintSettings(company.printSettings), paperSize: e.target.value as PrintSettings['paperSize'] },
+                    })}
+                    className="w-full rounded-xl border bg-white px-3 py-2 text-sm font-normal"
+                  >
+                    <option value="A4">A4</option>
+                    <option value="A5">A5</option>
+                    <option value="THERMAL_80">حراري 80 مم</option>
+                    <option value="THERMAL_58">حراري 58 مم</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={company.printSettings?.showCompanyName ?? true}
+                  onChange={(e) => setCompany({
+                    ...company,
+                    printSettings: { ...parsePrintSettings(company.printSettings), showCompanyName: e.target.checked },
+                  })}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                إظهار اسم المنشأة على المطبوعات
+              </label>
+
+              <div>
+                <h4 className="mb-2 text-xs font-bold text-slate-700">الحقول الظاهرة في الفاتورة</h4>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {invoicePrintFieldLabels.map(({ key, label }) => (
+                    <label key={key} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={company.printSettings?.invoiceFields?.[key] ?? true}
+                        onChange={(e) => {
+                          const current = parsePrintSettings(company.printSettings);
+                          setCompany({
+                            ...company,
+                            printSettings: {
+                              ...current,
+                              invoiceFields: { ...current.invoiceFields, [key]: e.target.checked },
+                            },
+                          });
+                        }}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </section>
 
             <div className="pt-4 border-t">
               <button
@@ -538,7 +679,7 @@ export const SettingsScreen: React.FC = () => {
                   required
                   value={branchForm.name}
                   onChange={(e) => setBranchForm({ ...branchForm, name: e.target.value })}
-                  placeholder="مثال: فرع جدة - طريق المدينة"
+                  placeholder="مثال: فرع الإسكندرية - وسط البلد"
                   className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
                 />
               </div>
@@ -551,7 +692,7 @@ export const SettingsScreen: React.FC = () => {
                     required
                     value={branchForm.code}
                     onChange={(e) => setBranchForm({ ...branchForm, code: e.target.value })}
-                    placeholder="JED-01"
+                    placeholder="ALX-01"
                     className="w-full border rounded-xl px-3 py-2 text-sm outline-none font-mono"
                   />
                 </div>
@@ -584,7 +725,7 @@ export const SettingsScreen: React.FC = () => {
                   type="text"
                   value={branchForm.address}
                   onChange={(e) => setBranchForm({ ...branchForm, address: e.target.value })}
-                  placeholder="حي النعيم - شارع حراء..."
+                  placeholder="القاهرة، جمهورية مصر العربية"
                   className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
                 />
               </div>

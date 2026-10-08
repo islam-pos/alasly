@@ -306,6 +306,13 @@ const apiClient = {
     return fetch(`${BASE_URL}/inventory/balances?${query.toString()}`, { headers: getHeaders() }).then((res) => handleResponse<any>(res));
   },
 
+  updateItemLocation: (itemId: string, location: string) =>
+    fetch(`${BASE_URL}/inventory/items/${itemId}/location`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ location }),
+    }).then((res) => handleResponse<any>(res)),
+
   getTransfers: () =>
     fetch(`${BASE_URL}/inventory/transfers`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
@@ -493,6 +500,7 @@ export const api = Object.assign(apiClient, {
   },
   inventory: {
     getBalances: apiClient.getStockBalances,
+    updateItemLocation: apiClient.updateItemLocation,
     getTransfers: apiClient.getTransfers,
     createTransfer: apiClient.createTransfer,
     getCounts: apiClient.getCounts,

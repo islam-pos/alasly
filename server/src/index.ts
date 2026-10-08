@@ -19,6 +19,7 @@ import profitsRouter from './routes/profits';
 import searchRouter from './routes/search';
 import settingsRouter from './routes/settings';
 import { authenticate } from './middleware/auth';
+import { migrateEgyptianLocationDefaults } from './migrations/egyptianLocationDefaults';
 
 dotenv.config();
 
@@ -87,9 +88,16 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ error: err.message || 'حدث خطأ غير متوقع في الخادم' });
 });
 
-app.listen(PORT, () => {
-  console.log(`====================================================`);
-  console.log(`🚗 AutoCare ERP Backend Server running on port ${PORT}`);
-  console.log(`🔗 http://localhost:${PORT}`);
-  console.log(`====================================================`);
-});
+migrateEgyptianLocationDefaults()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`====================================================`);
+      console.log(`🚗 AutoCare ERP Backend Server running on port ${PORT}`);
+      console.log(`🔗 http://localhost:${PORT}`);
+      console.log(`====================================================`);
+    });
+  })
+  .catch((error) => {
+    console.error('Failed to migrate legacy company and branch locations:', error);
+    process.exitCode = 1;
+  });
