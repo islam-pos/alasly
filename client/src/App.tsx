@@ -21,6 +21,7 @@ import { ProfitsDashboard } from './pages/profits/ProfitsDashboard';
 import { JobCardDetail } from './pages/workshop/JobCardDetail';
 import { JobCardsList } from './pages/workshop/JobCardsList';
 import { VehicleProfile } from './pages/vehicles/VehicleProfile';
+import { SmartSearchSuggestions } from './components/layout/SmartSearchSuggestions';
 
 const LoadingScreen: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50" role="status">
@@ -37,6 +38,7 @@ const ProtectedLayout: React.FC = () => {
   return (
     <div dir="rtl" className="min-h-screen bg-slate-50">
       <Navbar />
+      <SmartSearchSuggestions />
       <div className="mx-auto flex max-w-[1700px] items-start gap-4 px-4 py-5">
         <QuickSidebar />
         <main className="min-w-0 flex-1">

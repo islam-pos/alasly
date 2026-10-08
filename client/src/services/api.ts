@@ -166,6 +166,13 @@ const apiClient = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
+  importItems: (rows: Record<string, unknown>[]) =>
+    fetch(`${BASE_URL}/items/import`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ rows }),
+    }).then((res) => handleResponse<{ created: number; duplicates: { row: number; sku: string; reason: string }[]; errors: { row: number; sku?: string; reason: string }[] }>(res)),
+
   updateItem: (id: string, data: any) =>
     fetch(`${BASE_URL}/items/${id}`, {
       method: 'PUT',
@@ -445,6 +452,10 @@ const apiClient = {
   // Global Search
   globalSearch: (q: string) =>
     fetch(`${BASE_URL}/search?q=${encodeURIComponent(q)}`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  getSmartSearchSuggestions: (q: string) =>
+    fetch(`${BASE_URL}/search/suggestions?q=${encodeURIComponent(q)}`, { headers: getHeaders() })
+      .then((res) => handleResponse<{ suggestions: { value: string; label: string }[] }>(res)),
 
   // Settings & Audit
   getAuditLogs: (params?: { action?: string; entity?: string; limit?: number }) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Package,
@@ -11,9 +11,36 @@ import {
   Check,
   X,
   Filter,
+  Download,
+  FileSpreadsheet,
+  Printer,
+  Upload,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { exportToExcel, exportToPdf } from '../../utils/exports';
+import { readExcelRows } from '../../utils/excelImport';
+
+const itemExportColumns = [
+  ['SKU', (item: any) => item.sku],
+  ['اسم الصنف', (item: any) => item.nameAr],
+  ['الاسم الإنجليزي', (item: any) => item.nameEn],
+  ['الباركود', (item: any) => item.barcode],
+  ['رقم القطعة', (item: any) => item.partNumber],
+  ['التصنيف', (item: any) => item.category?.name],
+  ['الوحدة', (item: any) => item.unit?.name],
+  ['الشركة المصنعة', (item: any) => item.manufacturer],
+  ['بلد المنشأ', (item: any) => item.countryOfOrigin],
+  ['موقع التخزين', (item: any) => item.defaultLocation],
+  ['المخزن الافتتاحي', () => ''],
+  ['رصيد افتتاحي', () => ''],
+  ['سعر الشراء', (item: any) => item.purchasePrice],
+  ['سعر البيع', (item: any) => item.sellPrice],
+  ['السعر الخاص', (item: any) => item.specialSellPrice],
+  ['الحد الأدنى', (item: any) => item.minStock],
+  ['الحد الأقصى', (item: any) => item.maxStock],
+  ['المخزون المتاح', (item: any) => item.availableQuantity ?? item.totalQuantity],
+] as const;
 
 export const ItemsCatalog: React.FC = () => {
   const [items, setItems] = useState<any[]>([]);
@@ -25,6 +52,13 @@ export const ItemsCatalog: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importReport, setImportReport] = useState<{
+    created: number;
+    duplicates: { row: number; sku: string; reason: string }[];
+    errors: { row: number; sku?: string; reason: string }[];
+  } | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // Form State
   const [formData, setFormData] = useState<any>({
@@ -128,6 +162,88 @@ export const ItemsCatalog: React.FC = () => {
     return matchesCat && matchesLow && matchesQuery;
   });
 
+  const exportItems = (format: 'excel' | 'pdf', template = false) => {
+    const headers = itemExportColumns.map(([header]) => header);
+    const rows = template ? [] : filteredItems.map((item) => itemExportColumns.map(([, value]) => value(item)));
+    try {
+      if (format === 'excel') {
+        const records = rows.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ''])));
+        exportToExcel(
+          'كتالوج-الأصناف',
+          records.length ? records : [Object.fromEntries(headers.map((header) => [header, '']))],
+        );
+      } else {
+        exportToPdf('كتالوج الأصناف', headers, rows);
+      }
+    } catch (exportError: any) {
+      error(exportError.message || 'تعذر تصدير الأصناف');
+    }
+  };
+
+  const handleImportItems = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const rows = await readExcelRows(file);
+      const normalizedHeaders = rows[0].map((header) => header.trim().toLocaleLowerCase());
+      const headerAliases: Record<string, string[]> = {
+        sku: ['sku', 'كود الصنف', 'كود sku', 'كود الصنف sku'],
+        nameAr: ['اسم الصنف', 'الاسم العربي', 'namear'],
+        nameEn: ['الاسم الإنجليزي', 'الاسم الانجليزي', 'nameen'],
+        barcode: ['الباركود', 'barcode'],
+        partNumber: ['رقم القطعة', 'part number', 'partnumber', 'oem'],
+        category: ['التصنيف', 'category'],
+        unit: ['الوحدة', 'unit'],
+        manufacturer: ['الشركة المصنعة', 'manufacturer'],
+        countryOfOrigin: ['بلد المنشأ', 'country of origin', 'countryoforigin'],
+        defaultLocation: ['موقع التخزين', 'موقع الرف', 'location'],
+        purchasePrice: ['سعر الشراء', 'purchase price', 'purchaseprice'],
+        sellPrice: ['سعر البيع', 'sell price', 'sellprice'],
+        specialSellPrice: ['السعر الخاص', 'special price', 'specialsellprice'],
+        minStock: ['الحد الأدنى', 'min stock', 'minstock'],
+        maxStock: ['الحد الأقصى', 'max stock', 'maxstock'],
+        initialStock: ['رصيد افتتاحي', 'المخزون الافتتاحي', 'initial stock', 'initialstock'],
+        warehouse: ['المخزن الافتتاحي', 'المخزن', 'warehouse'],
+      };
+      const columnIndices = Object.fromEntries(
+        Object.entries(headerAliases).map(([field, aliases]) => [
+          field,
+          normalizedHeaders.findIndex((header) => aliases.includes(header)),
+        ]),
+      );
+      const missingHeaders = ['sku', 'nameAr', 'category', 'unit'].filter((field) => columnIndices[field] < 0);
+      if (missingHeaders.length) {
+        throw new Error('الأعمدة المطلوبة في الملف هي: SKU، اسم الصنف، التصنيف، والوحدة');
+      }
+
+      const importRows = rows.slice(1)
+        .filter((row) => row.some((value) => value.trim()))
+        .map((row) =>
+          Object.fromEntries(
+            Object.entries(columnIndices)
+              .filter(([, column]) => column >= 0)
+              .map(([field, column]) => [field, row[column] || '']),
+          ),
+        );
+      if (!importRows.length) throw new Error('لم يتم العثور على صفوف أصناف أسفل عناوين الأعمدة');
+
+      const result = await api.importItems(importRows);
+      setImportReport(result);
+      if (result.created > 0) {
+        success(`تم استيراد ${result.created} صنف بنجاح`);
+        await loadData();
+      }
+      if (result.created === 0) success('اكتملت مراجعة ملف الأصناف؛ راجع تقرير الاستيراد');
+    } catch (importError: any) {
+      error(importError.message || 'تعذر استيراد ملف الأصناف');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
@@ -142,13 +258,52 @@ export const ItemsCatalog: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20"
-        >
-          <Plus className="w-4 h-4" />
-          <span>إضافة كارت صنف جديد</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleImportItems}
+            className="hidden"
+            aria-label="استيراد ملف أصناف Excel"
+          />
+          <button
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold disabled:opacity-60"
+          >
+            <Upload className="w-4 h-4" />
+            <span>{importing ? 'جاري الاستيراد...' : 'استيراد Excel'}</span>
+          </button>
+          <button
+            onClick={() => exportItems('excel')}
+            className="flex items-center gap-2 px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+          >
+            <Download className="w-4 h-4" />
+            <span>تصدير Excel</span>
+          </button>
+          <button
+            onClick={() => exportItems('pdf')}
+            className="flex items-center gap-2 px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+          >
+            <Printer className="w-4 h-4" />
+            <span>PDF</span>
+          </button>
+          <button
+            onClick={() => exportItems('excel', true)}
+            className="flex items-center gap-2 px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>نموذج Excel</span>
+          </button>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            <span>إضافة كارت صنف جديد</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters Bar */}
@@ -424,6 +579,45 @@ export const ItemsCatalog: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {importReport && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">تقرير استيراد الأصناف</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  تمت إضافة {importReport.created} صنف، وتخطي {importReport.duplicates.length + importReport.errors.length} صف.
+                </p>
+              </div>
+              <button onClick={() => setImportReport(null)} aria-label="إغلاق تقرير الاستيراد" className="text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
+              {[...importReport.duplicates, ...importReport.errors]
+                .sort((a, b) => a.row - b.row)
+                .map((issue, index) => (
+                  <div key={`${issue.row}-${index}`} className="flex items-start gap-3 p-3 text-xs">
+                    <span className="shrink-0 rounded bg-rose-50 px-2 py-1 font-mono font-bold text-rose-700">
+                      صف {issue.row}
+                    </span>
+                    <span className="font-mono text-slate-500">{issue.sku || '-'}</span>
+                    <span className="text-slate-700">{issue.reason}</span>
+                  </div>
+                ))}
+              {importReport.duplicates.length + importReport.errors.length === 0 && (
+                <p className="p-6 text-center text-sm text-emerald-700">تم استيراد جميع الصفوف بنجاح.</p>
+              )}
+            </div>
+            <div className="flex justify-end">
+              <button onClick={() => setImportReport(null)} className="px-5 py-2 bg-slate-100 hover:bg-slate-200 font-bold rounded-xl text-xs">
+                إغلاق
+              </button>
+            </div>
           </div>
         </div>
       )}
