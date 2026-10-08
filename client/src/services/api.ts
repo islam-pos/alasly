@@ -2,6 +2,16 @@
 
 const BASE_URL = '/api';
 
+class ApiError extends Error {
+  response: { data: { error: string } };
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.response = { data: { error: message } };
+  }
+}
+
 function getHeaders(): HeadersInit {
   const token = localStorage.getItem('autocare_token');
   return {
@@ -13,12 +23,17 @@ function getHeaders(): HeadersInit {
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ error: 'حدث خطأ في الاتصال بالخادم' }));
-    throw new Error(errorData.error || `Error ${res.status}: ${res.statusText}`);
+    throw new ApiError(errorData.error || `Error ${res.status}: ${res.statusText}`);
   }
-  return res.json();
+  const payload = await res.json();
+  if (Array.isArray(payload)) return { data: payload } as T;
+  if (payload && typeof payload === 'object' && !('data' in payload)) {
+    return { ...payload, data: payload } as T;
+  }
+  return payload as T;
 }
 
-export const api = {
+const apiClient = {
   // Auth
   login: (credentials: any) =>
     fetch(`${BASE_URL}/auth/login`, {
@@ -32,6 +47,13 @@ export const api = {
 
   getUsers: () =>
     fetch(`${BASE_URL}/auth/users`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  resetUserPassword: (id: string, password: string) =>
+    fetch(`${BASE_URL}/auth/users/${encodeURIComponent(id)}/password`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({ password }),
+    }).then((res) => handleResponse<any>(res)),
 
   // Dashboard
   getDashboardStats: () =>
@@ -56,6 +78,13 @@ export const api = {
 
   getBranches: () =>
     fetch(`${BASE_URL}/master/branches`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  createBranch: (data: any) =>
+    fetch(`${BASE_URL}/master/branches`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
 
   getCategories: () =>
     fetch(`${BASE_URL}/master/categories`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
@@ -331,6 +360,12 @@ export const api = {
   getBanks: () =>
     fetch(`${BASE_URL}/financials/banks`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
+  getCashboxes: () =>
+    fetch(`${BASE_URL}/financials/cashboxes`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  getExpenseCategories: () =>
+    fetch(`${BASE_URL}/financials/expense-categories`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
   createBankTransaction: (data: any) =>
     fetch(`${BASE_URL}/financials/banks/transactions`, {
       method: 'POST',
@@ -420,3 +455,66 @@ export const api = {
   getPermissionsList: () =>
     fetch(`${BASE_URL}/settings/permissions`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 };
+
+export const api = Object.assign(apiClient, {
+  master: {
+    getCompany: apiClient.getCompany,
+    updateCompany: apiClient.updateCompany,
+    getBranches: apiClient.getBranches,
+    createBranch: apiClient.createBranch,
+    getCategories: apiClient.getCategories,
+    getUnits: apiClient.getUnits,
+    getWarehouses: apiClient.getWarehouses,
+    getSuppliers: apiClient.getSuppliers,
+    createSupplier: apiClient.createSupplier,
+    getCustomers: apiClient.getCustomers,
+    createCustomer: apiClient.createCustomer,
+    getVehicles: apiClient.getVehicles,
+    getVehicleProfile: apiClient.getVehicleProfile,
+    createVehicle: apiClient.createVehicle,
+    getEmployees: apiClient.getEmployees,
+    createEmployee: apiClient.createEmployee,
+    getJobs: apiClient.getJobs,
+    getRoles: apiClient.getRoles,
+  },
+  inventory: {
+    getBalances: apiClient.getStockBalances,
+    getTransfers: apiClient.getTransfers,
+    createTransfer: apiClient.createTransfer,
+    getCounts: apiClient.getCounts,
+    createCount: apiClient.createCount,
+  },
+  financials: {
+    getExpenses: apiClient.getExpenses,
+    createExpense: apiClient.createExpense,
+    getExpenseCategories: apiClient.getExpenseCategories,
+    getRevenues: apiClient.getRevenues,
+    createRevenue: apiClient.createRevenue,
+    getCashTransactions: apiClient.getCashTransactions,
+    createCashVoucher: apiClient.createCashVoucher,
+    getCashShifts: apiClient.getCashShifts,
+    closeCashShift: apiClient.closeCashShift,
+    getBanks: apiClient.getBanks,
+    getCashboxes: apiClient.getCashboxes,
+  },
+  hr: {
+    getAttendance: apiClient.getAttendance,
+    checkIn: apiClient.checkIn,
+    checkOut: apiClient.checkOut,
+    getCommissions: apiClient.getCommissions,
+    getPayroll: apiClient.getPayroll,
+    generatePayroll: apiClient.generatePayroll,
+  },
+  reports: {
+    getSalesReport: apiClient.getSalesReport,
+    getInventoryReport: apiClient.getInventoryReport,
+    getWorkshopReport: apiClient.getWorkshopReport,
+  },
+  profits: {
+    getSummary: apiClient.getProfitsSummary,
+  },
+  settings: {
+    getAuditLogs: apiClient.getAuditLogs,
+    getPermissions: apiClient.getPermissionsList,
+  },
+});

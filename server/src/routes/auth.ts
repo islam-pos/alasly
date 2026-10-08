@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
-import { generateToken, AuthenticatedRequest } from '../middleware/auth';
+import { authenticate, generateToken, AuthenticatedRequest } from '../middleware/auth';
 import { logAudit } from '../middleware/audit';
 
 const router = Router();
@@ -70,42 +70,14 @@ router.post('/login', async (req, res) => {
 });
 
 // Current user
-router.get('/me', async (req: AuthenticatedRequest, res) => {
+router.get('/me', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      // Default to admin user for smooth preview if not logged in
-      const defaultUser = await prisma.user.findFirst({
-        where: { username: 'admin' },
-        include: { role: true, branch: true, employee: true },
-      });
-      if (!defaultUser) return res.status(401).json({ error: 'غير مسجل' });
-      return res.json({
-        user: {
-          id: defaultUser.id,
-          username: defaultUser.username,
-          fullName: defaultUser.fullName,
-          email: defaultUser.email,
-          role: defaultUser.role.name,
-          roleNameAr: defaultUser.role.nameAr,
-          permissions: JSON.parse(defaultUser.role.permissions || '[]'),
-          branch: defaultUser.branch,
-          employee: defaultUser.employee,
-        },
-      });
-    }
-
-    // Verify token
-    const token = authHeader.split(' ')[1];
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'autocare_erp_super_secret_jwt_key_2026') as any;
-
     const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
+      where: { id: req.user!.id },
       include: { role: true, branch: true, employee: true },
     });
 
-    if (!user) return res.status(404).json({ error: 'المستخدم غير موجود' });
+    if (!user || !user.active) return res.status(401).json({ error: 'المستخدم غير موجود أو الحساب معطل' });
 
     res.json({
       user: {
@@ -127,15 +99,56 @@ router.get('/me', async (req: AuthenticatedRequest, res) => {
 });
 
 // Users list
-router.get('/users', async (req, res) => {
+router.get('/users', authenticate, async (req: AuthenticatedRequest, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'غير مصرح لك بعرض المستخدمين' });
+  }
+
   try {
     const users = await prisma.user.findMany({
-      include: { role: true, branch: true, employee: true },
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        active: true,
+        role: { select: { name: true, nameAr: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
     res.json(users);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/users/:id/password', authenticate, async (req: AuthenticatedRequest, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'غير مصرح لك بتغيير كلمات المرور' });
+  }
+
+  const { password } = req.body;
+  const passwordBytes = typeof password === 'string' ? Buffer.byteLength(password) : 0;
+  if (passwordBytes < 16 || passwordBytes > 72) {
+    return res.status(400).json({ error: 'يجب أن تكون كلمة المرور بين 16 و72 بايت' });
+  }
+
+  try {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!target) return res.status(404).json({ error: 'المستخدم غير موجود' });
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    await prisma.user.update({ where: { id: target.id }, data: { passwordHash } });
+    await logAudit({
+      userId: req.user.id,
+      action: 'PASSWORD_RESET',
+      entity: 'User',
+      entityId: target.id,
+      ipAddress: req.ip,
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to reset user password:', error);
+    res.status(500).json({ error: 'تعذر تغيير كلمة المرور' });
   }
 });
 

@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { existsSync } from 'fs';
 
 import authRouter from './routes/auth';
 import dashboardRouter from './routes/dashboard';
@@ -16,8 +18,13 @@ import reportsRouter from './routes/reports';
 import profitsRouter from './routes/profits';
 import searchRouter from './routes/search';
 import settingsRouter from './routes/settings';
+import { authenticate } from './middleware/auth';
 
 dotenv.config();
+
+if (!process.env.JWT_SECRET || Buffer.byteLength(process.env.JWT_SECRET) < 32) {
+  throw new Error('JWT_SECRET must contain at least 32 bytes before the server can start');
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -44,6 +51,7 @@ app.get('/api/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRouter);
+app.use('/api', authenticate);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/master', masterDataRouter);
 app.use('/api/items', itemsRouter);
@@ -57,6 +65,15 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/profits', profitsRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/settings', settingsRouter);
+
+const clientDistPath = path.resolve(__dirname, '../../client/dist');
+if (existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 // 404 handler
 app.use((req, res) => {

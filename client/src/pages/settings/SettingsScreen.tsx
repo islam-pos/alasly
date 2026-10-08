@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Settings, Building, ShieldCheck, History, 
   Save, Plus, MapPin, Phone, Mail, CheckCircle2, 
@@ -6,10 +7,13 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 export const SettingsScreen: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'company' | 'branches' | 'rbac' | 'audit'>('company');
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'company' | 'branches' | 'rbac' | 'users' | 'audit'>('company');
   const [loading, setLoading] = useState(true);
 
   // Data states
@@ -18,6 +22,9 @@ export const SettingsScreen: React.FC = () => {
   const [roles, setRoles] = useState<any[]>([]);
   const [permissions, setPermissions] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [userPasswords, setUserPasswords] = useState<Record<string, string>>({});
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
 
   // Modals & forms
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
@@ -57,6 +64,33 @@ export const SettingsScreen: React.FC = () => {
     loadData();
   }, [auditFilterAction]);
 
+  useEffect(() => {
+    switch (searchParams.get('tab')) {
+      case 'company':
+        setActiveTab('company');
+        break;
+      case 'branches':
+        setActiveTab('branches');
+        break;
+      case 'rbac':
+        setActiveTab('rbac');
+        break;
+      case 'users':
+        if (user?.role === 'admin') setActiveTab('users');
+        break;
+      case 'audit':
+        setActiveTab('audit');
+        break;
+    }
+  }, [searchParams, user?.role]);
+
+  useEffect(() => {
+    if (activeTab !== 'users') return;
+    api.getUsers()
+      .then((res) => setUsers(res.data))
+      .catch((err: any) => showToast(err.response?.data?.error || 'فشل تحميل المستخدمين', 'error'));
+  }, [activeTab]);
+
   // Save Company Settings
   const handleSaveCompany = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +113,21 @@ export const SettingsScreen: React.FC = () => {
       loadData();
     } catch (err: any) {
       showToast(err.response?.data?.error || 'فشل إضافة الفرع', 'error');
+    }
+  };
+
+  const handleResetUserPassword = async (e: React.FormEvent, userId: string) => {
+    e.preventDefault();
+    const password = userPasswords[userId] || '';
+    try {
+      setSavingUserId(userId);
+      await api.resetUserPassword(userId, password);
+      setUserPasswords((current) => ({ ...current, [userId]: '' }));
+      showToast('تم تغيير كلمة المرور بنجاح', 'success');
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'فشل تغيير كلمة المرور', 'error');
+    } finally {
+      setSavingUserId(null);
     }
   };
 
@@ -135,6 +184,17 @@ export const SettingsScreen: React.FC = () => {
           <ShieldCheck className="w-4 h-4" />
           الأدوار والصلاحيات (RBAC)
         </button>
+        {user?.role === 'admin' && (
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+              activeTab === 'users' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            المستخدمون وكلمات المرور
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('audit')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
@@ -334,6 +394,66 @@ export const SettingsScreen: React.FC = () => {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'users' && user?.role === 'admin' && (
+        <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6 space-y-4">
+          <p className="text-sm text-slate-600">
+            عيّن كلمة مرور جديدة لكل مستخدم قبل تفعيل حسابه. يجب أن تكون كلمة المرور من 16 إلى 72 بايت.
+          </p>
+          <div className="overflow-x-auto border rounded-xl">
+            <table className="w-full text-right text-sm">
+              <thead className="bg-slate-50 text-slate-700 font-bold border-b text-xs">
+                <tr>
+                  <th className="py-3 px-4">المستخدم</th>
+                  <th className="py-3 px-4">الدور</th>
+                  <th className="py-3 px-4">الحالة</th>
+                  <th className="py-3 px-4">تعيين كلمة مرور جديدة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {users.map((account) => (
+                  <tr key={account.id}>
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-slate-800">{account.fullName}</div>
+                      <div className="text-xs text-slate-500" dir="ltr">{account.username}</div>
+                    </td>
+                    <td className="py-3 px-4 text-xs">{account.role?.nameAr || account.role?.name || '-'}</td>
+                    <td className="py-3 px-4 text-xs">{account.active ? 'نشط' : 'معطل'}</td>
+                    <td className="py-3 px-4">
+                      <form onSubmit={(e) => handleResetUserPassword(e, account.id)} className="flex min-w-[24rem] gap-2">
+                        <input
+                          type="password"
+                          required
+                          minLength={16}
+                          maxLength={72}
+                          autoComplete="new-password"
+                          value={userPasswords[account.id] || ''}
+                          onChange={(e) => setUserPasswords((current) => ({ ...current, [account.id]: e.target.value }))}
+                          placeholder="16 حرفًا على الأقل"
+                          className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-xs"
+                          dir="ltr"
+                        />
+                        <button
+                          type="submit"
+                          disabled={savingUserId === account.id}
+                          className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          {savingUserId === account.id ? 'جارٍ الحفظ...' : 'حفظ'}
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+                {users.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-slate-400">لا يوجد مستخدمون</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

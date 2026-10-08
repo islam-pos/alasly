@@ -68,7 +68,7 @@ export const JobCardDetail: React.FC = () => {
   useEffect(() => {
     if (id) {
       loadDetails();
-      api.getItems().then(setAvailableItems).catch(console.error);
+      api.getItems().then((res) => setAvailableItems(res.data)).catch(console.error);
     }
   }, [id]);
 

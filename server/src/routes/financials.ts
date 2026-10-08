@@ -4,6 +4,26 @@ import { logAudit } from '../middleware/audit';
 
 const router = Router();
 
+router.get('/cashboxes', async (_req, res) => {
+  try {
+    const cashboxes = await prisma.cashbox.findMany({ orderBy: { name: 'asc' } });
+    res.json(cashboxes);
+  } catch (error) {
+    console.error('Failed to load cashboxes:', error);
+    res.status(500).json({ error: 'تعذر تحميل بيانات الصناديق النقدية' });
+  }
+});
+
+router.get('/expense-categories', async (_req, res) => {
+  try {
+    const categories = await prisma.expenseCategory.findMany({ orderBy: { name: 'asc' } });
+    res.json(categories);
+  } catch (error) {
+    console.error('Failed to load expense categories:', error);
+    res.status(500).json({ error: 'تعذر تحميل تصنيفات المصروفات' });
+  }
+});
+
 // --- Expenses ---
 router.get('/expenses', async (req, res) => {
   try {
