@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   Users,
   Car,
@@ -20,7 +20,10 @@ export const CustomersVehicles: React.FC = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'customers' | 'vehicles'>('customers');
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<'customers' | 'vehicles'>(
+    location.pathname === '/vehicles' ? 'vehicles' : 'customers',
+  );
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modals
@@ -54,6 +57,10 @@ export const CustomersVehicles: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [searchParams] = useSearchParams();
   const { success, error } = useToast();
+
+  useEffect(() => {
+    setActiveTab(location.pathname === '/vehicles' ? 'vehicles' : 'customers');
+  }, [location.pathname]);
 
   useEffect(() => {
     loadData();

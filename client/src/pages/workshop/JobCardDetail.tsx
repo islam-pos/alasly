@@ -87,11 +87,22 @@ export const JobCardDetail: React.FC = () => {
     }
   };
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400">
         <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mb-4"></div>
         <div className="text-sm font-medium">جاري تحميل تفاصيل أمر الإصلاح والملفات المرفقة...</div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
+        <p className="text-sm font-medium text-slate-600">تعذر تحميل أمر الإصلاح. قد يكون غير موجود أو حدث خطأ في الاتصال.</p>
+        <Link to="/workshop/job-cards" className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white">
+          العودة إلى أوامر الإصلاح
+        </Link>
       </div>
     );
   }
