@@ -8,7 +8,12 @@ import {
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
-import { defaultPrintSettings, parsePrintSettings, type PrintSettings } from '../../utils/printSettings';
+import {
+  defaultPrintSettings,
+  parsePrintSettings,
+  type OutputPrintSettings,
+  type PrintSettings,
+} from '../../utils/printSettings';
 
 const invoicePrintFieldLabels: { key: keyof PrintSettings['invoiceFields']; label: string }[] = [
   { key: 'companyAddress', label: 'عنوان المنشأة' },
@@ -124,13 +129,36 @@ export const SettingsScreen: React.FC = () => {
     try {
       const printSettings = parsePrintSettings(company.printSettings);
       const companyForPrint = { ...company, printSettings };
-      await api.master.updateCompany({
-        ...companyForPrint,
+      const response = await api.master.updateCompany({
+        name: company.name,
+        nameEn: company.nameEn,
+        logoUrl: company.logoUrl,
+        taxNumber: company.taxNumber,
+        commercialRegister: company.commercialRegister,
+        phone: company.phone,
+        mobile: company.mobile,
+        email: company.email,
+        website: company.website,
+        currency: company.currency,
+        currencySymbol: company.currencySymbol,
+        taxRate: company.taxRate,
+        city: company.city,
+        country: company.country,
+        address: company.address,
+        invoiceHeader: company.invoiceHeader,
+        invoiceFooter: company.invoiceFooter,
+        termsAndConditions: company.termsAndConditions,
+        supportTitle: company.supportTitle,
+        supportDescription: company.supportDescription,
+        supportPhoneLabel: company.supportPhoneLabel,
+        supportPhone: company.supportPhone,
         printSettings: JSON.stringify(printSettings),
       });
-      setCompany(companyForPrint);
+      const savedCompany = { ...response.data, printSettings };
+      setCompany(savedCompany);
       localStorage.setItem('alasly-print-settings', JSON.stringify(printSettings));
-      localStorage.setItem('alasly-print-company', JSON.stringify(companyForPrint));
+      localStorage.setItem('alasly-print-company', JSON.stringify(savedCompany));
+      window.dispatchEvent(new Event('alasly-company-updated'));
       showToast('تم حفظ بيانات المنشأة والضريبة بنجاح', 'success');
     } catch (err: any) {
       showToast(err.response?.data?.error || 'فشل حفظ البيانات', 'error');
@@ -164,6 +192,18 @@ export const SettingsScreen: React.FC = () => {
     } finally {
       setSavingUserId(null);
     }
+  };
+
+  const updateOutputSetting = (
+    output: 'barcode' | 'documents',
+    key: keyof OutputPrintSettings,
+    value: OutputPrintSettings[keyof OutputPrintSettings],
+  ) => {
+    const current = parsePrintSettings(company.printSettings);
+    setCompany({
+      ...company,
+      printSettings: { ...current, [output]: { ...current[output], [key]: value } },
+    });
   };
 
   return (
@@ -286,8 +326,8 @@ export const SettingsScreen: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-700 mb-1">رقم السجل التجاري (C.R):</label>
                 <input
                   type="text"
-                  value={company.crNumber || ''}
-                  onChange={(e) => setCompany({ ...company, crNumber: e.target.value })}
+                  value={company.commercialRegister || ''}
+                  onChange={(e) => setCompany({ ...company, commercialRegister: e.target.value })}
                   className="w-full border rounded-xl px-3 py-2 text-sm outline-none font-mono"
                 />
               </div>
@@ -320,8 +360,8 @@ export const SettingsScreen: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
-                    value={company.vatRate || 15}
-                    onChange={(e) => setCompany({ ...company, vatRate: parseFloat(e.target.value) || 15 })}
+                    value={company.taxRate ?? 15}
+                    onChange={(e) => setCompany({ ...company, taxRate: parseFloat(e.target.value) || 15 })}
                     className="w-full border rounded-xl px-3 py-2 text-sm outline-none font-mono font-bold"
                   />
                   <span className="font-bold text-slate-600">%</span>
@@ -363,24 +403,88 @@ export const SettingsScreen: React.FC = () => {
               />
             </div>
 
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label className="text-xs font-bold text-slate-700">
+                <span className="mb-1 block">رقم الجوال</span>
+                <input value={company.mobile || ''} onChange={(e) => setCompany({ ...company, mobile: e.target.value })} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" />
+              </label>
+              <label className="text-xs font-bold text-slate-700">
+                <span className="mb-1 block">الموقع الإلكتروني</span>
+                <input value={company.website || ''} onChange={(e) => setCompany({ ...company, website: e.target.value })} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" dir="ltr" />
+              </label>
+              <label className="text-xs font-bold text-slate-700">
+                <span className="mb-1 block">رابط شعار المنشأة</span>
+                <input value={company.logoUrl || ''} onChange={(e) => setCompany({ ...company, logoUrl: e.target.value })} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" dir="ltr" />
+              </label>
+              <label className="text-xs font-bold text-slate-700">
+                <span className="mb-1 block">رمز العملة</span>
+                <input value={company.currencySymbol || ''} onChange={(e) => setCompany({ ...company, currencySymbol: e.target.value })} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" />
+              </label>
+              <label className="text-xs font-bold text-slate-700">
+                <span className="mb-1 block">رمز العملة الداخلي</span>
+                <input value={company.currency || ''} onChange={(e) => setCompany({ ...company, currency: e.target.value })} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" dir="ltr" />
+              </label>
+            </div>
+
+            <section className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <h3 className="font-bold text-slate-900">نصوص الفواتير</h3>
+              <label className="block text-xs font-bold text-slate-700">
+                <span className="mb-1 block">عنوان الفاتورة</span>
+                <textarea value={company.invoiceHeader || ''} onChange={(e) => setCompany({ ...company, invoiceHeader: e.target.value })} rows={2} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" />
+              </label>
+              <label className="block text-xs font-bold text-slate-700">
+                <span className="mb-1 block">تذييل الفاتورة</span>
+                <textarea value={company.invoiceFooter || ''} onChange={(e) => setCompany({ ...company, invoiceFooter: e.target.value })} rows={2} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" />
+              </label>
+              <label className="block text-xs font-bold text-slate-700">
+                <span className="mb-1 block">الشروط والأحكام</span>
+                <textarea value={company.termsAndConditions || ''} onChange={(e) => setCompany({ ...company, termsAndConditions: e.target.value })} rows={3} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" />
+              </label>
+            </section>
+
+            <section className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <h3 className="font-bold text-slate-900">بيانات بطاقة الدعم الفني</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="text-xs font-bold text-slate-700">
+                  <span className="mb-1 block">عنوان البطاقة</span>
+                  <input value={company.supportTitle || ''} onChange={(e) => setCompany({ ...company, supportTitle: e.target.value })} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" />
+                </label>
+                <label className="text-xs font-bold text-slate-700">
+                  <span className="mb-1 block">رقم التواصل</span>
+                  <input value={company.supportPhone || ''} onChange={(e) => setCompany({ ...company, supportPhone: e.target.value })} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" />
+                </label>
+                <label className="text-xs font-bold text-slate-700">
+                  <span className="mb-1 block">وصف رقم التواصل</span>
+                  <input value={company.supportPhoneLabel || ''} onChange={(e) => setCompany({ ...company, supportPhoneLabel: e.target.value })} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" />
+                </label>
+              </div>
+              <label className="block text-xs font-bold text-slate-700">
+                <span className="mb-1 block">نص البطاقة</span>
+                <textarea value={company.supportDescription || ''} onChange={(e) => setCompany({ ...company, supportDescription: e.target.value })} rows={2} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" />
+              </label>
+            </section>
+
             <section className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
               <div className="flex items-center gap-2">
                 <Printer className="h-5 w-5 text-blue-700" />
                 <div>
-                  <h3 className="font-bold text-slate-900">إعدادات الطباعة</h3>
-                  <p className="text-xs text-slate-500">تؤثر على الفواتير وملصقات الباركود. اختيار الطابعة الفعلية يتم من نافذة الطباعة بالمتصفح.</p>
+                  <h3 className="font-bold text-slate-900">إعدادات الطباعة المستقلة</h3>
+                  <p className="text-xs text-slate-500">اضبط الباركود والمستندات بشكل مستقل. اختيار الطابعة الفعلية متاح من نافذة الطباعة بالمتصفح.</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {([
+                { key: 'barcode', title: 'طباعة الباركود', settings: company.printSettings?.barcode },
+                { key: 'documents', title: 'الفواتير والتقارير', settings: company.printSettings?.documents },
+              ] as const).map(({ key, title, settings }) => (
+                <div key={key} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                  <h4 className="text-sm font-bold text-slate-800">{title}</h4>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="space-y-1 text-xs font-bold text-slate-700">
                   <span className="block">نوع الطابعة</span>
                   <select
-                    value={company.printSettings?.printerType || defaultPrintSettings.printerType}
-                    onChange={(e) => setCompany({
-                      ...company,
-                      printSettings: { ...parsePrintSettings(company.printSettings), printerType: e.target.value as PrintSettings['printerType'] },
-                    })}
+                    value={settings?.printerType || defaultPrintSettings[key].printerType}
+                    onChange={(e) => updateOutputSetting(key, 'printerType', e.target.value as PrintSettings['printerType'])}
                     className="w-full rounded-xl border bg-white px-3 py-2 text-sm font-normal"
                   >
                     <option value="STANDARD">عادية (ليزر / نفث حبر)</option>
@@ -391,11 +495,8 @@ export const SettingsScreen: React.FC = () => {
                 <label className="space-y-1 text-xs font-bold text-slate-700">
                   <span className="block">مقاس الورق</span>
                   <select
-                    value={company.printSettings?.paperSize || defaultPrintSettings.paperSize}
-                    onChange={(e) => setCompany({
-                      ...company,
-                      printSettings: { ...parsePrintSettings(company.printSettings), paperSize: e.target.value as PrintSettings['paperSize'] },
-                    })}
+                    value={settings?.paperSize || defaultPrintSettings[key].paperSize}
+                    onChange={(e) => updateOutputSetting(key, 'paperSize', e.target.value as PrintSettings['paperSize'])}
                     className="w-full rounded-xl border bg-white px-3 py-2 text-sm font-normal"
                   >
                     <option value="A4">A4</option>
@@ -405,6 +506,8 @@ export const SettingsScreen: React.FC = () => {
                   </select>
                 </label>
               </div>
+                </div>
+              ))}
 
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <input

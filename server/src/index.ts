@@ -18,6 +18,7 @@ import reportsRouter from './routes/reports';
 import profitsRouter from './routes/profits';
 import searchRouter from './routes/search';
 import settingsRouter from './routes/settings';
+import publicPurchaseRequestsRouter from './routes/publicPurchaseRequests';
 import { authenticate } from './middleware/auth';
 import { migrateEgyptianLocationDefaults } from './migrations/egyptianLocationDefaults';
 
@@ -50,6 +51,8 @@ app.get('/api/health', (req, res) => {
     time: new Date().toISOString(),
   });
 });
+
+app.use('/api/public/purchase-requests', publicPurchaseRequestsRouter);
 
 // API Routes
 app.use('/api/auth', authRouter);

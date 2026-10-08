@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Zap,
@@ -14,9 +14,51 @@ import {
   Warehouse,
   Car,
 } from 'lucide-react';
+import { api } from '../../services/api';
 
 export const QuickSidebar: React.FC = () => {
   const location = useLocation();
+  const [support, setSupport] = useState({
+    supportTitle: 'الدعم الفني والخدمات',
+    supportDescription: 'مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.',
+    supportPhoneLabel: 'الرقم الموحد',
+    supportPhone: '920000000',
+  });
+
+  useEffect(() => {
+    const cachedCompany = localStorage.getItem('alasly-print-company');
+    if (cachedCompany) {
+      try {
+        const company = JSON.parse(cachedCompany);
+        setSupport({
+          supportTitle: company.supportTitle || 'الدعم الفني والخدمات',
+          supportDescription: company.supportDescription || 'مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.',
+          supportPhoneLabel: company.supportPhoneLabel || 'الرقم الموحد',
+          supportPhone: company.supportPhone || '920000000',
+        });
+      } catch (error) {
+        console.error('Failed to read cached company support details:', error);
+      }
+    }
+
+    const loadSupport = () => {
+      api.master.getCompany()
+        .then(({ data }) => {
+          const details = {
+            supportTitle: data.supportTitle || 'الدعم الفني والخدمات',
+            supportDescription: data.supportDescription || 'مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.',
+            supportPhoneLabel: data.supportPhoneLabel || 'الرقم الموحد',
+            supportPhone: data.supportPhone || '920000000',
+          };
+          setSupport(details);
+          localStorage.setItem('alasly-print-company', JSON.stringify(data));
+        })
+        .catch((error) => console.error('Failed to load company support details:', error));
+    };
+    loadSupport();
+    window.addEventListener('alasly-company-updated', loadSupport);
+    return () => window.removeEventListener('alasly-company-updated', loadSupport);
+  }, []);
 
   const shortcuts = [
     { label: 'فاتورة بيع (POS)', to: '/pos', icon: ShoppingCart, color: 'text-emerald-600 bg-emerald-50' },
@@ -64,11 +106,11 @@ export const QuickSidebar: React.FC = () => {
       </div>
 
       <div className="mt-6 p-3 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl shadow-sm text-center">
-        <div className="text-xs font-bold mb-1 text-slate-200">الدعم الفني والخدمات</div>
+        <div className="text-xs font-bold mb-1 text-slate-200">{support.supportTitle}</div>
         <div className="text-[11px] text-slate-400 leading-relaxed mb-2">
-          مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.
+          {support.supportDescription}
         </div>
-        <div className="text-[10px] text-amber-400 font-mono font-bold">الرقم الموحد: 920000000</div>
+        <div className="text-[10px] text-amber-400 font-mono font-bold">{support.supportPhoneLabel}: {support.supportPhone}</div>
       </div>
     </aside>
   );

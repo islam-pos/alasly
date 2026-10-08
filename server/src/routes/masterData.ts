@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 
@@ -19,13 +20,52 @@ router.get('/company', async (req, res) => {
 
 router.put('/company', async (req, res) => {
   try {
+    const input = req.body as Record<string, unknown>;
+    const data: Prisma.CompanySettingCreateInput = {};
+    const stringFields = [
+      'name', 'nameEn', 'logoUrl', 'taxNumber', 'commercialRegister', 'address',
+      'city', 'country', 'phone', 'mobile', 'email', 'website', 'currency',
+      'currencySymbol', 'invoiceHeader', 'invoiceFooter', 'termsAndConditions',
+      'supportTitle', 'supportDescription', 'supportPhoneLabel', 'supportPhone',
+    ] as const;
+
+    for (const field of stringFields) {
+      if (typeof input[field] === 'string') {
+        Object.assign(data, { [field]: input[field] });
+      } else if (
+        input[field] === null
+        && ['nameEn', 'logoUrl', 'invoiceHeader', 'invoiceFooter', 'termsAndConditions'].includes(field)
+      ) {
+        Object.assign(data, { [field]: null });
+      }
+    }
+
+    if (input.commercialRegister === undefined && typeof input.crNumber === 'string') {
+      data.commercialRegister = input.crNumber;
+    }
+
+    const taxRate = input.taxRate ?? input.vatRate;
+    if (typeof taxRate === 'number' && Number.isFinite(taxRate)) {
+      data.taxRate = taxRate;
+    } else if (taxRate !== undefined) {
+      return res.status(400).json({ error: 'نسبة الضريبة يجب أن تكون رقمًا صالحًا' });
+    }
+
+    if (typeof input.printSettings === 'string') {
+      data.printSettings = input.printSettings;
+    } else if (input.printSettings && typeof input.printSettings === 'object') {
+      data.printSettings = JSON.stringify(input.printSettings);
+    } else if (input.printSettings !== undefined) {
+      return res.status(400).json({ error: 'إعدادات الطباعة غير صالحة' });
+    }
+
     let company = await prisma.companySetting.findFirst();
     if (!company) {
-      company = await prisma.companySetting.create({ data: req.body });
+      company = await prisma.companySetting.create({ data });
     } else {
       company = await prisma.companySetting.update({
         where: { id: company.id },
-        data: req.body,
+        data,
       });
     }
     await logAudit({ action: 'UPDATE', entity: 'CompanySetting', entityId: company.id, details: 'تحديث بيانات المنشأة والضريبة' });
@@ -168,6 +208,8 @@ router.post('/suppliers', async (req, res) => {
           code: `CUS-${String(customerCount + 1).padStart(3, '0')}`,
           name: supplierData.name,
           phone: supplierData.phone,
+          whatsappNumber: supplierData.whatsappNumber || null,
+          whatsappOptIn: supplierData.whatsappOptIn === true,
           mobile: supplierData.mobile || null,
           email: supplierData.email || null,
           address: supplierData.address || null,
@@ -242,6 +284,8 @@ router.post('/customers', async (req, res) => {
           name: customerData.name,
           company: customerData.customerType === 'COMPANY' ? customerData.name : null,
           phone: customerData.phone,
+          whatsappNumber: customerData.whatsappNumber || null,
+          whatsappOptIn: customerData.whatsappOptIn === true,
           mobile: customerData.mobile || null,
           email: customerData.email || null,
           address: customerData.address || null,

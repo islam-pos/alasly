@@ -45,6 +45,7 @@ export const printBarcodeLabels = (
 
     return `<article class="label">${settings.showCompanyName && cachedCompanyName ? `<b class="company">${escapeHtml(cachedCompanyName)}</b>` : ''}<strong>${escapeHtml(item.nameAr)}</strong>${svg.outerHTML}<small>SKU: ${escapeHtml(item.sku)}</small></article>`;
   }).join('');
+  const barcodeSettings = settings.barcode;
 
   const printWindow = window.open('', '_blank');
   if (!printWindow) return 'blocked';
@@ -56,14 +57,14 @@ export const printBarcodeLabels = (
         <meta charset="utf-8">
         <title>ملصقات باركود الأصناف</title>
         <style>
-          @page { size: ${getPaperSizeCss(settings.paperSize)}; margin: ${settings.printerType === 'THERMAL' ? '3mm' : '10mm'}; }
+          @page { size: ${getPaperSizeCss(barcodeSettings.paperSize)}; margin: ${barcodeSettings.printerType === 'THERMAL' ? '3mm' : '10mm'}; }
           * { box-sizing: border-box; }
           body { margin: 0; color: #111827; font-family: Arial, sans-serif; }
-          main { display: grid; grid-template-columns: repeat(${settings.paperSize.startsWith('THERMAL') ? '1' : '3'}, 1fr); gap: 5mm; }
-          .label { height: ${settings.paperSize === 'THERMAL_58' ? '25mm' : settings.paperSize === 'THERMAL_80' ? '30mm' : '30mm'}; padding: 2mm; border: 1px dashed #9ca3af; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; break-inside: avoid; }
+          main { display: grid; grid-template-columns: repeat(${barcodeSettings.paperSize.startsWith('THERMAL') ? '1' : '3'}, 1fr); gap: 5mm; }
+          .label { height: ${barcodeSettings.paperSize === 'THERMAL_58' ? '25mm' : '30mm'}; padding: 2mm; border: 1px dashed #9ca3af; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; break-inside: avoid; }
           .company { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 7pt; }
           .label strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9pt; }
-          .label svg { display: block; max-width: 100%; height: ${settings.paperSize.startsWith('THERMAL') ? '12mm' : '15mm'}; }
+          .label svg { display: block; max-width: 100%; height: ${barcodeSettings.paperSize.startsWith('THERMAL') ? '12mm' : '15mm'}; }
           .label small { font-size: 7pt; direction: ltr; }
           @media screen { body { padding: 10mm; } .label { background: #fff; } }
           @media print { .label { border-color: #d1d5db; } }

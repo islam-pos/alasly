@@ -29,12 +29,16 @@ export const CustomersVehicles: React.FC = () => {
   // Modals
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
+  const [whatsappEdits, setWhatsappEdits] = useState<Record<string, { number: string; optIn: boolean }>>({});
+  const [savingWhatsappId, setSavingWhatsappId] = useState<string | null>(null);
 
   // Forms
   const [customerForm, setCustomerForm] = useState({
     name: '',
     phone: '',
     mobile: '',
+    whatsappNumber: '',
+    whatsappOptIn: false,
     email: '',
     address: 'القاهرة',
     taxNumber: '',
@@ -100,6 +104,8 @@ export const CustomersVehicles: React.FC = () => {
         name: '',
         phone: '',
         mobile: '',
+        whatsappNumber: '',
+        whatsappOptIn: false,
         email: '',
         address: 'القاهرة',
         taxNumber: '',
@@ -112,6 +118,33 @@ export const CustomersVehicles: React.FC = () => {
       error(err.message || 'فشل حفظ العميل');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const saveCustomerWhatsapp = async (customer: any) => {
+    const values = whatsappEdits[customer.id] || {
+      number: customer.whatsappNumber || '',
+      optIn: Boolean(customer.whatsappOptIn),
+    };
+    try {
+      setSavingWhatsappId(customer.id);
+      const response = await api.updateCustomer(customer.id, {
+        whatsappNumber: values.number || null,
+        whatsappOptIn: values.optIn,
+      });
+      setCustomers((current) => current.map((entry) => entry.id === customer.id
+        ? { ...entry, ...response.data }
+        : entry));
+      setWhatsappEdits((current) => {
+        const next = { ...current };
+        delete next[customer.id];
+        return next;
+      });
+      success('تم حفظ رقم واتساب العميل');
+    } catch (err: any) {
+      error(err.message || 'تعذر حفظ رقم واتساب العميل');
+    } finally {
+      setSavingWhatsappId(null);
     }
   };
 
@@ -238,6 +271,7 @@ export const CustomersVehicles: React.FC = () => {
                   <th className="p-3.5">اسم العميل</th>
                   <th className="p-3.5">النوع</th>
                   <th className="p-3.5">الجوال والهاتف</th>
+                  <th className="p-3.5">واتساب وموافقة الإرسال</th>
                   <th className="p-3.5">السيارات المرتبطة</th>
                   <th className="p-3.5">الرصيد المالي الحالي</th>
                   <th className="p-3.5">الحد الائتماني</th>
@@ -267,6 +301,50 @@ export const CustomersVehicles: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-3.5 font-mono text-slate-600">{c.phone}</td>
+                    <td className="p-3.5">
+                      {(() => {
+                        const values = whatsappEdits[c.id] || {
+                          number: c.whatsappNumber || '',
+                          optIn: Boolean(c.whatsappOptIn),
+                        };
+                        return (
+                          <div className="flex min-w-48 flex-col gap-1">
+                            <input
+                              type="tel"
+                              value={values.number}
+                              onChange={(event) => setWhatsappEdits((current) => ({
+                                ...current,
+                                [c.id]: { ...values, number: event.target.value },
+                              }))}
+                              placeholder="+201XXXXXXXXX"
+                              dir="ltr"
+                              className="rounded-md border px-2 py-1 font-mono"
+                            />
+                            <div className="flex items-center justify-between gap-2">
+                              <label className="flex items-center gap-1 text-[10px]">
+                                <input
+                                  type="checkbox"
+                                  checked={values.optIn}
+                                  onChange={(event) => setWhatsappEdits((current) => ({
+                                    ...current,
+                                    [c.id]: { ...values, optIn: event.target.checked },
+                                  }))}
+                                />
+                                وافق على الرسائل
+                              </label>
+                              <button
+                                type="button"
+                                disabled={savingWhatsappId === c.id}
+                                onClick={() => saveCustomerWhatsapp(c)}
+                                className="rounded bg-blue-50 px-2 py-1 font-bold text-blue-700 disabled:opacity-50"
+                              >
+                                حفظ
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td className="p-3.5">
                       <div className="flex flex-wrap gap-1">
                         {c.vehicles?.map((v: any) => (
@@ -415,6 +493,22 @@ export const CustomersVehicles: React.FC = () => {
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
                 />
               </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">رقم واتساب العميل</label>
+                <input
+                  type="tel"
+                  value={customerForm.whatsappNumber}
+                  onChange={(e) => setCustomerForm({ ...customerForm, whatsappNumber: e.target.value })}
+                  placeholder="+201XXXXXXXXX"
+                  dir="ltr"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
+                />
+              </div>
+              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-700">
+                <input type="checkbox" checked={customerForm.whatsappOptIn} onChange={(e) => setCustomerForm({ ...customerForm, whatsappOptIn: e.target.checked })} className="h-4 w-4" />
+                وافق العميل على استلام الفواتير عبر واتساب
+              </label>
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">الحد الائتماني (ر.س)</label>

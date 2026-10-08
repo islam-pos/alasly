@@ -178,6 +178,15 @@ export const PosScreen: React.FC = () => {
       setPaymentModalOpen(false);
       clearCart();
       success(`تم إصدار فاتورة البيع ${res.invoiceNumber} بنجاح!`);
+      if (res.whatsappNotification?.sent) {
+        success('تم إرسال نسخة PDF للعميل عبر واتساب');
+      } else if (selectedCustomerId && res.whatsappNotification?.reason === 'not_configured') {
+        error('لم تُرسل الفاتورة عبر واتساب: إعدادات WhatsApp Cloud API غير مكتملة');
+      } else if (selectedCustomerId && res.whatsappNotification?.reason === 'no_opt_in_or_number') {
+        error('لم تُرسل الفاتورة: رقم واتساب العميل أو موافقته على الاستلام غير مسجل');
+      } else if (selectedCustomerId && res.whatsappNotification?.error) {
+        error(`تعذر إرسال الفاتورة عبر واتساب: ${res.whatsappNotification.error}`);
+      }
       // Refresh inventory items
       loadData();
     } catch (err: any) {

@@ -10,6 +10,7 @@ datasource db {
 model CompanySetting {
   id                 String   @id @default(uuid())
   name               String   @default("مركز المحترف لصيانة السيارات وقطع الغيار")
+  nameEn             String?
   logoUrl            String?
   taxNumber          String   @default("310245897100003")
   commercialRegister String   @default("1010892341")
@@ -26,6 +27,10 @@ model CompanySetting {
   invoiceHeader      String?  @default("أهلاً بكم في مركز المحترف لخدمات وصيانة السيارات")
   invoiceFooter      String?  @default("الضمان يشمل قطع الغيار الأصلية لمدة شهر من تاريخ الفاتورة")
   termsAndConditions String?
+  supportTitle       String   @default("الدعم الفني والخدمات")
+  supportDescription String   @default("مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.")
+  supportPhoneLabel  String   @default("الرقم الموحد")
+  supportPhone       String   @default("920000000")
   printSettings      String   @default("{}")
   updatedAt          DateTime @updatedAt
 }
@@ -188,6 +193,8 @@ model Supplier {
   currentBalance   Float             @default(0)
   creditLimit      Float             @default(0)
   paymentTermsDays Int               @default(30)
+  whatsappNumber   String?
+  whatsappOptIn    Boolean           @default(false)
   notes            String?
   active           Boolean           @default(true)
   createdAt        DateTime          @default(now())
@@ -209,6 +216,8 @@ model Customer {
   address        String?
   taxNumber      String?
   customerType   String         @default("INDIVIDUAL") // INDIVIDUAL, COMPANY
+  whatsappNumber String?
+  whatsappOptIn  Boolean        @default(false)
   openingBalance Float          @default(0)
   currentBalance Float          @default(0)
   creditLimit    Float          @default(0)
@@ -376,6 +385,9 @@ model PurchaseRequest {
   reason        String?
   status        String                @default("PENDING") // DRAFT, PENDING, APPROVED, ORDERED, RECEIVED, CANCELLED
   notes         String?
+  publicTokenHash String?       @unique
+  publicTokenExpiresAt DateTime?
+  supplierResponse String?
   createdById   String?
   createdAt     DateTime              @default(now())
   items         PurchaseRequestItem[]

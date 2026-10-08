@@ -6,7 +6,7 @@ COPY client/ ./
 RUN npm run build
 
 FROM node:20-alpine AS server-build
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl ttf-dejavu
 WORKDIR /build/server
 COPY server/package*.json ./
 RUN npm ci
@@ -19,7 +19,7 @@ RUN cp -R node_modules/.prisma /tmp/generated-prisma-client \
     && cp -R /tmp/generated-prisma-client/. node_modules/.prisma/
 
 FROM node:20-alpine
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl ttf-dejavu
 ENV NODE_ENV=production
 ENV PORT=5000
 ENV DATABASE_URL=file:/data/autocare.db

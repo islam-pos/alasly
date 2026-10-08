@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
+import { sendInvoicePdf } from '../services/whatsapp';
 
 const router = Router();
 
@@ -240,7 +241,22 @@ router.post('/pos', async (req, res) => {
       details: `إصدار فاتورة بيع كاشير ${invoiceNumber} بمبلغ ${grandTotal} ر.س`,
     });
 
-    res.status(201).json(invoice);
+    let whatsappNotification: { sent: boolean; reason?: string } | { sent: false; error: string } = {
+      sent: false,
+      reason: 'no_opt_in_or_number',
+    };
+    if (invoice.customer?.whatsappOptIn && invoice.customer.whatsappNumber) {
+      try {
+        const company = await prisma.companySetting.findFirst();
+        if (!company) throw new Error('بيانات المنشأة غير موجودة لإنشاء ملف الفاتورة');
+        whatsappNotification = await sendInvoicePdf('sales', invoice, company, invoice.customer);
+      } catch (whatsappError: any) {
+        console.error(`WhatsApp sales invoice send failed for ${invoice.invoiceNumber}:`, whatsappError);
+        whatsappNotification = { sent: false, error: whatsappError.message || 'تعذر إرسال الفاتورة عبر واتساب' };
+      }
+    }
+
+    res.status(201).json({ ...invoice, whatsappNotification });
   } catch (err: any) {
     console.error('POS Checkout error:', err);
     res.status(400).json({ error: err.message });

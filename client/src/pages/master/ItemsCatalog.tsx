@@ -21,6 +21,8 @@ import { useToast } from '../../context/ToastContext';
 import { exportToExcel, exportToPdf } from '../../utils/exports';
 import { readExcelRows } from '../../utils/excelImport';
 import { printBarcodeLabels } from '../../utils/barcodePrint';
+import type { BarcodeLabelItem } from '../../utils/barcodePrint';
+import { BarcodePrintDialog } from '../../components/common/BarcodePrintDialog';
 
 const itemExportColumns = [
   ['SKU', (item: any) => item.sku],
@@ -53,6 +55,7 @@ export const ItemsCatalog: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [barcodePrintItems, setBarcodePrintItems] = useState<BarcodeLabelItem[] | null>(null);
   const [importing, setImporting] = useState(false);
   const [importReport, setImportReport] = useState<{
     created: number;
@@ -182,12 +185,22 @@ export const ItemsCatalog: React.FC = () => {
   };
 
   const handlePrintBarcodes = (selectedItems: any[]) => {
+    if (selectedItems.length === 0) {
+      error('لا توجد أصناف لطباعة باركودها');
+      return;
+    }
+    setBarcodePrintItems(selectedItems);
+  };
+
+  const printSelectedBarcodes = (selectedItems: BarcodeLabelItem[]) => {
     try {
       const result = printBarcodeLabels(selectedItems);
       if (result === 'empty') error('لا توجد أصناف لطباعة باركودها');
       if (result === 'blocked') error('يرجى السماح بالنوافذ المنبثقة لطباعة ملصقات الباركود');
+      return result === 'opened';
     } catch (printError: any) {
       error(printError.message || 'تعذرت طباعة ملصقات الباركود');
+      return false;
     }
   };
 
@@ -651,6 +664,13 @@ export const ItemsCatalog: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {barcodePrintItems && (
+        <BarcodePrintDialog
+          items={barcodePrintItems}
+          onClose={() => setBarcodePrintItems(null)}
+          onPrint={printSelectedBarcodes}
+        />
       )}
     </div>
   );

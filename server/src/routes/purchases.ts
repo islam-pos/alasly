@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
+import { sendInvoicePdf, sendShortageRequest } from '../services/whatsapp';
 
 const router = Router();
 
@@ -45,7 +46,20 @@ router.post('/requests', async (req, res) => {
 
     await logAudit({ action: 'CREATE', entity: 'PurchaseRequest', entityId: request.id, details: `إنشاء طلب شراء ${requestNumber}` });
 
-    res.status(201).json(request);
+    let whatsappNotification: { sent: boolean; reason?: string } | { sent: false; error: string } = {
+      sent: false,
+      reason: 'no_supplier_or_opt_in',
+    };
+    if (request.supplier?.whatsappOptIn && request.supplier.whatsappNumber) {
+      try {
+        whatsappNotification = await sendShortageRequest(request, request.supplier);
+      } catch (whatsappError: any) {
+        console.error(`WhatsApp shortage request send failed for ${request.requestNumber}:`, whatsappError);
+        whatsappNotification = { sent: false, error: whatsappError.message || 'تعذر إرسال طلب النواقص عبر واتساب' };
+      }
+    }
+
+    res.status(201).json({ ...request, whatsappNotification });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -192,7 +206,31 @@ router.post('/invoices', async (req, res) => {
 
     await logAudit({ action: 'POST', entity: 'PurchaseInvoice', entityId: invoice.id, details: `اعتماد فاتورة مشتريات ${invoiceNumber} بمبلغ ${grandTotal} ر.س` });
 
-    res.status(201).json(invoice);
+    let whatsappNotification: { sent: boolean; reason?: string } | { sent: false; error: string } = {
+      sent: false,
+      reason: 'no_supplier_or_opt_in',
+    };
+    const invoiceForMessage = await prisma.purchaseInvoice.findUnique({
+      where: { id: invoice.id },
+      include: { supplier: true, items: { include: { item: true } } },
+    });
+    if (invoiceForMessage?.supplier.whatsappOptIn && invoiceForMessage.supplier.whatsappNumber) {
+      try {
+        const company = await prisma.companySetting.findFirst();
+        if (!company) throw new Error('بيانات المنشأة غير موجودة لإنشاء ملف الفاتورة');
+        whatsappNotification = await sendInvoicePdf(
+          'supplier',
+          invoiceForMessage,
+          company,
+          invoiceForMessage.supplier,
+        );
+      } catch (whatsappError: any) {
+        console.error(`WhatsApp supplier invoice send failed for ${invoice.invoiceNumber}:`, whatsappError);
+        whatsappNotification = { sent: false, error: whatsappError.message || 'تعذر إرسال الفاتورة عبر واتساب' };
+      }
+    }
+
+    res.status(201).json({ ...invoice, whatsappNotification });
   } catch (err: any) {
     console.error('Purchase invoice error:', err);
     res.status(400).json({ error: err.message });

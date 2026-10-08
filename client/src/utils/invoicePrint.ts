@@ -69,8 +69,8 @@ export const printSalesInvoice = (
     fields.grandTotal && `<div class="grand-total"><span>الإجمالي النهائي</span><strong>${formatMoney(invoice.grandTotal ?? invoice.totalAmount, currency)}</strong></div>`,
   ].filter(Boolean).join('');
 
-  const paperSize = getPaperSizeCss(settings.paperSize);
-  const thermal = settings.printerType === 'THERMAL';
+  const paperSize = getPaperSizeCss(settings.documents.paperSize);
+  const thermal = settings.documents.printerType === 'THERMAL';
   const printWindow = window.open('', '_blank');
   if (!printWindow) return 'blocked';
 
@@ -83,7 +83,7 @@ export const printSalesInvoice = (
         <style>
           @page { size: ${paperSize}; margin: ${thermal ? '4mm' : '12mm'}; }
           * { box-sizing: border-box; }
-          body { color: #111827; font: ${thermal ? '11px' : '13px'} Arial, sans-serif; margin: 0 auto; max-width: ${settings.paperSize === 'THERMAL_58' ? '52mm' : settings.paperSize === 'THERMAL_80' ? '74mm' : '100%'}; }
+          body { color: #111827; font: ${thermal ? '11px' : '13px'} Arial, sans-serif; margin: 0 auto; max-width: ${settings.documents.paperSize === 'THERMAL_58' ? '52mm' : settings.documents.paperSize === 'THERMAL_80' ? '74mm' : '100%'}; }
           header { border-bottom: 1px solid #9ca3af; margin-bottom: 12px; padding-bottom: 10px; }
           h1 { font-size: ${thermal ? '16px' : '21px'}; margin: 0 0 6px; }
           .meta, .details { display: grid; gap: 4px; margin-bottom: 12px; }
@@ -95,12 +95,13 @@ export const printSalesInvoice = (
           .totals div { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
           .grand-total { border-top: 1px solid #374151; font-size: 1.15em; font-weight: bold; margin-top: 5px; padding-top: 7px !important; }
           footer { border-top: 1px solid #d1d5db; margin-top: 18px; padding-top: 8px; text-align: center; }
-          @media print { body { max-width: ${settings.paperSize === 'THERMAL_58' ? '52mm' : settings.paperSize === 'THERMAL_80' ? '74mm' : '100%'}; } }
+          @media print { body { max-width: ${settings.documents.paperSize === 'THERMAL_58' ? '52mm' : settings.documents.paperSize === 'THERMAL_80' ? '74mm' : '100%'}; } }
         </style>
       </head>
       <body>
         <header>
           ${settings.showCompanyName && company?.name ? `<h1>${escapeHtml(company.name)}</h1>` : ''}
+          ${company?.invoiceHeader ? `<div>${escapeHtml(company.invoiceHeader)}</div>` : ''}
           ${companyDetails}
           <div class="meta"><strong>فاتورة رقم: ${escapeHtml(invoice.invoiceNumber)}</strong>
             ${fields.invoiceDate ? `<span>التاريخ: ${escapeHtml(new Date(invoice.date || invoice.createdAt || Date.now()).toLocaleString('ar-EG'))}</span>` : ''}
@@ -113,6 +114,7 @@ export const printSalesInvoice = (
         </table>
         <section class="totals">${totals}</section>
         ${fields.footer && company?.invoiceFooter ? `<footer>${escapeHtml(company.invoiceFooter)}</footer>` : ''}
+        ${company?.termsAndConditions ? `<footer>${escapeHtml(company.termsAndConditions)}</footer>` : ''}
         <script>window.addEventListener('load', () => setTimeout(() => window.print(), 200));</script>
       </body>
     </html>`);

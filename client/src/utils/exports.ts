@@ -80,7 +80,7 @@ export const exportToPdf = (title: string, headers: string[], rows: unknown[][])
           table { border-collapse: collapse; width: 100%; font-size: 12px; }
           th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: right; }
           th { background: #f1f5f9; }
-          @page { size: ${getPaperSizeCss(printSettings.paperSize)}; margin: ${printSettings.printerType === 'THERMAL' ? '4mm' : '14mm'}; }
+          @page { size: ${getPaperSizeCss(printSettings.documents.paperSize)}; margin: ${printSettings.documents.printerType === 'THERMAL' ? '4mm' : '14mm'}; }
           @media print { body { margin: 0; } }
         </style>
       </head>

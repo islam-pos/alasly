@@ -1,9 +1,16 @@
 export type PaperSize = 'A4' | 'A5' | 'THERMAL_80' | 'THERMAL_58';
 export type PrinterType = 'STANDARD' | 'THERMAL';
 
+export interface OutputPrintSettings {
+  paperSize: PaperSize;
+  printerType: PrinterType;
+}
+
 export interface PrintSettings {
   paperSize: PaperSize;
   printerType: PrinterType;
+  barcode: OutputPrintSettings;
+  documents: OutputPrintSettings;
   showCompanyName: boolean;
   invoiceFields: {
     companyAddress: boolean;
@@ -32,6 +39,8 @@ export interface PrintSettings {
 export const defaultPrintSettings: PrintSettings = {
   paperSize: 'A4',
   printerType: 'STANDARD',
+  barcode: { paperSize: 'THERMAL_80', printerType: 'THERMAL' },
+  documents: { paperSize: 'A4', printerType: 'STANDARD' },
   showCompanyName: true,
   invoiceFields: {
     companyAddress: true,
@@ -70,6 +79,33 @@ export const parsePrintSettings = (value: unknown): PrintSettings => {
     ? parsed.paperSize as PaperSize
     : defaultPrintSettings.paperSize;
   const printerType = parsed.printerType === 'THERMAL' ? 'THERMAL' : 'STANDARD';
+  const hasLegacyOutputSettings = Object.prototype.hasOwnProperty.call(parsed, 'paperSize')
+    || Object.prototype.hasOwnProperty.call(parsed, 'printerType');
+  const parseOutputSettings = (
+    output: unknown,
+    fallback: OutputPrintSettings,
+  ): OutputPrintSettings => {
+    const candidateOutput = output && typeof output === 'object'
+      ? output as Partial<OutputPrintSettings>
+      : {};
+    return {
+      paperSize: ['A4', 'A5', 'THERMAL_80', 'THERMAL_58'].includes(String(candidateOutput.paperSize))
+        ? candidateOutput.paperSize as PaperSize
+        : fallback.paperSize,
+      printerType: candidateOutput.printerType === 'THERMAL' ? 'THERMAL' : candidateOutput.printerType === 'STANDARD'
+        ? 'STANDARD'
+        : fallback.printerType,
+    };
+  };
+  const legacyOutput: OutputPrintSettings = { paperSize, printerType };
+  const barcode = parseOutputSettings(
+    parsed.barcode,
+    defaultPrintSettings.barcode,
+  );
+  const documents = parseOutputSettings(
+    parsed.documents,
+    hasLegacyOutputSettings ? legacyOutput : defaultPrintSettings.documents,
+  );
   const invoiceFields = parsed.invoiceFields && typeof parsed.invoiceFields === 'object'
     ? parsed.invoiceFields
     : {};
@@ -77,6 +113,8 @@ export const parsePrintSettings = (value: unknown): PrintSettings => {
   return {
     paperSize,
     printerType,
+    barcode,
+    documents,
     showCompanyName: typeof parsed.showCompanyName === 'boolean'
       ? parsed.showCompanyName
       : defaultPrintSettings.showCompanyName,

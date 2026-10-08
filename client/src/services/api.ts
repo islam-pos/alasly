@@ -105,12 +105,26 @@ const apiClient = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
+  updateSupplier: (id: string, data: any) =>
+    fetch(`${BASE_URL}/master/suppliers/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
   getCustomers: () =>
     fetch(`${BASE_URL}/master/customers`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
   createCustomer: (data: any) =>
     fetch(`${BASE_URL}/master/customers`, {
       method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  updateCustomer: (id: string, data: any) =>
+    fetch(`${BASE_URL}/master/customers/${encodeURIComponent(id)}`, {
+      method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
