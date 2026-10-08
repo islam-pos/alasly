@@ -190,9 +190,12 @@ model Supplier {
   notes            String?
   active           Boolean           @default(true)
   createdAt        DateTime          @default(now())
+  customerId       String?           @unique
+  customer         Customer?         @relation("SupplierCustomerLink", fields: [customerId], references: [id], onDelete: SetNull)
   purchaseOrders   PurchaseRequest[]
   purchaseInvoices PurchaseInvoice[]
   purchaseReturns  PurchaseReturn[]
+  cashTransactions CashTransaction[] @relation("SupplierCashTransactions")
 }
 
 model Customer {
@@ -211,10 +214,12 @@ model Customer {
   notes          String?
   active         Boolean        @default(true)
   createdAt      DateTime       @default(now())
+  supplier       Supplier?      @relation("SupplierCustomerLink")
   vehicles       Vehicle[]
   repairOrders   RepairOrder[]
   salesInvoices  SalesInvoice[]
   salesReturns   SalesReturn[]
+  cashTransactions CashTransaction[] @relation("CustomerCashTransactions")
 }
 
 model Vehicle {
@@ -757,6 +762,10 @@ model CashTransaction {
   referenceId   String?
   partyType     String?   // CUSTOMER, SUPPLIER, EMPLOYEE, OTHER
   partyName     String?
+  customerId    String?
+  customer      Customer? @relation("CustomerCashTransactions", fields: [customerId], references: [id], onDelete: SetNull)
+  supplierId    String?
+  supplier      Supplier? @relation("SupplierCashTransactions", fields: [supplierId], references: [id], onDelete: SetNull)
   description   String?
   createdById   String?
   createdAt     DateTime  @default(now())

@@ -197,6 +197,9 @@ const apiClient = {
   getSupplierStatement: (id: string) =>
     fetch(`${BASE_URL}/purchases/suppliers/${id}/statement`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
+  getAllSupplierStatements: () =>
+    fetch(`${BASE_URL}/purchases/suppliers/statement`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
   // Sales & POS
   getSalesInvoices: (params?: { type?: string; customerId?: string }) => {
     const query = new URLSearchParams();

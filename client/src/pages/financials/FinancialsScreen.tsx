@@ -7,6 +7,7 @@ import {
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { PrintModal, CashVoucherPrint } from '../../components/common/PrintTemplates';
+import { exportToExcel, exportToPdf, formatExportDate } from '../../utils/exports';
 
 export const FinancialsScreen: React.FC = () => {
   const { showToast } = useToast();
@@ -104,6 +105,35 @@ export const FinancialsScreen: React.FC = () => {
   const totalExpenses = expenses.reduce((sum, e) => sum + (e.totalAmount || 0), 0);
   const totalRevenues = revenues.reduce((sum, r) => sum + (r.amount || 0), 0);
 
+  const exportFinancialRecords = (format: 'excel' | 'pdf') => {
+    const records =
+      activeTab === 'expenses'
+        ? expenses.map((record) => [record.expenseNumber, formatExportDate(record.date), record.category?.name || '', record.beneficiary || '', record.totalAmount, record.paymentMethod])
+        : activeTab === 'revenues'
+          ? revenues.map((record) => [record.revenueNumber, formatExportDate(record.date), record.category?.name || '', record.source || '', record.amount, record.paymentMethod])
+          : activeTab === 'cashbox'
+            ? cashTransactions.map((record) => [record.type, formatExportDate(record.date), record.partyName || '', record.description || '', record.amount, record.cashbox?.name || ''])
+            : activeTab === 'shifts'
+              ? shifts.map((record) => [record.shiftNumber, formatExportDate(record.startTime), record.cashierName || '', record.status, record.expectedCash, record.actualCash])
+              : banks.map((record) => [record.bankName, record.accountNumber || '', record.currentBalance]);
+    const headers =
+      activeTab === 'expenses'
+        ? ['رقم السند', 'التاريخ', 'التصنيف', 'المستفيد', 'المبلغ', 'طريقة الدفع']
+        : activeTab === 'revenues'
+          ? ['رقم السند', 'التاريخ', 'التصنيف', 'المصدر', 'المبلغ', 'طريقة الدفع']
+          : activeTab === 'cashbox'
+            ? ['النوع', 'التاريخ', 'الطرف', 'الوصف', 'المبلغ', 'الصندوق']
+            : activeTab === 'shifts'
+              ? ['رقم الوردية', 'التاريخ', 'الكاشير', 'الحالة', 'المتوقع', 'الفعلي']
+              : ['البنك', 'رقم الحساب', 'الرصيد'];
+    const title = `السجلات المالية - ${activeTab}`;
+    if (format === 'excel') {
+      exportToExcel(title, records.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']))));
+    } else {
+      exportToPdf(title, headers, records);
+    }
+  };
+
   // Submit Expense
   const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,6 +226,18 @@ export const FinancialsScreen: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => exportFinancialRecords('excel')}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2.5 rounded-xl font-bold text-sm"
+          >
+            Excel
+          </button>
+          <button
+            onClick={() => exportFinancialRecords('pdf')}
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-3 py-2.5 rounded-xl font-bold text-sm"
+          >
+            PDF
+          </button>
           <button
             onClick={() => setIsVoucherModalOpen(true)}
             className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition"

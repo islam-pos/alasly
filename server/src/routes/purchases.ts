@@ -200,6 +200,59 @@ router.post('/invoices', async (req, res) => {
 });
 
 // --- Supplier Statement of Account ---
+router.get('/suppliers/statement', async (_req, res) => {
+  try {
+    const suppliers = await prisma.supplier.findMany({
+      orderBy: { name: 'asc' },
+      include: {
+        purchaseInvoices: { orderBy: { date: 'asc' } },
+        purchaseReturns: { orderBy: { date: 'asc' } },
+        cashTransactions: { where: { type: 'PAYMENT' }, orderBy: { date: 'asc' }, include: { cashbox: true } },
+      },
+    });
+    res.json({
+      suppliers: suppliers.map((supplier) => {
+        const { purchaseInvoices, purchaseReturns, cashTransactions, ...supplierDetails } = supplier;
+        return {
+          ...supplierDetails,
+          statement: [
+            ...purchaseInvoices.map((invoice) => ({
+              id: invoice.id,
+              date: invoice.date,
+              number: invoice.invoiceNumber,
+              type: 'فاتورة مشتريات',
+              debit: invoice.remainingAmount,
+              credit: 0,
+              notes: invoice.notes,
+            })),
+            ...purchaseReturns.map((purchaseReturn) => ({
+              id: purchaseReturn.id,
+              date: purchaseReturn.date,
+              number: purchaseReturn.returnNumber,
+              type: 'مرتجع مشتريات',
+              debit: 0,
+              credit: purchaseReturn.totalAmount,
+              notes: purchaseReturn.reason,
+            })),
+            ...cashTransactions.map((transaction) => ({
+              id: transaction.id,
+              date: transaction.date,
+              number: transaction.referenceId || transaction.id,
+              type: 'سند صرف',
+              debit: 0,
+              credit: transaction.amount,
+              notes: transaction.description,
+            })),
+          ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+        };
+      }),
+    });
+  } catch (err: any) {
+    console.error('Failed to load supplier statements:', err);
+    res.status(500).json({ error: 'تعذر تحميل كشوف حساب الموردين' });
+  }
+});
+
 router.get('/suppliers/:id/statement', async (req, res) => {
   try {
     const supplier = await prisma.supplier.findUnique({
@@ -207,17 +260,51 @@ router.get('/suppliers/:id/statement', async (req, res) => {
       include: {
         purchaseInvoices: { orderBy: { date: 'desc' } },
         purchaseReturns: { orderBy: { date: 'desc' } },
+        cashTransactions: { where: { type: 'PAYMENT' }, orderBy: { date: 'desc' } },
       },
     });
 
     if (!supplier) return res.status(404).json({ error: 'المورد غير موجود' });
 
+    const { purchaseInvoices, purchaseReturns, cashTransactions, ...supplierDetails } = supplier;
+    const transactions = [
+      ...purchaseInvoices.map((invoice) => ({
+        id: invoice.id,
+        date: invoice.date,
+        number: invoice.invoiceNumber,
+        type: 'فاتورة مشتريات',
+        debit: invoice.remainingAmount,
+        credit: 0,
+        notes: invoice.notes,
+      })),
+      ...purchaseReturns.map((purchaseReturn) => ({
+        id: purchaseReturn.id,
+        date: purchaseReturn.date,
+        number: purchaseReturn.returnNumber,
+        type: 'مرتجع مشتريات',
+        debit: 0,
+        credit: purchaseReturn.totalAmount,
+        notes: purchaseReturn.reason,
+      })),
+      ...cashTransactions.map((transaction) => ({
+        id: transaction.id,
+        date: transaction.date,
+        number: transaction.referenceId || transaction.id,
+        type: 'سند صرف',
+        debit: 0,
+        credit: transaction.amount,
+        notes: transaction.description,
+      })),
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
     res.json({
-      supplier,
-      invoicesCount: supplier.purchaseInvoices.length,
-      totalPurchases: supplier.purchaseInvoices.reduce((sum, i) => sum + i.grandTotal, 0),
-      totalPaid: supplier.purchaseInvoices.reduce((sum, i) => sum + i.paidAmount, 0),
+      supplier: { ...supplierDetails, statement: transactions },
+      invoicesCount: purchaseInvoices.length,
+      totalPurchases: purchaseInvoices.reduce((sum, i) => sum + i.grandTotal, 0),
+      totalPaid: purchaseInvoices.reduce((sum, i) => sum + i.paidAmount, 0)
+        + cashTransactions.reduce((sum, transaction) => sum + transaction.amount, 0),
       totalRemaining: supplier.currentBalance,
+      transactions,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

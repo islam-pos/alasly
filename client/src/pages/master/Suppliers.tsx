@@ -8,9 +8,12 @@ import {
   Calendar,
   X,
   Check,
+  Download,
+  Printer,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { exportToExcel, exportToPdf, formatExportDate, formatExportNumber } from '../../utils/exports';
 
 export const Suppliers: React.FC = () => {
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -19,6 +22,7 @@ export const Suppliers: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [statementModalOpen, setStatementModalOpen] = useState(false);
   const [selectedStatement, setSelectedStatement] = useState<any>(null);
+  const [allStatements, setAllStatements] = useState<any[] | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -28,6 +32,7 @@ export const Suppliers: React.FC = () => {
     taxNumber: '',
     paymentTermsDays: 30,
     creditLimit: 50000,
+    alsoCustomer: false,
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -69,6 +74,7 @@ export const Suppliers: React.FC = () => {
         taxNumber: '',
         paymentTermsDays: 30,
         creditLimit: 50000,
+        alsoCustomer: false,
       });
       loadSuppliers();
     } catch (err: any) {
@@ -82,9 +88,54 @@ export const Suppliers: React.FC = () => {
     try {
       const res = await api.getSupplierStatement(supplierId);
       setSelectedStatement(res);
+      setAllStatements(null);
       setStatementModalOpen(true);
     } catch (err: any) {
       error(err.message || 'فشل تحميل كشف حساب المورد');
+    }
+  };
+
+  const handleViewAllStatements = async () => {
+    try {
+      const res = await api.getAllSupplierStatements();
+      setAllStatements(res.data.suppliers);
+      setSelectedStatement(null);
+      setStatementModalOpen(true);
+    } catch (err: any) {
+      error(err.message || 'فشل تحميل كشوف حساب الموردين');
+    }
+  };
+
+  const statementRows = (statements: any[]) =>
+    statements.flatMap((supplier) => {
+      let balance = supplier.openingBalance || 0;
+      return [
+        ...(supplier.openingBalance
+          ? [[supplier.name, '', '', 'رصيد افتتاحي', supplier.openingBalance, 0, balance]]
+          : []),
+        ...(supplier.statement || []).map((transaction: any) => {
+          balance += (transaction.debit || 0) - (transaction.credit || 0);
+          return [
+            supplier.name,
+            formatExportDate(transaction.date),
+            transaction.number,
+            transaction.type,
+            transaction.debit || 0,
+            transaction.credit || 0,
+            balance,
+          ];
+        }),
+      ];
+    });
+
+  const exportStatements = (format: 'excel' | 'pdf') => {
+    const statements = allStatements || (selectedStatement ? [selectedStatement.supplier] : []);
+    const rows = statementRows(statements);
+    const headers = ['المورد', 'التاريخ', 'رقم المستند', 'البيان', 'مدين', 'دائن', 'الرصيد'];
+    if (format === 'excel') {
+      exportToExcel('كشف-حساب-الموردين', rows.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']))));
+    } else {
+      exportToPdf('كشف حساب الموردين', headers, rows);
     }
   };
 
@@ -116,6 +167,13 @@ export const Suppliers: React.FC = () => {
         >
           <Plus className="w-4 h-4" />
           <span>إضافة مورد جديد</span>
+        </button>
+        <button
+          onClick={handleViewAllStatements}
+          className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold"
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          <span>كشف حساب الموردين</span>
         </button>
       </div>
 
@@ -156,6 +214,7 @@ export const Suppliers: React.FC = () => {
                   <td className="p-3.5">
                     <div className="font-bold text-slate-900">{s.name}</div>
                     {s.company && <div className="text-[11px] text-slate-400">{s.company}</div>}
+                    {s.customer && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">مورد وعميل</span>}
                   </td>
                   <td className="p-3.5 font-mono text-slate-600">{s.phone}</td>
                   <td className="p-3.5 font-mono text-slate-500">{s.taxNumber || '-'}</td>
@@ -262,6 +321,16 @@ export const Suppliers: React.FC = () => {
                 />
               </div>
 
+              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={formData.alsoCustomer}
+                  onChange={(e) => setFormData({ ...formData, alsoCustomer: e.target.checked })}
+                  className="h-4 w-4 accent-brand-600"
+                />
+                تسجيل هذا المورد كعميل أيضًا
+              </label>
+
               <div className="flex gap-2 pt-3">
                 <button
                   type="submit"
@@ -285,25 +354,29 @@ export const Suppliers: React.FC = () => {
       )}
 
       {/* Supplier Statement Modal */}
-      {statementModalOpen && selectedStatement && (
+      {statementModalOpen && (selectedStatement || allStatements) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
                 <h3 className="font-bold text-slate-900 text-base">
-                  كشف حساب المورد: {selectedStatement.supplier.name}
+                  {allStatements ? 'كشف حساب جميع الموردين' : `كشف حساب المورد: ${selectedStatement.supplier.name}`}
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                {!allStatements && <p className="text-xs text-slate-400 mt-0.5">
                   كود: {selectedStatement.supplier.code} • هاتف: {selectedStatement.supplier.phone}
-                </p>
+                </p>}
               </div>
-              <button onClick={() => setStatementModalOpen(false)} className="text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => exportStatements('excel')} title="تنزيل Excel" className="rounded-lg p-2 text-emerald-700 hover:bg-emerald-50"><Download className="h-4 w-4" /></button>
+                <button onClick={() => exportStatements('pdf')} title="تنزيل PDF" className="rounded-lg p-2 text-slate-700 hover:bg-slate-100"><Printer className="h-4 w-4" /></button>
+                <button onClick={() => setStatementModalOpen(false)} className="text-slate-400">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
+            {!allStatements && <div className="grid grid-cols-3 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
               <div>
                 <span className="text-slate-400 block font-medium">إجمالي المشتريات:</span>
                 <span className="font-bold text-slate-900 text-sm mt-0.5 block font-mono">
@@ -322,38 +395,48 @@ export const Suppliers: React.FC = () => {
                   {selectedStatement.totalRemaining.toLocaleString()} ر.س
                 </span>
               </div>
-            </div>
+            </div>}
 
             {/* Invoices List */}
             <div className="overflow-x-auto">
               <table className="w-full text-right text-xs">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
                   <tr>
-                    <th className="p-2.5">رقم الفاتورة</th>
+                    {allStatements && <th className="p-2.5">المورد</th>}
                     <th className="p-2.5">التاريخ</th>
-                    <th className="p-2.5">الإجمالي</th>
-                    <th className="p-2.5">المدفوع</th>
-                    <th className="p-2.5">المتبقي</th>
-                    <th className="p-2.5">الحالة</th>
+                    <th className="p-2.5">رقم المستند</th>
+                    <th className="p-2.5">البيان</th>
+                    <th className="p-2.5">مدين</th>
+                    <th className="p-2.5">دائن</th>
+                    <th className="p-2.5">الرصيد</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  {selectedStatement.supplier.purchaseInvoices?.map((inv: any) => (
-                    <tr key={inv.id}>
-                      <td className="p-2.5 font-mono font-bold text-brand-700">{inv.invoiceNumber}</td>
-                      <td className="p-2.5 font-mono text-slate-500">
-                        {new Date(inv.date).toLocaleDateString('ar-SA')}
-                      </td>
-                      <td className="p-2.5 font-bold font-mono">{inv.grandTotal} ر.س</td>
-                      <td className="p-2.5 font-mono text-emerald-600">{inv.paidAmount} ر.س</td>
-                      <td className="p-2.5 font-mono text-rose-600">{inv.remainingAmount} ر.س</td>
-                      <td className="p-2.5">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100">
-                          {inv.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {(allStatements || [selectedStatement.supplier]).flatMap((supplier: any) => {
+                    let balance = supplier.openingBalance || 0;
+                    const openingRow = balance ? [<tr key={`${supplier.id}-opening`}>
+                      {allStatements && <td className="p-2.5 font-bold">{supplier.name}</td>}
+                      <td className="p-2.5">-</td>
+                      <td className="p-2.5">-</td>
+                      <td className="p-2.5">رصيد افتتاحي</td>
+                      <td className="p-2.5 font-mono">{formatExportNumber(balance)}</td>
+                      <td className="p-2.5 font-mono">{formatExportNumber(0)}</td>
+                      <td className="p-2.5 font-mono font-bold">{formatExportNumber(balance)} ر.س</td>
+                    </tr>] : [];
+                    const transactions = (supplier.statement || []).map((transaction: any) => {
+                      balance += (transaction.debit || 0) - (transaction.credit || 0);
+                      return <tr key={`${supplier.id}-${transaction.id}`}>
+                        {allStatements && <td className="p-2.5 font-bold">{supplier.name}</td>}
+                        <td className="p-2.5 font-mono text-slate-500">{formatExportDate(transaction.date)}</td>
+                        <td className="p-2.5 font-mono font-bold text-brand-700">{transaction.number}</td>
+                        <td className="p-2.5">{transaction.type}</td>
+                        <td className="p-2.5 font-mono">{formatExportNumber(transaction.debit)}</td>
+                        <td className="p-2.5 font-mono">{formatExportNumber(transaction.credit)}</td>
+                        <td className="p-2.5 font-mono font-bold">{formatExportNumber(balance)} ر.س</td>
+                      </tr>;
+                    });
+                    return [...openingRow, ...transactions];
+                  })}
                 </tbody>
               </table>
             </div>

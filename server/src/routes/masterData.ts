@@ -137,6 +137,7 @@ router.get('/suppliers', async (req, res) => {
     const suppliers = await prisma.supplier.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
+        customer: { select: { id: true, code: true } },
         _count: { select: { purchaseInvoices: true, purchaseOrders: true } },
       },
     });
@@ -148,10 +149,41 @@ router.get('/suppliers', async (req, res) => {
 
 router.post('/suppliers', async (req, res) => {
   try {
+    const { alsoCustomer = false, ...supplierData } = req.body;
     const count = await prisma.supplier.count();
-    const code = req.body.code || `SUP-${String(count + 1).padStart(2, '0')}`;
-    const supplier = await prisma.supplier.create({
-      data: { ...req.body, code },
+    const customerCount = alsoCustomer ? await prisma.customer.count() : 0;
+    const code = supplierData.code || `SUP-${String(count + 1).padStart(2, '0')}`;
+    const supplier = await prisma.$transaction(async (tx) => {
+      const createdSupplier = await tx.supplier.create({
+        data: {
+          ...supplierData,
+          code,
+          currentBalance: supplierData.currentBalance ?? supplierData.openingBalance ?? 0,
+        },
+      });
+      if (!alsoCustomer) return createdSupplier;
+
+      const customer = await tx.customer.create({
+        data: {
+          code: `CUS-${String(customerCount + 1).padStart(3, '0')}`,
+          name: supplierData.name,
+          phone: supplierData.phone,
+          mobile: supplierData.mobile || null,
+          email: supplierData.email || null,
+          address: supplierData.address || null,
+          taxNumber: supplierData.taxNumber || null,
+          customerType: supplierData.company ? 'COMPANY' : 'INDIVIDUAL',
+          openingBalance: supplierData.openingBalance || 0,
+          currentBalance: supplierData.currentBalance ?? supplierData.openingBalance ?? 0,
+          creditLimit: supplierData.creditLimit || 0,
+          notes: supplierData.notes || null,
+        },
+      });
+      return tx.supplier.update({
+        where: { id: createdSupplier.id },
+        data: { customerId: customer.id },
+        include: { customer: { select: { id: true, code: true } } },
+      });
     });
     res.status(201).json(supplier);
   } catch (err: any) {
@@ -177,6 +209,7 @@ router.get('/customers', async (req, res) => {
     const customers = await prisma.customer.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
+        supplier: { select: { id: true, code: true } },
         vehicles: true,
         _count: { select: { repairOrders: true, salesInvoices: true } },
       },
@@ -189,10 +222,41 @@ router.get('/customers', async (req, res) => {
 
 router.post('/customers', async (req, res) => {
   try {
+    const { alsoSupplier = false, ...customerData } = req.body;
     const count = await prisma.customer.count();
-    const code = req.body.code || `CUS-${String(count + 1).padStart(3, '0')}`;
-    const customer = await prisma.customer.create({
-      data: { ...req.body, code },
+    const supplierCount = alsoSupplier ? await prisma.supplier.count() : 0;
+    const code = customerData.code || `CUS-${String(count + 1).padStart(3, '0')}`;
+    const customer = await prisma.$transaction(async (tx) => {
+      const createdCustomer = await tx.customer.create({
+        data: {
+          ...customerData,
+          code,
+          currentBalance: customerData.currentBalance ?? customerData.openingBalance ?? 0,
+        },
+      });
+      if (!alsoSupplier) return createdCustomer;
+
+      const supplier = await tx.supplier.create({
+        data: {
+          code: `SUP-${String(supplierCount + 1).padStart(2, '0')}`,
+          name: customerData.name,
+          company: customerData.customerType === 'COMPANY' ? customerData.name : null,
+          phone: customerData.phone,
+          mobile: customerData.mobile || null,
+          email: customerData.email || null,
+          address: customerData.address || null,
+          taxNumber: customerData.taxNumber || null,
+          openingBalance: customerData.openingBalance || 0,
+          currentBalance: customerData.currentBalance ?? customerData.openingBalance ?? 0,
+          creditLimit: customerData.creditLimit || 0,
+          notes: customerData.notes || null,
+          customerId: createdCustomer.id,
+        },
+      });
+      return tx.customer.findUniqueOrThrow({
+        where: { id: createdCustomer.id },
+        include: { supplier: { select: { id: true, code: true } } },
+      });
     });
     res.status(201).json(customer);
   } catch (err: any) {

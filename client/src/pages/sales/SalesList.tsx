@@ -13,9 +13,11 @@ import {
   Eye,
   X,
   Check,
+  Download,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { exportToExcel, exportToPdf, formatExportDate } from '../../utils/exports';
 
 export const SalesList: React.FC = () => {
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -89,6 +91,25 @@ export const SalesList: React.FC = () => {
     return matchesType && matchesQuery;
   });
 
+  const exportInvoices = (format: 'excel' | 'pdf') => {
+    const headers = ['رقم الفاتورة', 'التاريخ', 'العميل', 'نوع الفاتورة', 'الإجمالي', 'المدفوع', 'المتبقي', 'الحالة'];
+    const rows = filteredInvoices.map((invoice) => [
+      invoice.invoiceNumber,
+      formatExportDate(invoice.date),
+      invoice.customer?.name || 'عميل نقدي',
+      invoice.invoiceType,
+      invoice.grandTotal,
+      invoice.paidAmount,
+      invoice.remainingAmount,
+      invoice.status,
+    ]);
+    if (format === 'excel') {
+      exportToExcel('فواتير-المبيعات', rows.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']))));
+    } else {
+      exportToPdf('فواتير المبيعات', headers, rows);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
@@ -103,13 +124,21 @@ export const SalesList: React.FC = () => {
           </p>
         </div>
 
-        <Link
-          to="/pos"
-          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20"
-        >
-          <Plus className="w-4 h-4" />
-          <span>نقطة بيع سريعة (POS)</span>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => exportInvoices('excel')} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white">
+            <Download className="h-4 w-4" /> Excel
+          </button>
+          <button onClick={() => exportInvoices('pdf')} className="flex items-center gap-2 rounded-xl bg-slate-800 px-3 py-2.5 text-xs font-bold text-white">
+            <Printer className="h-4 w-4" /> PDF
+          </button>
+          <Link
+            to="/pos"
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20"
+          >
+            <Plus className="w-4 h-4" />
+            <span>نقطة بيع سريعة (POS)</span>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { exportToExcel, exportToPdf } from '../../utils/exports';
 
 export const JobCardDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -135,6 +136,22 @@ export const JobCardDetail: React.FC = () => {
   };
 
   const currentStepIdx = getStepIndex(jobCard.status);
+
+  const exportEstimate = (estimate: any, format: 'excel' | 'pdf') => {
+    const headers = ['النوع', 'البيان', 'الكمية', 'سعر الوحدة', 'الإجمالي'];
+    const rows = (estimate.items || []).map((item: any) => [
+      item.type === 'PART' ? 'قطعة غيار' : 'أجور يد',
+      item.description,
+      item.quantity,
+      item.unitPrice,
+      item.total,
+    ]);
+    if (format === 'excel') {
+      exportToExcel(`عرض-سعر-${estimate.estimateNumber}`, rows.map((row: unknown[]) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']))));
+    } else {
+      exportToPdf(`عرض السعر ${estimate.estimateNumber} - ${jobCard.customer?.name || ''}`, headers, rows);
+    }
+  };
 
   // Status transition handler
   const handleUpdateStatus = async (newStatus: string) => {
@@ -568,6 +585,13 @@ export const JobCardDetail: React.FC = () => {
                         </span>
                       </div>
 
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button onClick={() => exportEstimate(est, 'excel')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">
+                          تنزيل Excel
+                        </button>
+                        <button onClick={() => exportEstimate(est, 'pdf')} className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-white">
+                          تنزيل PDF
+                        </button>
                       {/* Approval Actions */}
                       {!est.isApprovedByCustomer && (
                         <div className="flex items-center gap-2">
@@ -586,6 +610,7 @@ export const JobCardDetail: React.FC = () => {
                           </button>
                         </div>
                       )}
+                      </div>
                     </div>
 
                     {/* Estimate Items Table */}

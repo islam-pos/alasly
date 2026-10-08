@@ -12,9 +12,12 @@ import {
   FileSpreadsheet,
   X,
   Check,
+  Download,
+  Printer,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { exportToExcel, exportToPdf, formatExportDate } from '../../utils/exports';
 
 export const PurchasesList: React.FC = () => {
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -143,6 +146,26 @@ export const PurchasesList: React.FC = () => {
       (inv.supplierInvoiceNumber && inv.supplierInvoiceNumber.includes(searchQuery))
   );
 
+  const exportInvoices = (format: 'excel' | 'pdf') => {
+    const headers = ['رقم الفاتورة', 'المورد', 'رقم فاتورة المورد', 'المستودع', 'التاريخ', 'الإجمالي', 'المدفوع', 'المتبقي', 'الحالة'];
+    const rows = filteredInvoices.map((invoice) => [
+      invoice.invoiceNumber,
+      invoice.supplier?.name || '',
+      invoice.supplierInvoiceNumber || '',
+      invoice.warehouse?.name || '',
+      formatExportDate(invoice.date),
+      invoice.grandTotal,
+      invoice.paidAmount,
+      invoice.remainingAmount,
+      invoice.status,
+    ]);
+    if (format === 'excel') {
+      exportToExcel('فواتير-المشتريات', rows.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']))));
+    } else {
+      exportToPdf('فواتير المشتريات', headers, rows);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
@@ -157,13 +180,21 @@ export const PurchasesList: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20"
-        >
-          <Plus className="w-4 h-4" />
-          <span>فاتورة مشتريات جديدة</span>
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => exportInvoices('excel')} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white">
+            <Download className="h-4 w-4" /> Excel
+          </button>
+          <button onClick={() => exportInvoices('pdf')} className="flex items-center gap-2 rounded-xl bg-slate-800 px-3 py-2.5 text-xs font-bold text-white">
+            <Printer className="h-4 w-4" /> PDF
+          </button>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            <span>فاتورة مشتريات جديدة</span>
+          </button>
+        </div>
       </div>
 
       {/* Search */}

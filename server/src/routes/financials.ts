@@ -170,7 +170,7 @@ router.post('/revenues', async (req, res) => {
 router.get('/cash/transactions', async (req, res) => {
   try {
     const transactions = await prisma.cashTransaction.findMany({
-      include: { cashbox: true },
+      include: { cashbox: true, customer: true, supplier: true },
       orderBy: { date: 'desc' },
     });
     res.json(transactions);
@@ -232,6 +232,8 @@ router.post('/cash/vouchers', async (req, res) => {
           amount: amountVal,
           partyType: customerId ? 'CUSTOMER' : supplierId ? 'SUPPLIER' : 'OTHER',
           partyName,
+          customerId: customerId || null,
+          supplierId: supplierId || null,
           description,
           referenceType: referenceType || (customerId ? 'CUSTOMER_PAYMENT' : 'SUPPLIER_PAYMENT'),
           referenceId,

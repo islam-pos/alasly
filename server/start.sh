@@ -16,6 +16,7 @@ if [ ! -f /data/autocare.db ]; then
 fi
 
 export DATABASE_URL="file:/data/autocare.db"
+node /app/server/dist/migrate.js
 if [ ! -f /data/.users-secured ]; then
   if [ -z "${INITIAL_ADMIN_PASSWORD:-}" ]; then
     echo "Set INITIAL_ADMIN_PASSWORD (16-72 bytes) before the first deployment."

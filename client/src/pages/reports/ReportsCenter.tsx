@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { exportToExcel, exportToPdf, formatExportDate } from '../../utils/exports';
 
 export const ReportsCenter: React.FC = () => {
   const { showToast } = useToast();
@@ -58,34 +59,35 @@ export const ReportsCenter: React.FC = () => {
     fetchActiveReport();
   }, [activeReport, fromDate, toDate, selectedWarehouse]);
 
-  // Export CSV Helper
-  const exportToCSV = () => {
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // Byte Order Mark for Arabic Excel
-    
+  const getReportExport = () => {
     if (activeReport === 'sales') {
-      csvContent += "رقم الفاتورة,التاريخ,العميل,النوع,المجموع,الضريبة,الخصم,الصافي,المدفوع,المتبقي\n";
-      salesReport.invoices.forEach((inv: any) => {
-        csvContent += `"${inv.invoiceNumber}","${new Date(inv.date).toLocaleDateString('ar-SA')}","${inv.customer?.name || 'نقدي'}","${inv.invoiceType}","${inv.subtotal}","${inv.taxAmount}","${inv.discount}","${inv.grandTotal}","${inv.paidAmount}","${inv.remainingAmount}"\n`;
-      });
-    } else if (activeReport === 'inventory') {
-      csvContent += "الصنف,الباركود,التصنيف,الكمية,حد الطلب,سعر التكلفة,سعر البيع,قيمة التكلفة,قيمة البيع\n";
-      inventoryReport.items.forEach((it: any) => {
-        csvContent += `"${it.name}","${it.barcode || ''}","${it.category}","${it.quantity}","${it.minStock}","${it.avgCost}","${it.sellPrice}","${it.costValue}","${it.sellValue}"\n`;
-      });
-    } else if (activeReport === 'workshop') {
-      csvContent += "رقم الأمر,التاريخ,العميل,السيارة,اللوحة,الفني,قطع الغيار,أجور اليد,الإجمالي,الحالة\n";
-      workshopReport.jobCards.forEach((j: any) => {
-        csvContent += `"${j.orderNumber}","${new Date(j.createdAt).toLocaleDateString('ar-SA')}","${j.customer?.name}","${j.vehicle?.make} ${j.vehicle?.model}","${j.vehicle?.plateNumber}","${j.technician?.name || '-'}","${j.totalParts}","${j.totalLabor}","${j.grandTotal}","${j.status}"\n`;
-      });
+      return {
+        title: 'تقرير المبيعات والفواتير',
+        headers: ['رقم الفاتورة', 'التاريخ', 'العميل', 'النوع', 'المجموع', 'الضريبة', 'الخصم', 'الصافي', 'المدفوع', 'المتبقي'],
+        rows: salesReport.invoices.map((inv: any) => [inv.invoiceNumber, formatExportDate(inv.date), inv.customer?.name || 'نقدي', inv.invoiceType, inv.subtotal, inv.taxAmount, inv.discount, inv.grandTotal, inv.paidAmount, inv.remainingAmount]),
+      };
     }
+    if (activeReport === 'inventory') {
+      return {
+        title: 'تقرير تقييم المخزون والأصناف',
+        headers: ['الصنف', 'الباركود', 'التصنيف', 'الكمية', 'حد الطلب', 'سعر التكلفة', 'سعر البيع', 'قيمة التكلفة', 'قيمة البيع'],
+        rows: inventoryReport.items.map((it: any) => [it.name, it.barcode || '', it.category, it.quantity, it.minStock, it.avgCost, it.sellPrice, it.costValue, it.sellValue]),
+      };
+    }
+    return {
+      title: 'تقرير أداء الورشة وأوامر الإصلاح',
+      headers: ['رقم الأمر', 'التاريخ', 'العميل', 'السيارة', 'اللوحة', 'الفني', 'قطع الغيار', 'أجور اليد', 'الإجمالي', 'الحالة'],
+      rows: workshopReport.jobCards.map((j: any) => [j.orderNumber, formatExportDate(j.createdAt), j.customer?.name, `${j.vehicle?.make || ''} ${j.vehicle?.model || ''}`, j.vehicle?.plateNumber, j.technician?.name || '-', j.totalParts, j.totalLabor, j.grandTotal, j.status]),
+    };
+  };
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `تقرير_${activeReport}_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const exportReport = (format: 'excel' | 'pdf') => {
+    const report = getReportExport();
+    if (format === 'excel') {
+      exportToExcel(`تقرير-${activeReport}`, report.rows.map((row: unknown[]) => Object.fromEntries(report.headers.map((header, index) => [header, row[index] ?? '']))));
+    } else {
+      exportToPdf(report.title, report.headers, report.rows);
+    }
   };
 
   return (
@@ -103,18 +105,18 @@ export const ReportsCenter: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={exportToCSV}
+            onClick={() => exportReport('excel')}
             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition"
           >
             <Download className="w-4 h-4" />
-            تصدير إلى Excel / CSV
+            تنزيل Excel
           </button>
           <button
-            onClick={() => window.print()}
+            onClick={() => exportReport('pdf')}
             className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition"
           >
             <Printer className="w-4 h-4" />
-            طباعة التقرير
+            تنزيل PDF
           </button>
         </div>
       </div>

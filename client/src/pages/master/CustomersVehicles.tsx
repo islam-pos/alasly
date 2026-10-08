@@ -40,6 +40,7 @@ export const CustomersVehicles: React.FC = () => {
     taxNumber: '',
     customerType: 'INDIVIDUAL',
     creditLimit: 5000,
+    alsoSupplier: false,
   });
 
   const [vehicleForm, setVehicleForm] = useState({
@@ -104,6 +105,7 @@ export const CustomersVehicles: React.FC = () => {
         taxNumber: '',
         customerType: 'INDIVIDUAL',
         creditLimit: 5000,
+        alsoSupplier: false,
       });
       loadData();
     } catch (err: any) {
@@ -248,6 +250,7 @@ export const CustomersVehicles: React.FC = () => {
                     <td className="p-3.5 font-mono font-bold text-slate-700">{c.code}</td>
                     <td className="p-3.5">
                       <div className="font-bold text-slate-900">{c.name}</div>
+                      {c.supplier && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">مورد وعميل</span>}
                       {c.taxNumber && (
                         <div className="text-[10px] text-slate-400 font-mono">الرقم الضريبي: {c.taxNumber}</div>
                       )}
@@ -422,6 +425,16 @@ export const CustomersVehicles: React.FC = () => {
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
                 />
               </div>
+
+              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={customerForm.alsoSupplier}
+                  onChange={(e) => setCustomerForm({ ...customerForm, alsoSupplier: e.target.checked })}
+                  className="h-4 w-4 accent-brand-600"
+                />
+                تسجيل هذا العميل كمورد أيضًا
+              </label>
 
               <div className="flex gap-2 pt-3">
                 <button
