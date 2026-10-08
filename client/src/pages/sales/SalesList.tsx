@@ -39,7 +39,7 @@ export const SalesList: React.FC = () => {
     setLoading(true);
     try {
       const res = await api.getSalesInvoices();
-      setInvoices(res);
+      setInvoices(res.data);
     } catch (err) {
       console.error(err);
     } finally {

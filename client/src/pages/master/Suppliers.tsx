@@ -41,7 +41,7 @@ export const Suppliers: React.FC = () => {
     setLoading(true);
     try {
       const res = await api.getSuppliers();
-      setSuppliers(res);
+      setSuppliers(res.data);
     } catch (err) {
       console.error(err);
     } finally {

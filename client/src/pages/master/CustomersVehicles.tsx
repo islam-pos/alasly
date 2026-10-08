@@ -66,9 +66,9 @@ export const CustomersVehicles: React.FC = () => {
     setLoading(true);
     try {
       const [cusRes, vehRes] = await Promise.all([api.getCustomers(), api.getVehicles()]);
-      setCustomers(cusRes);
-      setVehicles(vehRes);
-      if (cusRes.length > 0) setVehicleForm((prev) => ({ ...prev, customerId: cusRes[0].id }));
+      setCustomers(cusRes.data);
+      setVehicles(vehRes.data);
+      if (cusRes.data.length > 0) setVehicleForm((prev) => ({ ...prev, customerId: cusRes.data[0].id }));
     } catch (err) {
       console.error(err);
     } finally {

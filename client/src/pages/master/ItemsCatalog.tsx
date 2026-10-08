@@ -65,13 +65,13 @@ export const ItemsCatalog: React.FC = () => {
         api.getUnits(),
         api.getWarehouses(),
       ]);
-      setItems(itemsRes);
-      setCategories(catRes);
-      setUnits(unitRes);
-      setWarehouses(whRes);
-      if (catRes.length > 0) setFormData((prev: any) => ({ ...prev, categoryId: catRes[0].id }));
-      if (unitRes.length > 0) setFormData((prev: any) => ({ ...prev, unitId: unitRes[0].id }));
-      if (whRes.length > 0) setFormData((prev: any) => ({ ...prev, initialWarehouseId: whRes[0].id }));
+      setItems(itemsRes.data);
+      setCategories(catRes.data);
+      setUnits(unitRes.data);
+      setWarehouses(whRes.data);
+      if (catRes.data.length > 0) setFormData((prev: any) => ({ ...prev, categoryId: catRes.data[0].id }));
+      if (unitRes.data.length > 0) setFormData((prev: any) => ({ ...prev, unitId: unitRes.data[0].id }));
+      if (whRes.data.length > 0) setFormData((prev: any) => ({ ...prev, initialWarehouseId: whRes.data[0].id }));
     } catch (err) {
       console.error(err);
     } finally {

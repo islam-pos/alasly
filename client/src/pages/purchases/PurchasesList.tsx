@@ -55,12 +55,12 @@ export const PurchasesList: React.FC = () => {
         api.getWarehouses(),
         api.getItems(),
       ]);
-      setInvoices(invRes);
-      setSuppliers(supRes);
-      setWarehouses(whRes);
-      setItems(itRes);
-      if (supRes.length > 0) setSelectedSupplierId(supRes[0].id);
-      if (whRes.length > 0) setSelectedWarehouseId(whRes[0].id);
+      setInvoices(invRes.data);
+      setSuppliers(supRes.data);
+      setWarehouses(whRes.data);
+      setItems(itRes.data);
+      if (supRes.data.length > 0) setSelectedSupplierId(supRes.data[0].id);
+      if (whRes.data.length > 0) setSelectedWarehouseId(whRes.data[0].id);
     } catch (err) {
       console.error(err);
     } finally {

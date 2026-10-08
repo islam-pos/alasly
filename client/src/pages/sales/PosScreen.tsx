@@ -49,9 +49,9 @@ export const PosScreen: React.FC = () => {
         api.getCategories(),
         api.getCustomers(),
       ]);
-      setItems(itemsRes);
-      setCategories(catRes);
-      setCustomers(cusRes);
+      setItems(itemsRes.data);
+      setCategories(catRes.data);
+      setCustomers(cusRes.data);
     } catch (err) {
       console.error(err);
     }

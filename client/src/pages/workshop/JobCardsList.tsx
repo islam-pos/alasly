@@ -53,7 +53,7 @@ export const JobCardsList: React.FC = () => {
     setLoading(true);
     try {
       const res = await api.getJobCards();
-      setJobCards(res);
+      setJobCards(res.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -68,9 +68,9 @@ export const JobCardsList: React.FC = () => {
         api.getVehicles(),
         api.getEmployees(),
       ]);
-      setCustomers(cusRes);
-      setVehicles(vehRes);
-      setEmployees(empRes);
+      setCustomers(cusRes.data);
+      setVehicles(vehRes.data);
+      setEmployees(empRes.data);
     } catch (err) {
       console.error(err);
     }
