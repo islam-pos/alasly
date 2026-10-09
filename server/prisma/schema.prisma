@@ -41,13 +41,19 @@ model NumberSequence {
 }
 
 model NotificationIntegration {
-  id          Int      @id @default(1)
-  whatsapp    String?
-  telegram    String?
-  options     String   @default("{}")
+  id           Int      @id @default(1)
+  whatsapp     String?
+  whatsappPhone String?
+  telegram     String?
+  options      String   @default("{}")
   shiftEndTime String  @default("23:00")
   timeZone    String   @default("Africa/Cairo")
   updatedAt   DateTime @updatedAt
+}
+
+model WhatsappAuthData {
+  key            String @id
+  encryptedValue String
 }
 
 model NotificationDelivery {

@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID, scryptSync } from 'crypto';
 import { prisma } from '../lib/prisma';
+import { getWhatsappQrStatus, sendWhatsappQrMessage } from './whatsappQr';
 
 export type NotificationChannel = 'whatsapp' | 'telegram';
 export type NotificationOptions = {
@@ -11,17 +12,9 @@ export type NotificationOptions = {
   updates: boolean;
   shiftSummary: boolean;
 };
-type WhatsAppConfig = {
-  accessToken: string;
-  phoneNumberId: string;
-  apiVersion: string;
-  recipientPhone: string;
-  templateName: string;
-  templateLanguage: string;
-};
 type TelegramConfig = { botToken: string; chatId: string };
 type IntegrationState = {
-  whatsapp?: WhatsAppConfig;
+  whatsappPhone: string;
   telegram?: TelegramConfig;
   options: NotificationOptions;
   shiftEndTime: string;
@@ -98,11 +91,10 @@ const readIntegrationState = async () => {
       return undefined;
     }
   };
-  const whatsapp = readCredential<WhatsAppConfig>(row.whatsapp);
   const telegram = readCredential<TelegramConfig>(row.telegram);
   return {
     state: {
-      ...(whatsapp ? { whatsapp } : {}),
+      whatsappPhone: row.whatsappPhone || '',
       ...(telegram ? { telegram } : {}),
       options: { ...defaultOptions, ...JSON.parse(row.options) },
       shiftEndTime: row.shiftEndTime,
@@ -114,14 +106,15 @@ const readIntegrationState = async () => {
 
 export const getIntegrationStatus = async () => {
   const { state, credentialsResetRequired } = await readIntegrationState();
+  const whatsapp = await getWhatsappQrStatus();
   return {
     whatsapp: {
-      connected: Boolean(state.whatsapp?.accessToken && state.whatsapp.phoneNumberId && state.whatsapp.recipientPhone),
-      recipientPhone: state.whatsapp?.recipientPhone || '',
-      phoneNumberId: state.whatsapp?.phoneNumberId || '',
-      apiVersion: state.whatsapp?.apiVersion || 'v23.0',
-      templateName: state.whatsapp?.templateName || 'system_event_alert_ar',
-      templateLanguage: state.whatsapp?.templateLanguage || 'ar',
+      connected: whatsapp.connected,
+      connecting: whatsapp.connecting,
+      phoneNumber: whatsapp.phoneNumber,
+      recipientPhone: state.whatsappPhone,
+      qrCode: whatsapp.qrCode,
+      error: whatsapp.error,
     },
     telegram: {
       connected: Boolean(state.telegram?.botToken && state.telegram.chatId),
@@ -136,26 +129,12 @@ export const getIntegrationStatus = async () => {
 
 export const saveIntegrationSettings = async (input: Record<string, unknown>) => {
   const { state: current } = await readIntegrationState();
-  const whatsappInput = input.whatsapp && typeof input.whatsapp === 'object'
-    ? input.whatsapp as Record<string, unknown>
-    : {};
   const telegramInput = input.telegram && typeof input.telegram === 'object'
     ? input.telegram as Record<string, unknown>
     : {};
-  const whatsapp = {
-    accessToken: typeof whatsappInput.accessToken === 'string' && whatsappInput.accessToken.trim()
-      ? whatsappInput.accessToken.trim() : current.whatsapp?.accessToken || '',
-    phoneNumberId: typeof whatsappInput.phoneNumberId === 'string' && whatsappInput.phoneNumberId.trim()
-      ? whatsappInput.phoneNumberId.trim() : current.whatsapp?.phoneNumberId || '',
-    apiVersion: typeof whatsappInput.apiVersion === 'string' && whatsappInput.apiVersion.trim()
-      ? whatsappInput.apiVersion.trim() : current.whatsapp?.apiVersion || 'v23.0',
-    recipientPhone: typeof whatsappInput.recipientPhone === 'string' && whatsappInput.recipientPhone.trim()
-      ? whatsappInput.recipientPhone.trim() : current.whatsapp?.recipientPhone || '',
-    templateName: typeof whatsappInput.templateName === 'string' && whatsappInput.templateName.trim()
-      ? whatsappInput.templateName.trim() : current.whatsapp?.templateName || 'system_event_alert_ar',
-    templateLanguage: typeof whatsappInput.templateLanguage === 'string' && whatsappInput.templateLanguage.trim()
-      ? whatsappInput.templateLanguage.trim() : current.whatsapp?.templateLanguage || 'ar',
-  };
+  const whatsappPhone = typeof input.whatsappPhone === 'string' && input.whatsappPhone.trim()
+    ? input.whatsappPhone.trim()
+    : current.whatsappPhone;
   const telegram = {
     botToken: typeof telegramInput.botToken === 'string' && telegramInput.botToken.trim()
       ? telegramInput.botToken.trim() : current.telegram?.botToken || '',
@@ -182,14 +161,16 @@ export const saveIntegrationSettings = async (input: Record<string, unknown>) =>
     where: { id: 1 },
     create: {
       id: 1,
-      whatsapp: whatsapp.accessToken ? encrypt(whatsapp) : null,
+      whatsapp: null,
+      whatsappPhone,
       telegram: telegram.botToken ? encrypt(telegram) : null,
       options: JSON.stringify(options),
       shiftEndTime,
       timeZone: 'Africa/Cairo',
     },
     update: {
-      whatsapp: whatsapp.accessToken ? encrypt(whatsapp) : null,
+      whatsapp: null,
+      whatsappPhone,
       telegram: telegram.botToken ? encrypt(telegram) : null,
       options: JSON.stringify(options),
       shiftEndTime,
@@ -214,11 +195,13 @@ const requestJson = async (url: string, init?: RequestInit) => {
   return body;
 };
 
-const whatsappUrl = (config: WhatsAppConfig) =>
-  `https://graph.facebook.com/${encodeURIComponent(config.apiVersion)}/${encodeURIComponent(config.phoneNumberId)}/messages`;
-
 const sendToChannel = async (channel: NotificationChannel, text: string, state?: IntegrationState) => {
   const settings = state || await getIntegrationState();
+  if (channel === 'whatsapp') {
+    if (!settings.whatsappPhone) throw new Error('Set the WhatsApp recipient phone number in integration settings');
+    await sendWhatsappQrMessage(settings.whatsappPhone, text);
+    return;
+  }
   if (channel === 'telegram') {
     const config = settings.telegram;
     if (!config?.botToken || !config.chatId) throw new Error('Telegram is not fully configured');
@@ -229,30 +212,6 @@ const sendToChannel = async (channel: NotificationChannel, text: string, state?:
     });
     return;
   }
-  const config = settings.whatsapp;
-  if (!config?.accessToken || !config.phoneNumberId || !config.recipientPhone) {
-    throw new Error('WhatsApp is not fully configured');
-  }
-  await requestJson(whatsappUrl(config), {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to: config.recipientPhone,
-      type: 'template',
-      template: {
-        name: config.templateName,
-        language: { code: config.templateLanguage },
-        components: [{
-          type: 'body',
-          parameters: [{ type: 'text', text: 'تنبيه النظام' }, { type: 'text', text: text.slice(0, 900) }],
-        }],
-      },
-    }),
-  });
 };
 
 export const testIntegration = async (
@@ -275,29 +234,13 @@ export const testIntegration = async (
     await sendToChannel('telegram', 'تم اختبار اتصال Alasly بنجاح.', { ...state, telegram: config });
     return { success: true, account: response.result?.username || 'Telegram bot' };
   }
-  const config: WhatsAppConfig = {
-    accessToken: typeof input.accessToken === 'string' && input.accessToken.trim()
-      ? input.accessToken.trim() : state.whatsapp?.accessToken || '',
-    phoneNumberId: typeof input.phoneNumberId === 'string' && input.phoneNumberId.trim()
-      ? input.phoneNumberId.trim() : state.whatsapp?.phoneNumberId || '',
-    apiVersion: typeof input.apiVersion === 'string' && input.apiVersion.trim()
-      ? input.apiVersion.trim() : state.whatsapp?.apiVersion || 'v23.0',
-    recipientPhone: typeof input.recipientPhone === 'string' && input.recipientPhone.trim()
-      ? input.recipientPhone.trim() : state.whatsapp?.recipientPhone || '',
-    templateName: typeof input.templateName === 'string' && input.templateName.trim()
-      ? input.templateName.trim() : state.whatsapp?.templateName || 'system_event_alert_ar',
-    templateLanguage: typeof input.templateLanguage === 'string' && input.templateLanguage.trim()
-      ? input.templateLanguage.trim() : state.whatsapp?.templateLanguage || 'ar',
-  };
-  nonEmpty(config.accessToken, 'WhatsApp access token');
-  nonEmpty(config.phoneNumberId, 'WhatsApp phone number ID');
-  nonEmpty(config.recipientPhone, 'WhatsApp recipient phone');
-  const status = await requestJson(
-    `https://graph.facebook.com/${encodeURIComponent(config.apiVersion)}/${encodeURIComponent(config.phoneNumberId)}?fields=display_phone_number,verified_name`,
-    { headers: { Authorization: `Bearer ${config.accessToken}` } },
-  ) as { display_phone_number?: string };
-  await sendToChannel('whatsapp', 'تم اختبار اتصال Alasly بنجاح.', { ...state, whatsapp: config });
-  return { success: true, account: status.display_phone_number || 'WhatsApp Business' };
+  const whatsapp = await getWhatsappQrStatus();
+  const phoneNumber = typeof input.phoneNumber === 'string' && input.phoneNumber.trim()
+    ? input.phoneNumber.trim() : state.whatsappPhone;
+  if (!whatsapp.connected) throw new Error('Connect WhatsApp by scanning the QR code first');
+  if (!phoneNumber) throw new Error('WhatsApp recipient phone is required');
+  await sendWhatsappQrMessage(phoneNumber, 'تم اختبار اتصال Alasly بنجاح.');
+  return { success: true, account: phoneNumber };
 };
 
 type NotificationCategory = keyof Omit<NotificationOptions, 'shiftSummary'>;
@@ -314,11 +257,13 @@ export const notifyEvent = async (category: NotificationCategory, text: string) 
 const sendToConfiguredChannels = async (text: string, state: IntegrationState, category: string) => {
   const channels = (['whatsapp', 'telegram'] as NotificationChannel[]).filter((channel) => channel === 'telegram'
     ? Boolean(state.telegram?.botToken && state.telegram.chatId)
-    : Boolean(state.whatsapp?.accessToken && state.whatsapp.phoneNumberId && state.whatsapp.recipientPhone));
-  const results = await Promise.allSettled(channels.map((channel) => sendToChannel(channel, text, state)));
+    : Boolean(state.whatsappPhone));
+  const whatsapp = channels.includes('whatsapp') ? await getWhatsappQrStatus() : null;
+  const enabledChannels = channels.filter((channel) => channel !== 'whatsapp' || whatsapp?.connected);
+  const results = await Promise.allSettled(enabledChannels.map((channel) => sendToChannel(channel, text, state)));
   results.forEach((result, index) => {
     if (result.status === 'rejected') {
-      console.error(`Notification delivery failed (${category}, ${channels[index]}):`, result.reason);
+      console.error(`Notification delivery failed (${category}, ${enabledChannels[index]}):`, result.reason);
     }
   });
 };
@@ -465,7 +410,7 @@ export const sendShiftSummary = async (date: string) => {
   const summary = await createShiftSummary(start, end);
   for (const channel of ['whatsapp', 'telegram'] as NotificationChannel[]) {
     const configured = channel === 'whatsapp'
-      ? Boolean(state.whatsapp?.accessToken && state.whatsapp.phoneNumberId && state.whatsapp.recipientPhone)
+      ? Boolean(state.whatsappPhone && (await getWhatsappQrStatus()).connected)
       : Boolean(state.telegram?.botToken && state.telegram.chatId);
     if (!configured) continue;
     const eventKey = `shift-summary:${date}`;

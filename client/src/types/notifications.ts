@@ -9,14 +9,7 @@ export type NotificationOptions = {
 };
 
 export type NotificationIntegrationStatus = {
-  whatsapp: {
-    connected: boolean;
-    recipientPhone: string;
-    phoneNumberId: string;
-    apiVersion: string;
-    templateName: string;
-    templateLanguage: string;
-  };
+  whatsapp: NotificationQrStatus;
   telegram: { connected: boolean; chatId: string };
   options: NotificationOptions;
   shiftEndTime: string;
@@ -25,14 +18,7 @@ export type NotificationIntegrationStatus = {
 };
 
 export type NotificationIntegrationInput = {
-  whatsapp: {
-    accessToken: string;
-    phoneNumberId: string;
-    apiVersion: string;
-    recipientPhone: string;
-    templateName: string;
-    templateLanguage: string;
-  };
+  whatsappPhone: string;
   telegram: { botToken: string; chatId: string };
   options: NotificationOptions;
   shiftEndTime: string;
@@ -40,14 +26,18 @@ export type NotificationIntegrationInput = {
 };
 
 export type NotificationConnectionInput = {
-  accessToken?: string;
-  phoneNumberId?: string;
-  apiVersion?: string;
-  recipientPhone?: string;
-  templateName?: string;
-  templateLanguage?: string;
   botToken?: string;
   chatId?: string;
+  phoneNumber?: string;
 };
 
 export type NotificationConnectionTest = { success: boolean; account?: string };
+
+export type NotificationQrStatus = {
+  connected: boolean;
+  connecting: boolean;
+  phoneNumber: string;
+  recipientPhone: string;
+  qrCode: string | null;
+  error: string | null;
+};

@@ -4,6 +4,7 @@ import type {
   NotificationConnectionTest,
   NotificationIntegrationInput,
   NotificationIntegrationStatus,
+  NotificationQrStatus,
 } from '../types/notifications';
 
 const BASE_URL = '/api';
@@ -500,6 +501,22 @@ const apiClient = {
     fetch(`${BASE_URL}/settings/integrations`, { headers: getHeaders() })
       .then((res) => handleResponse<{ data: NotificationIntegrationStatus }>(res)),
 
+  getWhatsappQrStatus: () =>
+    fetch(`${BASE_URL}/settings/integrations/whatsapp/qr`, { headers: getHeaders() })
+      .then((res) => handleResponse<{ data: NotificationQrStatus }>(res)),
+
+  startWhatsappQrPairing: () =>
+    fetch(`${BASE_URL}/settings/integrations/whatsapp/connect`, {
+      method: 'POST',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<{ data: NotificationQrStatus }>(res)),
+
+  disconnectWhatsappQr: () =>
+    fetch(`${BASE_URL}/settings/integrations/whatsapp/connect`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<{ data: NotificationQrStatus }>(res)),
+
   saveNotificationIntegrations: (data: NotificationIntegrationInput) =>
     fetch(`${BASE_URL}/settings/integrations`, {
       method: 'PUT',
@@ -580,6 +597,9 @@ export const api = Object.assign(apiClient, {
     getAuditLogs: apiClient.getAuditLogs,
     getPermissions: apiClient.getPermissionsList,
     getNotificationIntegrations: apiClient.getNotificationIntegrations,
+    getWhatsappQrStatus: apiClient.getWhatsappQrStatus,
+    startWhatsappQrPairing: apiClient.startWhatsappQrPairing,
+    disconnectWhatsappQr: apiClient.disconnectWhatsappQr,
     saveNotificationIntegrations: apiClient.saveNotificationIntegrations,
     testNotificationIntegration: apiClient.testNotificationIntegration,
   },

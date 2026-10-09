@@ -22,6 +22,7 @@ import publicPurchaseRequestsRouter from './routes/publicPurchaseRequests';
 import { authenticate } from './middleware/auth';
 import { migrateEgyptianLocationDefaults } from './migrations/egyptianLocationDefaults';
 import { startNotificationScheduler } from './services/notifications';
+import { startWhatsappQrSessionIfPresent } from './services/whatsappQr';
 import { withRequestContext } from './middleware/requestContext';
 
 dotenv.config();
@@ -98,6 +99,7 @@ migrateEgyptianLocationDefaults()
   .then(() => {
     app.listen(PORT, () => {
       startNotificationScheduler();
+      void startWhatsappQrSessionIfPresent();
       console.log(`====================================================`);
       console.log(`🚗 AutoCare ERP Backend Server running on port ${PORT}`);
       console.log(`🔗 http://localhost:${PORT}`);

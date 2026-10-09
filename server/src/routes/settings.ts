@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { getIntegrationStatus, saveIntegrationSettings, testIntegration, type NotificationChannel } from '../services/notifications';
+import { disconnectWhatsappQr, getWhatsappQrStatus, startWhatsappQrPairing } from '../services/whatsappQr';
 
 const router = Router();
 
@@ -42,6 +43,36 @@ router.put('/integrations', async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'تعذر حفظ إعدادات التنبيهات';
     res.status(400).json({ error: message });
+  }
+});
+
+router.get('/integrations/whatsapp/qr', async (req, res) => {
+  if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
+  try {
+    res.json(await getWhatsappQrStatus());
+  } catch (error) {
+    console.error('Failed to load WhatsApp QR status:', error);
+    res.status(500).json({ error: 'تعذر تحميل حالة ربط WhatsApp' });
+  }
+});
+
+router.post('/integrations/whatsapp/connect', async (req, res) => {
+  if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
+  try {
+    res.json(await startWhatsappQrPairing());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'تعذر بدء ربط WhatsApp';
+    res.status(400).json({ error: message });
+  }
+});
+
+router.delete('/integrations/whatsapp/connect', async (req, res) => {
+  if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
+  try {
+    res.json(await disconnectWhatsappQr());
+  } catch (error) {
+    console.error('Failed to disconnect WhatsApp QR session:', error);
+    res.status(500).json({ error: 'تعذر فصل حساب WhatsApp' });
   }
 });
 

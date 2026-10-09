@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Loader2, MessageCircle, Send, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Loader2, LogOut, MessageCircle, QrCode, RefreshCw, Send, ShieldCheck } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import type { NotificationIntegrationInput, NotificationIntegrationStatus, NotificationOptions } from '../../types/notifications';
@@ -22,14 +22,7 @@ export const NotificationIntegrations: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<'whatsapp' | 'telegram' | null>(null);
-  const [whatsapp, setWhatsapp] = useState({
-    accessToken: '',
-    phoneNumberId: '',
-    apiVersion: 'v23.0',
-    recipientPhone: '',
-    templateName: 'system_event_alert_ar',
-    templateLanguage: 'ar',
-  });
+  const [whatsappPhone, setWhatsappPhone] = useState('');
   const [telegram, setTelegram] = useState({ botToken: '', chatId: '' });
 
   useEffect(() => {
@@ -37,14 +30,7 @@ export const NotificationIntegrations: React.FC = () => {
       .then((response) => {
         const current = response.data;
         setStatus(current);
-        setWhatsapp({
-          accessToken: '',
-          phoneNumberId: current.whatsapp.phoneNumberId,
-          apiVersion: current.whatsapp.apiVersion,
-          recipientPhone: current.whatsapp.recipientPhone,
-          templateName: current.whatsapp.templateName || 'system_event_alert_ar',
-          templateLanguage: current.whatsapp.templateLanguage,
-        });
+        setWhatsappPhone(current.whatsapp.recipientPhone);
         setTelegram({ botToken: '', chatId: current.telegram.chatId });
       })
       .catch((error: { response?: { data?: { error?: string } } }) => {
@@ -53,12 +39,30 @@ export const NotificationIntegrations: React.FC = () => {
       .finally(() => setLoading(false));
   }, [showToast]);
 
+  useEffect(() => {
+    if (!status?.whatsapp.connecting && !status?.whatsapp.qrCode) return;
+    const timer = window.setInterval(() => {
+      api.settings.getWhatsappQrStatus()
+      .then(({ data }) => {
+        setStatus((current) => current ? { ...current, whatsapp: data } : current);
+      })
+        .catch((error: { response?: { data?: { error?: string } } }) => {
+          const message = error.response?.data?.error || 'تعذر تحديث رمز ربط WhatsApp';
+          setStatus((current) => current
+            ? { ...current, whatsapp: { ...current.whatsapp, connecting: false, qrCode: null, error: message } }
+            : current);
+          showToast(message, 'error');
+        });
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [showToast, status?.whatsapp.connecting, status?.whatsapp.qrCode]);
+
   const persist = async () => {
     if (!status) return;
     setSaving(true);
     try {
       const input: NotificationIntegrationInput = {
-        whatsapp,
+        whatsappPhone,
         telegram,
         options: status.options,
         shiftEndTime: '23:00',
@@ -66,15 +70,6 @@ export const NotificationIntegrations: React.FC = () => {
       };
       const response = await api.settings.saveNotificationIntegrations(input);
       setStatus(response.data);
-      setWhatsapp((current) => ({
-        ...current,
-        accessToken: '',
-        phoneNumberId: response.data.whatsapp.phoneNumberId,
-        apiVersion: response.data.whatsapp.apiVersion,
-        recipientPhone: response.data.whatsapp.recipientPhone,
-        templateName: response.data.whatsapp.templateName,
-        templateLanguage: response.data.whatsapp.templateLanguage,
-      }));
       setTelegram((current) => ({ ...current, botToken: '', chatId: response.data.telegram.chatId }));
       showToast('تم حفظ إعدادات التنبيهات بأمان', 'success');
     } catch (error: any) {
@@ -89,13 +84,39 @@ export const NotificationIntegrations: React.FC = () => {
     try {
       const response = await api.settings.testNotificationIntegration(
         channel,
-        channel === 'whatsapp' ? whatsapp : telegram,
+        channel === 'whatsapp' ? { phoneNumber: whatsappPhone } : telegram,
       );
       showToast(`تم الاتصال وإرسال رسالة اختبار${response.data.account ? ` إلى ${response.data.account}` : ''}`, 'success');
       const refreshed = await api.settings.getNotificationIntegrations();
       setStatus(refreshed.data);
     } catch (error: any) {
       showToast(error.response?.data?.error || 'فشل اختبار الاتصال', 'error');
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const startQrPairing = async () => {
+    setTesting('whatsapp');
+    try {
+      const { data } = await api.settings.startWhatsappQrPairing();
+      setStatus((current) => current ? { ...current, whatsapp: data } : current);
+    } catch (error: any) {
+      showToast(error.response?.data?.error || 'تعذر بدء ربط WhatsApp', 'error');
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const disconnectQrPairing = async () => {
+    setTesting('whatsapp');
+    try {
+      const { data } = await api.settings.disconnectWhatsappQr();
+      setStatus((current) => current ? { ...current, whatsapp: data } : current);
+      setWhatsappPhone(data.recipientPhone);
+      showToast('تم فصل حساب WhatsApp وحذف جلسة الربط المحفوظة', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.error || 'تعذر فصل حساب WhatsApp', 'error');
     } finally {
       setTesting(null);
     }
@@ -114,7 +135,7 @@ export const NotificationIntegrations: React.FC = () => {
     <div className="space-y-5 rounded-b-2xl border border-slate-200 border-t-0 bg-white p-5 md:p-6">
       <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
-        <p>بيانات الدخول تُشفّر قبل حفظها ولا يعيدها النظام إلى المتصفح. إعداد وربط القنوات متاح لمدير النظام فقط.</p>
+        <p>جلسة WhatsApp تحفظ مشفّرة على الخادم، ولا يعيد النظام مفاتيحها إلى المتصفح. ربط QR يحاكي WhatsApp Web عبر مكتبة غير رسمية وقد يتوقف أو يعرّض الرقم لقيود WhatsApp؛ استخدم رقمًا مخصصًا وعلى مسؤوليتك.</p>
       </div>
       {status.credentialsResetRequired && (
         <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
@@ -125,39 +146,47 @@ export const NotificationIntegrations: React.FC = () => {
       <div className="grid gap-5 xl:grid-cols-2">
         <section className="space-y-4 rounded-2xl border border-slate-200 p-5">
           <div className="flex items-center justify-between">
-            <h3 className="flex items-center gap-2 font-bold text-slate-900"><MessageCircle className="h-5 w-5 text-emerald-600" /> WhatsApp Business</h3>
+            <h3 className="flex items-center gap-2 font-bold text-slate-900"><MessageCircle className="h-5 w-5 text-emerald-600" /> WhatsApp عبر QR</h3>
             <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${status.whatsapp.connected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-              {status.whatsapp.connected ? 'مُعدّ' : 'غير مكتمل'}
+              {status.whatsapp.connected ? 'متصل' : status.whatsapp.connecting ? 'جارٍ الاتصال' : 'غير متصل'}
             </span>
           </div>
+          {status.whatsapp.error && (
+            <div role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{status.whatsapp.error}</div>
+          )}
           <label className="block space-y-1 text-xs font-semibold text-slate-600">
-            رمز الوصول الدائم
-            <input type="password" autoComplete="new-password" value={whatsapp.accessToken} onChange={(event) => setWhatsapp({ ...whatsapp, accessToken: event.target.value })} placeholder={status.whatsapp.connected ? 'محفوظ ومشفّر — اتركه فارغاً للإبقاء عليه' : 'أدخل Access Token'} className={inputClass} dir="ltr" />
+            رقم WhatsApp الذي يستقبل التنبيهات، بالصيغة الدولية
+            <input value={whatsappPhone} onChange={(event) => setWhatsappPhone(event.target.value)} placeholder="2010xxxxxxxx" className={inputClass} dir="ltr" />
           </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block space-y-1 text-xs font-semibold text-slate-600">
-              Phone Number ID
-              <input value={whatsapp.phoneNumberId} onChange={(event) => setWhatsapp({ ...whatsapp, phoneNumberId: event.target.value })} className={inputClass} dir="ltr" />
-            </label>
-            <label className="block space-y-1 text-xs font-semibold text-slate-600">
-              رقم المستلم بصيغة دولية
-              <input value={whatsapp.recipientPhone} onChange={(event) => setWhatsapp({ ...whatsapp, recipientPhone: event.target.value })} placeholder="2010xxxxxxxx" className={inputClass} dir="ltr" />
-            </label>
+          {status.whatsapp.qrCode && (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
+              <img src={status.whatsapp.qrCode} alt="رمز QR لربط WhatsApp" className="h-64 w-64 max-w-full" />
+              <div className="text-center text-xs leading-5 text-slate-600">
+                افتح WhatsApp في الهاتف ← الأجهزة المرتبطة ← ربط جهاز، ثم امسح الرمز.
+                <br />الرمز مؤقت ويتجدد تلقائيًا؛ لا تشاركه مع أحد.
+              </div>
+            </div>
+          )}
+          {status.whatsapp.connected && (
+            <p className="text-xs text-emerald-700">الحساب المرتبط: <span dir="ltr">{status.whatsapp.phoneNumber}</span></p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {!status.whatsapp.connected ? (
+              <button type="button" disabled={testing !== null || status.whatsapp.connecting} onClick={startQrPairing} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
+                {testing === 'whatsapp' ? <Loader2 className="h-4 w-4 animate-spin" /> : status.whatsapp.qrCode ? <RefreshCw className="h-4 w-4" /> : <QrCode className="h-4 w-4" />}
+                {status.whatsapp.connecting ? 'جارٍ إنشاء QR...' : status.whatsapp.qrCode ? 'إنشاء QR جديد' : 'إنشاء رمز QR للربط'}
+              </button>
+            ) : (
+              <>
+                <button type="button" disabled={testing !== null} onClick={() => testConnection('whatsapp')} className="rounded-xl border border-emerald-200 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+                  {testing === 'whatsapp' ? 'جارٍ إرسال رسالة اختبار...' : 'إرسال رسالة اختبار'}
+                </button>
+                <button type="button" disabled={testing !== null} onClick={disconnectQrPairing} className="flex items-center gap-2 rounded-xl border border-rose-200 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+                  <LogOut className="h-4 w-4" /> فصل الحساب
+                </button>
+              </>
+            )}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block space-y-1 text-xs font-semibold text-slate-600">
-              اسم القالب المعتمد للتنبيه
-              <input value={whatsapp.templateName} onChange={(event) => setWhatsapp({ ...whatsapp, templateName: event.target.value })} className={inputClass} dir="ltr" />
-            </label>
-            <label className="block space-y-1 text-xs font-semibold text-slate-600">
-              لغة القالب
-              <input value={whatsapp.templateLanguage} onChange={(event) => setWhatsapp({ ...whatsapp, templateLanguage: event.target.value })} placeholder="ar" className={inputClass} dir="ltr" />
-            </label>
-          </div>
-          <p className="text-xs leading-5 text-slate-500">يلزم أن يكون المستلم موافقاً على استقبال الرسائل، وأن يعتمد Meta قالباً بالاسم واللغة المحددين يحتوي متغيرين نصيين في نص الرسالة؛ لا تُرسل التنبيهات خارج نافذة المحادثة برسائل حرة.</p>
-          <button type="button" disabled={testing !== null} onClick={() => testConnection('whatsapp')} className="rounded-xl border border-emerald-200 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
-            {testing === 'whatsapp' ? 'جارٍ الاختبار وإرسال رسالة فعلية...' : 'اختبار الاتصال وإرسال رسالة'}
-          </button>
         </section>
 
         <section className="space-y-4 rounded-2xl border border-slate-200 p-5">
