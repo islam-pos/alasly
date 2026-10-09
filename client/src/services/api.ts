@@ -56,6 +56,26 @@ const apiClient = {
   getUsers: () =>
     fetch(`${BASE_URL}/auth/users`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
+  createUser: (data: any) =>
+    fetch(`${BASE_URL}/auth/users`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  updateUser: (id: string, data: any) =>
+    fetch(`${BASE_URL}/auth/users/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  deleteUser: (id: string) =>
+    fetch(`${BASE_URL}/auth/users/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<any>(res)),
+
   resetUserPassword: (id: string, password: string) =>
     fetch(`${BASE_URL}/auth/users/${encodeURIComponent(id)}/password`, {
       method: 'PATCH',
@@ -158,6 +178,19 @@ const apiClient = {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  updateEmployee: (id: string, data: any) =>
+    fetch(`${BASE_URL}/master/employees/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  deleteEmployee: (id: string) =>
+    fetch(`${BASE_URL}/master/employees/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
     }).then((res) => handleResponse<any>(res)),
 
   getJobs: () =>
@@ -413,6 +446,16 @@ const apiClient = {
     }).then((res) => handleResponse<any>(res)),
 
   // HR
+  getHrSettings: () =>
+    fetch(`${BASE_URL}/hr/settings`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  updateHrSettings: (data: { standardMonthlyHours: number }) =>
+    fetch(`${BASE_URL}/hr/settings`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
   getAttendance: (params?: { employeeId?: string }) => {
     const query = new URLSearchParams();
     if (params?.employeeId) query.append('employeeId', params.employeeId);
@@ -577,6 +620,8 @@ export const api = Object.assign(apiClient, {
     createVehicle: apiClient.createVehicle,
     getEmployees: apiClient.getEmployees,
     createEmployee: apiClient.createEmployee,
+    updateEmployee: apiClient.updateEmployee,
+    deleteEmployee: apiClient.deleteEmployee,
     getJobs: apiClient.getJobs,
     getRoles: apiClient.getRoles,
   },
@@ -602,6 +647,8 @@ export const api = Object.assign(apiClient, {
     getCashboxes: apiClient.getCashboxes,
   },
   hr: {
+    getHrSettings: apiClient.getHrSettings,
+    updateHrSettings: apiClient.updateHrSettings,
     getAttendance: apiClient.getAttendance,
     checkIn: apiClient.checkIn,
     checkOut: apiClient.checkOut,

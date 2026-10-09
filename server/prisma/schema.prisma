@@ -113,6 +113,7 @@ model User {
   employee           Employee? @relation(fields: [employeeId], references: [id])
   allowedWarehouseId String?
   allowedCashboxId   String?
+  permissionOverrides String?
   active             Boolean   @default(true)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -145,7 +146,8 @@ model Employee {
   name           String
   phone          String
   email          String?
-  jobId          String
+  nationalId       String?      @unique
+  jobId            String
   job            JobTitle     @relation(fields: [jobId], references: [id])
   department     String       @default("الورشة") // الورشة، الإدارة، المستودع، الحسابات
   hireDate       DateTime     @default(now())
@@ -165,6 +167,12 @@ model Employee {
   performedLabor  RepairLabor[]
 }
 
+model HrSetting {
+  id                   Int      @id @default(1)
+  standardMonthlyHours Float    @default(208)
+  updatedAt            DateTime @updatedAt
+}
+
 model Attendance {
   id              String   @id @default(uuid())
   employeeId      String
@@ -173,6 +181,7 @@ model Attendance {
   checkIn         DateTime?
   checkOut        DateTime?
   workHours       Float    @default(0)
+  workMinutes     Int?
   delayMinutes    Int      @default(0)
   overtimeMinutes Int      @default(0)
   status          String   @default("PRESENT") // PRESENT, ABSENT, LEAVE, HOLIDAY
@@ -202,6 +211,8 @@ model Payroll {
   month          Int
   year           Int
   basicSalary    Float
+  standardMonthlyHours Float?
+  attendedMinutes Int?
   allowances     Float    @default(0)
   commissions    Float    @default(0)
   overtimeAmount Float    @default(0)
@@ -212,6 +223,8 @@ model Payroll {
   paidAt         DateTime?
   notes          String?
   createdAt      DateTime @default(now())
+
+  @@unique([employeeId, year, month])
 }
 
 model Supplier {

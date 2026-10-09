@@ -20,6 +20,7 @@ import searchRouter from './routes/search';
 import settingsRouter from './routes/settings';
 import publicPurchaseRequestsRouter from './routes/publicPurchaseRequests';
 import { authenticate } from './middleware/auth';
+import { authorizeApiPermission } from './middleware/permissions';
 import { migrateEgyptianLocationDefaults } from './migrations/egyptianLocationDefaults';
 import { startNotificationScheduler } from './services/notifications';
 import { startWhatsappQrSessionIfPresent } from './services/whatsappQr';
@@ -61,6 +62,7 @@ app.use('/api/public/purchase-requests', publicPurchaseRequestsRouter);
 // API Routes
 app.use('/api/auth', authRouter);
 app.use('/api', authenticate);
+app.use('/api', authorizeApiPermission);
 app.use('/api', withRequestContext);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/master', masterDataRouter);

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 export const CustomersVehicles: React.FC = () => {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -62,13 +63,16 @@ export const CustomersVehicles: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [searchParams] = useSearchParams();
   const { success, error } = useToast();
+  const { hasPermission } = useAuth();
+  const canViewVehicles = hasPermission('manage_workshop') || hasPermission('manage_sales');
+  const canManageCustomers = canViewVehicles || hasPermission('manage_purchases');
 
   useEffect(() => {
     setActiveTab(location.pathname === '/vehicles' ? 'vehicles' : 'customers');
+    loadData();
   }, [location.pathname]);
 
   useEffect(() => {
-    loadData();
     if (searchParams.get('action') === 'new') {
       setCustomerModalOpen(true);
     }
@@ -77,12 +81,16 @@ export const CustomersVehicles: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [cusRes, vehRes] = await Promise.all([api.getCustomers(), api.getVehicles()]);
+      const [cusRes, vehRes] = await Promise.all([
+        api.getCustomers(),
+        canViewVehicles && location.pathname === '/vehicles' ? api.getVehicles() : Promise.resolve({ data: [] }),
+      ]);
       setCustomers(cusRes.data);
       setVehicles(vehRes.data);
       if (cusRes.data.length > 0) setVehicleForm((prev) => ({ ...prev, customerId: cusRes.data[0].id }));
     } catch (err) {
       console.error(err);
+      error('تعذر تحميل بيانات العملاء أو المركبات');
     } finally {
       setLoading(false);
     }
@@ -203,20 +211,20 @@ export const CustomersVehicles: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
+          {canManageCustomers && <button
             onClick={() => setCustomerModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20"
           >
             <Plus className="w-4 h-4" />
             <span>إضافة عميل</span>
-          </button>
-          <button
+          </button>}
+          {canViewVehicles && <button
             onClick={() => setVehicleModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold shadow-md shadow-slate-900/20"
           >
             <Car className="w-4 h-4" />
             <span>إضافة سيارة</span>
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -232,14 +240,14 @@ export const CustomersVehicles: React.FC = () => {
             >
               العملاء ({customers.length})
             </button>
-            <button
+            {canViewVehicles && <button
               onClick={() => setActiveTab('vehicles')}
               className={`px-4 py-2 rounded-lg transition-all ${
                 activeTab === 'vehicles' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
               }`}
             >
               السيارات والأسطول ({vehicles.length})
-            </button>
+            </button>}
           </div>
 
           <div className="w-full sm:w-80 relative">

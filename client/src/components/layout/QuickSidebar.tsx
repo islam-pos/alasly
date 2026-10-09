@@ -21,7 +21,7 @@ import { useAuth } from '../../context/AuthContext';
 
 export const QuickSidebar: React.FC = () => {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [support, setSupport] = useState({
     supportTitle: 'الدعم الفني والخدمات',
     supportDescription: 'مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.',
@@ -77,6 +77,17 @@ export const QuickSidebar: React.FC = () => {
     { label: 'المخزون', to: '/warehouses', icon: Warehouse, color: 'text-slate-600 bg-slate-100' },
     { label: 'سيارات الورشة', to: '/workshop/job-cards?filter=in_shop', icon: Car, color: 'text-red-600 bg-red-50' },
   ];
+  const visibleShortcuts = shortcuts.filter((shortcut) => {
+    if (shortcut.to.startsWith('/pos')) return hasPermission('pos_access');
+    if (shortcut.to.startsWith('/workshop')) return hasPermission('manage_workshop');
+    if (shortcut.to.startsWith('/sales')) return hasPermission('manage_sales');
+    if (shortcut.to.startsWith('/purchases')) return hasPermission('manage_purchases');
+    if (shortcut.to.startsWith('/warehouses')) return hasPermission('manage_inventory');
+    if (shortcut.to.startsWith('/financials')) return hasPermission('manage_cashbox');
+    if (shortcut.to.startsWith('/customers')) return ['manage_sales', 'manage_workshop', 'manage_purchases'].some(hasPermission);
+    if (shortcut.to.startsWith('/items')) return hasPermission('manage_items');
+    return true;
+  });
 
   return (
     <aside className="w-56 flex-shrink-0 hidden xl:block bg-white border-l border-slate-200 h-[calc(100vh-6.5rem)] sticky top-28 overflow-y-auto p-3 select-none">
@@ -86,7 +97,7 @@ export const QuickSidebar: React.FC = () => {
       </div>
 
       <div className="space-y-1">
-        {shortcuts.map((sc, i) => {
+        {visibleShortcuts.map((sc, i) => {
           const Icon = sc.icon;
           const isActive = location.pathname === sc.to;
 

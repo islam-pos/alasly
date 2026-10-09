@@ -14,6 +14,12 @@ The container stops if a required secret is missing or weak, or if Railway does 
 
 Sign in as `admin` with the password entered in Railway. Other existing users remain in the database but their previous passwords are invalidated; an administrator can assign them new passwords under Settings → Users.
 
+## User permissions and HR
+
+Administrators can create, update, deactivate, and delete user accounts from Settings → Users, link an account to an employee, and either inherit role permissions or set individual permissions. WhatsApp and Telegram connection settings remain restricted to active administrators. Employee records can be created, edited, or deactivated in HR; deactivation also disables the linked user account while preserving attendance and payroll history.
+
+HR stores attendance durations as whole minutes. Monthly base pay is calculated as monthly salary divided by the configurable standard monthly hours (initially 208), multiplied by completed attendance minutes. The system generates the previous month's payroll on the first day of each month in `Africa/Cairo`; manual generation is safe to repeat and payroll rows are unique by employee and month. Pending commissions created during the payroll month are included in that month's payroll.
+
 ## Supplier accounts and exports
 
 Supplier and customer creation forms can create a linked account for the other role. Supplier statements are available per supplier or combined, and include opening balances, purchase invoices, returns, and linked payment vouchers. Report, invoice, estimate, and financial-record export actions provide an Excel-compatible `.xls` download and a printable PDF view; use the browser print dialog's “Save as PDF” option for a PDF file.

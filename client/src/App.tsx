@@ -29,6 +29,14 @@ const LoadingScreen: React.FC = () => (
   </div>
 );
 
+const PermissionGate: React.FC<{ permission: string | string[]; children: React.ReactNode }> = ({ permission, children }) => {
+  const { hasPermission } = useAuth();
+  const allowed = Array.isArray(permission) ? permission.some(hasPermission) : hasPermission(permission);
+  return allowed
+    ? <>{children}</>
+    : <div role="alert" className="rounded-2xl border border-rose-200 bg-white p-8 text-center text-sm font-semibold text-rose-700">ليس لديك صلاحية لعرض هذه الصفحة.</div>;
+};
+
 const ProtectedLayout: React.FC = () => {
   const { user, loading } = useAuth();
 
@@ -59,23 +67,23 @@ const AppRoutes: React.FC = () => {
         element={loading ? <LoadingScreen /> : user ? <Navigate to="/" replace /> : <Login />}
       />
       <Route element={<ProtectedLayout />}>
-        <Route index element={<Dashboard />} />
-        <Route path="items" element={<ItemsCatalog />} />
-        <Route path="customers" element={<CustomersVehicles />} />
-        <Route path="vehicles" element={<CustomersVehicles />} />
-        <Route path="vehicles/:id" element={<VehicleProfile />} />
-        <Route path="suppliers" element={<Suppliers />} />
-        <Route path="employees" element={<EmployeesScreen />} />
-        <Route path="financials" element={<FinancialsScreen />} />
-        <Route path="warehouses" element={<InventoryManagement />} />
-        <Route path="pos" element={<PosScreen />} />
-        <Route path="sales" element={<SalesList />} />
-        <Route path="purchases" element={<PurchasesList />} />
-        <Route path="reports" element={<ReportsCenter />} />
-        <Route path="profits" element={<ProfitsDashboard />} />
-        <Route path="settings" element={<SettingsScreen />} />
-        <Route path="workshop/job-cards" element={<JobCardsList />} />
-        <Route path="workshop/job-cards/:id" element={<JobCardDetail />} />
+        <Route index element={<PermissionGate permission="view_dashboard"><Dashboard /></PermissionGate>} />
+        <Route path="items" element={<PermissionGate permission="manage_items"><ItemsCatalog /></PermissionGate>} />
+        <Route path="customers" element={<PermissionGate permission={['manage_sales', 'manage_workshop', 'manage_purchases']}><CustomersVehicles /></PermissionGate>} />
+        <Route path="vehicles" element={<PermissionGate permission={['manage_workshop', 'manage_sales']}><CustomersVehicles /></PermissionGate>} />
+        <Route path="vehicles/:id" element={<PermissionGate permission={['manage_workshop', 'manage_sales']}><VehicleProfile /></PermissionGate>} />
+        <Route path="suppliers" element={<PermissionGate permission={['manage_purchases', 'manage_expenses']}><Suppliers /></PermissionGate>} />
+        <Route path="employees" element={<PermissionGate permission={['manage_employees', 'manage_payroll']}><EmployeesScreen /></PermissionGate>} />
+        <Route path="financials" element={<PermissionGate permission={['manage_expenses', 'manage_cashbox', 'manage_banks']}><FinancialsScreen /></PermissionGate>} />
+        <Route path="warehouses" element={<PermissionGate permission="manage_inventory"><InventoryManagement /></PermissionGate>} />
+        <Route path="pos" element={<PermissionGate permission="pos_access"><PosScreen /></PermissionGate>} />
+        <Route path="sales" element={<PermissionGate permission="manage_sales"><SalesList /></PermissionGate>} />
+        <Route path="purchases" element={<PermissionGate permission="manage_purchases"><PurchasesList /></PermissionGate>} />
+        <Route path="reports" element={<PermissionGate permission="view_reports"><ReportsCenter /></PermissionGate>} />
+        <Route path="profits" element={<PermissionGate permission="view_profits"><ProfitsDashboard /></PermissionGate>} />
+        <Route path="settings" element={<PermissionGate permission={['manage_settings', 'view_audit_logs']}><SettingsScreen /></PermissionGate>} />
+        <Route path="workshop/job-cards" element={<PermissionGate permission="manage_workshop"><JobCardsList /></PermissionGate>} />
+        <Route path="workshop/job-cards/:id" element={<PermissionGate permission="manage_workshop"><JobCardDetail /></PermissionGate>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

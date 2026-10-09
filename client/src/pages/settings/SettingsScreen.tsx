@@ -43,6 +43,8 @@ export const SettingsScreen: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { showToast } = useToast();
   const { user } = useAuth();
+  const canManageSettings = user?.role === 'admin' || user?.permissions?.includes('manage_settings') === true;
+  const canViewAuditLogs = user?.role === 'admin' || user?.permissions?.includes('view_audit_logs') === true;
   const [activeTab, setActiveTab] = useState<'company' | 'branches' | 'rbac' | 'users' | 'audit' | 'integrations'>('company');
   const [loading, setLoading] = useState(true);
 
@@ -53,8 +55,24 @@ export const SettingsScreen: React.FC = () => {
   const [permissions, setPermissions] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [employeeOptions, setEmployeeOptions] = useState<any[]>([]);
   const [userPasswords, setUserPasswords] = useState<Record<string, string>>({});
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [userForm, setUserForm] = useState({
+    username: '',
+    fullName: '',
+    password: '',
+    email: '',
+    phone: '',
+    roleId: '',
+    employeeId: '',
+    active: true,
+    customPermissions: false,
+    permissions: [] as string[],
+  });
+  const [savingUser, setSavingUser] = useState(false);
 
   // Modals & forms
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
@@ -71,17 +89,20 @@ export const SettingsScreen: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
+      const empty = { data: {} as any };
       const [compRes, brRes, rRes, permRes, logRes] = await Promise.all([
-        api.master.getCompany(),
-        api.master.getBranches(),
-        api.master.getRoles(),
-        api.settings.getPermissions(),
-        api.settings.getAuditLogs({ action: auditFilterAction })
+        canManageSettings ? api.master.getCompany() : Promise.resolve(empty),
+        canManageSettings ? api.master.getBranches() : Promise.resolve({ data: [] }),
+        canManageSettings ? api.master.getRoles() : Promise.resolve({ data: [] }),
+        canManageSettings ? api.settings.getPermissions() : Promise.resolve({ data: [] }),
+        canViewAuditLogs ? api.settings.getAuditLogs({ action: auditFilterAction }) : Promise.resolve({ data: [] })
       ]);
-      const printSettings = parsePrintSettings(compRes.data.printSettings || defaultPrintSettings);
-      setCompany({ ...compRes.data, printSettings });
-      localStorage.setItem('alasly-print-settings', JSON.stringify(printSettings));
-      localStorage.setItem('alasly-print-company', JSON.stringify(compRes.data));
+      if (canManageSettings) {
+        const printSettings = parsePrintSettings(compRes.data.printSettings || defaultPrintSettings);
+        setCompany({ ...compRes.data, printSettings });
+        localStorage.setItem('alasly-print-settings', JSON.stringify(printSettings));
+        localStorage.setItem('alasly-print-company', JSON.stringify(compRes.data));
+      }
       setBranches(brRes.data);
       setRoles(rRes.data);
       setPermissions(permRes.data);
@@ -95,35 +116,39 @@ export const SettingsScreen: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [auditFilterAction]);
+  }, [auditFilterAction, canManageSettings, canViewAuditLogs]);
 
   useEffect(() => {
     switch (searchParams.get('tab')) {
       case 'company':
-        setActiveTab('company');
+        if (canManageSettings) setActiveTab('company');
         break;
       case 'branches':
-        setActiveTab('branches');
+        if (canManageSettings) setActiveTab('branches');
         break;
       case 'rbac':
-        setActiveTab('rbac');
+        if (canManageSettings) setActiveTab('rbac');
         break;
       case 'users':
         if (user?.role === 'admin') setActiveTab('users');
         break;
       case 'audit':
-        setActiveTab('audit');
+        if (canViewAuditLogs) setActiveTab('audit');
         break;
       case 'integrations':
         if (user?.role === 'admin') setActiveTab('integrations');
         break;
     }
-  }, [searchParams, user?.role]);
+    if (!canManageSettings && canViewAuditLogs) setActiveTab('audit');
+  }, [searchParams, user?.role, canViewAuditLogs, canManageSettings]);
 
   useEffect(() => {
     if (activeTab !== 'users') return;
-    api.getUsers()
-      .then((res) => setUsers(res.data))
+    Promise.all([api.getUsers(), api.master.getEmployees()])
+      .then(([usersRes, employeesRes]) => {
+        setUsers(usersRes.data);
+        setEmployeeOptions(employeesRes.data);
+      })
       .catch((err: any) => showToast(err.response?.data?.error || 'فشل تحميل المستخدمين', 'error'));
   }, [activeTab]);
 
@@ -198,6 +223,68 @@ export const SettingsScreen: React.FC = () => {
     }
   };
 
+  const openUserModal = (account?: any) => {
+    setEditingUserId(account?.id || null);
+    setUserForm({
+      username: account?.username || '',
+      fullName: account?.fullName || '',
+      password: '',
+      email: account?.email || '',
+      phone: account?.phone || '',
+      roleId: account?.role?.id || roles[0]?.id || '',
+      employeeId: account?.employee?.id || '',
+      active: account?.active ?? true,
+      customPermissions: account?.permissionOverrides != null,
+      permissions: account?.permissions || [],
+    });
+    setIsUserModalOpen(true);
+  };
+
+  const handleSaveUser = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const data = {
+      username: userForm.username,
+      fullName: userForm.fullName,
+      ...(userForm.password ? { password: userForm.password } : {}),
+      email: userForm.email || null,
+      phone: userForm.phone || null,
+      roleId: userForm.roleId,
+      employeeId: userForm.employeeId || null,
+      active: userForm.active,
+      permissionOverrides: userForm.customPermissions ? userForm.permissions : null,
+    };
+
+    try {
+      setSavingUser(true);
+      if (editingUserId) {
+        const updateData = { ...data };
+        delete updateData.password;
+        await api.updateUser(editingUserId, updateData);
+      } else {
+        await api.createUser(data);
+      }
+      const response = await api.getUsers();
+      setUsers(response.data);
+      setIsUserModalOpen(false);
+      showToast(editingUserId ? 'تم تحديث المستخدم وصلاحياته' : 'تم إنشاء المستخدم', 'success');
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'تعذر حفظ المستخدم', 'error');
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async (account: any) => {
+    if (!window.confirm(`هل تريد حذف حساب ${account.fullName}؟`)) return;
+    try {
+      await api.deleteUser(account.id);
+      setUsers((current) => current.filter((item) => item.id !== account.id));
+      showToast('تم حذف المستخدم', 'success');
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'تعذر حذف المستخدم', 'error');
+    }
+  };
+
   const updateOutputSetting = (
     output: 'barcode' | 'documents',
     key: keyof OutputPrintSettings,
@@ -223,7 +310,7 @@ export const SettingsScreen: React.FC = () => {
             ملف المنشأة الضريبي، الفروع، صلاحيات المستخدمين، وسجل العمليات والرقابة (Audit Log)
           </p>
         </div>
-        {activeTab === 'branches' && (
+        {activeTab === 'branches' && canManageSettings && (
           <button
             onClick={() => setIsBranchModalOpen(true)}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition"
@@ -232,11 +319,20 @@ export const SettingsScreen: React.FC = () => {
             إضافة فرع جديد
           </button>
         )}
+        {activeTab === 'users' && user?.role === 'admin' && (
+          <button
+            onClick={() => openUserModal()}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition"
+          >
+            <Plus className="w-4 h-4" />
+            إضافة مستخدم
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 bg-white px-6 pt-2 rounded-t-2xl overflow-x-auto">
-        <button
+        {canManageSettings && <button
           onClick={() => setActiveTab('company')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
             activeTab === 'company' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -244,8 +340,8 @@ export const SettingsScreen: React.FC = () => {
         >
           <Building className="w-4 h-4" />
           بيانات المركز والضريبة
-        </button>
-        <button
+        </button>}
+        {canManageSettings && <button
           onClick={() => setActiveTab('branches')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
             activeTab === 'branches' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -253,8 +349,8 @@ export const SettingsScreen: React.FC = () => {
         >
           <MapPin className="w-4 h-4" />
           الفروع والمستودعات ({branches.length})
-        </button>
-        <button
+        </button>}
+        {canManageSettings && <button
           onClick={() => setActiveTab('rbac')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
             activeTab === 'rbac' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -262,7 +358,7 @@ export const SettingsScreen: React.FC = () => {
         >
           <ShieldCheck className="w-4 h-4" />
           الأدوار والصلاحيات (RBAC)
-        </button>
+        </button>}
         {user?.role === 'admin' && (
           <button
             onClick={() => setActiveTab('users')}
@@ -271,18 +367,20 @@ export const SettingsScreen: React.FC = () => {
             }`}
           >
             <Users className="w-4 h-4" />
-            المستخدمون وكلمات المرور
+            المستخدمون والصلاحيات
           </button>
         )}
-        <button
-          onClick={() => setActiveTab('audit')}
-          className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-            activeTab === 'audit' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <History className="w-4 h-4" />
-          سجل الرقابة والعمليات ({auditLogs.length})
-        </button>
+        {canViewAuditLogs && (
+          <button
+            onClick={() => setActiveTab('audit')}
+            className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+              activeTab === 'audit' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            سجل الرقابة والعمليات ({auditLogs.length})
+          </button>
+        )}
         {user?.role === 'admin' && (
           <button
             onClick={() => setActiveTab('integrations')}
@@ -297,7 +395,7 @@ export const SettingsScreen: React.FC = () => {
       </div>
 
       {/* Tab 1: Company Settings */}
-      {activeTab === 'company' && (
+      {activeTab === 'company' && canManageSettings && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6">
           <form onSubmit={handleSaveCompany} className="max-w-3xl space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -578,7 +676,7 @@ export const SettingsScreen: React.FC = () => {
       )}
 
       {/* Tab 2: Branches */}
-      {activeTab === 'branches' && (
+      {activeTab === 'branches' && canManageSettings && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {branches.map(b => (
@@ -619,7 +717,7 @@ export const SettingsScreen: React.FC = () => {
       )}
 
       {/* Tab 3: RBAC Roles & Permissions */}
-      {activeTab === 'rbac' && (
+      {activeTab === 'rbac' && canManageSettings && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {roles.map(r => (
@@ -660,7 +758,7 @@ export const SettingsScreen: React.FC = () => {
       {activeTab === 'users' && user?.role === 'admin' && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6 space-y-4">
           <p className="text-sm text-slate-600">
-            عيّن كلمة مرور جديدة لكل مستخدم قبل تفعيل حسابه. يجب أن تكون كلمة المرور من 16 إلى 72 بايت.
+            أنشئ الحسابات، اربطها بالموظفين، وحدد الصلاحيات الفردية أو استخدم صلاحيات الدور. كلمات المرور لا تقل عن 16 بايت.
           </p>
           <div className="overflow-x-auto border rounded-xl">
             <table className="w-full text-right text-sm">
@@ -669,6 +767,9 @@ export const SettingsScreen: React.FC = () => {
                   <th className="py-3 px-4">المستخدم</th>
                   <th className="py-3 px-4">الدور</th>
                   <th className="py-3 px-4">الحالة</th>
+                  <th className="py-3 px-4">الموظف</th>
+                  <th className="py-3 px-4">الصلاحيات</th>
+                  <th className="py-3 px-4">إدارة الحساب</th>
                   <th className="py-3 px-4">تعيين كلمة مرور جديدة</th>
                 </tr>
               </thead>
@@ -681,6 +782,27 @@ export const SettingsScreen: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-xs">{account.role?.nameAr || account.role?.name || '-'}</td>
                     <td className="py-3 px-4 text-xs">{account.active ? 'نشط' : 'معطل'}</td>
+                    <td className="py-3 px-4 text-xs">{account.employee?.name || '-'}</td>
+                    <td className="py-3 px-4 text-xs">{account.permissionOverrides != null ? 'مخصصة' : 'من الدور'}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex min-w-[10rem] gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openUserModal(account)}
+                          className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50"
+                        >
+                          تعديل وصلاحيات
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUser(account)}
+                          disabled={account.id === user?.id}
+                          className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-40"
+                        >
+                          حذف
+                        </button>
+                      </div>
+                    </td>
                     <td className="py-3 px-4">
                       <form onSubmit={(e) => handleResetUserPassword(e, account.id)} className="flex min-w-[24rem] gap-2">
                         <input
@@ -708,7 +830,7 @@ export const SettingsScreen: React.FC = () => {
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-slate-400">لا يوجد مستخدمون</td>
+                    <td colSpan={7} className="py-8 text-center text-slate-400">لا يوجد مستخدمون</td>
                   </tr>
                 )}
               </tbody>
@@ -718,7 +840,7 @@ export const SettingsScreen: React.FC = () => {
       )}
 
       {/* Tab 4: Audit Logs */}
-      {activeTab === 'audit' && (
+      {activeTab === 'audit' && canViewAuditLogs && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6 space-y-4">
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-slate-700">تصفية حسب نوع الإجراء:</span>
@@ -783,6 +905,106 @@ export const SettingsScreen: React.FC = () => {
       )}
 
       {activeTab === 'integrations' && user?.role === 'admin' && <NotificationIntegrations />}
+
+      {isUserModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form onSubmit={handleSaveUser} className="max-h-[90vh] w-full max-w-3xl space-y-4 overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">{editingUserId ? 'تعديل حساب وصلاحيات المستخدم' : 'إنشاء مستخدم جديد'}</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-xs font-semibold text-slate-700">
+                اسم المستخدم
+                <input required value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-sm" dir="ltr" />
+              </label>
+              <label className="space-y-1 text-xs font-semibold text-slate-700">
+                الاسم الكامل
+                <input required value={userForm.fullName} onChange={(e) => setUserForm({ ...userForm, fullName: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-sm" />
+              </label>
+              {!editingUserId && (
+                <label className="space-y-1 text-xs font-semibold text-slate-700">
+                  كلمة المرور (16 إلى 72 بايت)
+                  <input required minLength={16} maxLength={72} autoComplete="new-password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-sm" dir="ltr" />
+                </label>
+              )}
+              <label className="space-y-1 text-xs font-semibold text-slate-700">
+                الدور
+                <select required value={userForm.roleId} onChange={(e) => setUserForm({ ...userForm, roleId: e.target.value })} className="w-full rounded-lg border bg-white px-3 py-2 text-sm">
+                  <option value="">اختر الدور</option>
+                  {roles.map((role) => <option key={role.id} value={role.id}>{role.nameAr || role.name}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1 text-xs font-semibold text-slate-700">
+                ربط بموظف
+                <select value={userForm.employeeId} onChange={(e) => setUserForm({ ...userForm, employeeId: e.target.value })} className="w-full rounded-lg border bg-white px-3 py-2 text-sm">
+                  <option value="">بدون ربط</option>
+                  {employeeOptions.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1 text-xs font-semibold text-slate-700">
+                البريد الإلكتروني
+                <input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-sm" dir="ltr" />
+              </label>
+              <label className="space-y-1 text-xs font-semibold text-slate-700">
+                الهاتف
+                <input value={userForm.phone} onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-sm" dir="ltr" />
+              </label>
+            </div>
+            {editingUserId && (
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <input type="checkbox" checked={userForm.active} onChange={(e) => setUserForm({ ...userForm, active: e.target.checked })} disabled={editingUserId === user?.id} />
+                الحساب نشط
+              </label>
+            )}
+            <section className="space-y-3 rounded-xl border p-4">
+              <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                <input type="checkbox" checked={userForm.customPermissions} onChange={(e) => {
+                  const rolePermissions = roles.find((role) => role.id === userForm.roleId)?.permissions || '[]';
+                  let parsedRolePermissions: string[] = [];
+                  try {
+                    const parsed: unknown = JSON.parse(rolePermissions);
+                    if (Array.isArray(parsed) && parsed.every((permission) => typeof permission === 'string')) {
+                      parsedRolePermissions = parsed;
+                    }
+                  } catch (error) {
+                    console.error('Failed to parse role permissions:', error);
+                  }
+                  setUserForm({
+                    ...userForm,
+                    customPermissions: e.target.checked,
+                    permissions: e.target.checked && !userForm.permissions.length ? parsedRolePermissions : userForm.permissions,
+                  });
+                }} />
+                تخصيص الصلاحيات لهذا المستخدم بدلًا من صلاحيات الدور
+              </label>
+              {userForm.customPermissions && (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {permissions.map((permission) => (
+                    <label key={permission.key} className="flex items-center gap-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={userForm.permissions.includes(permission.key)}
+                        onChange={(e) => setUserForm({
+                          ...userForm,
+                          permissions: e.target.checked
+                            ? [...userForm.permissions, permission.key]
+                            : userForm.permissions.filter((item) => item !== permission.key),
+                        })}
+                      />
+                      {permission.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="text-[11px] text-slate-500">يظل ربط WhatsApp وTelegram متاحًا لمدير النظام فقط.</p>
+            </section>
+            <div className="flex justify-end gap-2 border-t pt-4">
+              <button type="button" onClick={() => setIsUserModalOpen(false)} className="rounded-lg border px-4 py-2 text-sm font-semibold">إلغاء</button>
+              <button type="submit" disabled={savingUser} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white disabled:opacity-50">
+                {savingUser ? 'جارٍ الحفظ...' : 'حفظ المستخدم'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Add Branch Modal */}
       {isBranchModalOpen && (

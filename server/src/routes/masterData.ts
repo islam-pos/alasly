@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
+import { AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -448,17 +449,125 @@ router.get('/employees', async (req, res) => {
   }
 });
 
-router.post('/employees', async (req, res) => {
+router.post('/employees', async (req: AuthenticatedRequest, res) => {
   try {
+    const { name, phone, email, nationalId, jobId, department, hireDate, salary, commissionRate, branchId, active } = req.body || {};
+    if (
+      typeof name !== 'string' || !name.trim() ||
+      typeof phone !== 'string' || !phone.trim() ||
+      typeof jobId !== 'string' || !jobId ||
+      !Number.isFinite(Number(salary)) || Number(salary) < 0 ||
+      (commissionRate !== undefined && (!Number.isFinite(Number(commissionRate)) || Number(commissionRate) < 0 || Number(commissionRate) > 100)) ||
+      (email !== undefined && email !== null && typeof email !== 'string') ||
+      (nationalId !== undefined && nationalId !== null && typeof nationalId !== 'string') ||
+      (branchId !== undefined && branchId !== null && typeof branchId !== 'string') ||
+      (active !== undefined && typeof active !== 'boolean') ||
+      (hireDate !== undefined && Number.isNaN(new Date(hireDate).getTime()))
+    ) {
+      return res.status(400).json({ error: 'بيانات الموظف غير صالحة' });
+    }
     const count = await prisma.employee.count();
     const code = req.body.code || `EMP-${String(count + 101)}`;
     const employee = await prisma.employee.create({
-      data: { ...req.body, code },
-      include: { job: true },
+      data: {
+        code,
+        name: name.trim(),
+        phone: phone.trim(),
+        email: typeof email === 'string' && email.trim() ? email.trim() : null,
+        nationalId: typeof nationalId === 'string' && nationalId.trim() ? nationalId.trim() : null,
+        jobId,
+        department: typeof department === 'string' && department.trim() ? department.trim() : 'الورشة',
+        hireDate: hireDate ? new Date(hireDate) : new Date(),
+        salary: Number(salary),
+        commissionRate: Number(commissionRate || 0),
+        branchId: typeof branchId === 'string' && branchId ? branchId : null,
+        active: active ?? true,
+      },
+      include: { job: true, branch: true },
     });
+    await logAudit({ userId: req.user?.id, action: 'CREATE', entity: 'Employee', entityId: employee.id, details: `إضافة الموظف ${employee.name}`, ipAddress: req.ip });
     res.status(201).json(employee);
   } catch (err: any) {
+    console.error('Failed to create employee:', err);
+    if (err.code === 'P2002') return res.status(409).json({ error: 'رقم الهوية أو كود الموظف مستخدم بالفعل' });
     res.status(400).json({ error: err.message });
+  }
+});
+
+router.patch('/employees/:id', async (req: AuthenticatedRequest, res) => {
+  const body = req.body || {};
+  const allowedFields = ['name', 'phone', 'email', 'nationalId', 'jobId', 'department', 'hireDate', 'salary', 'commissionRate', 'branchId', 'active'];
+  if (!Object.keys(body).length || Object.keys(body).some((key) => !allowedFields.includes(key))) {
+    return res.status(400).json({ error: 'بيانات تعديل الموظف غير صالحة' });
+  }
+  if (
+    (body.name !== undefined && (typeof body.name !== 'string' || !body.name.trim())) ||
+    (body.phone !== undefined && (typeof body.phone !== 'string' || !body.phone.trim())) ||
+    (body.email !== undefined && body.email !== null && typeof body.email !== 'string') ||
+    (body.nationalId !== undefined && body.nationalId !== null && typeof body.nationalId !== 'string') ||
+    (body.jobId !== undefined && (typeof body.jobId !== 'string' || !body.jobId)) ||
+    (body.department !== undefined && typeof body.department !== 'string') ||
+    (body.branchId !== undefined && body.branchId !== null && typeof body.branchId !== 'string') ||
+    (body.hireDate !== undefined && Number.isNaN(new Date(body.hireDate).getTime())) ||
+    (body.salary !== undefined && (!Number.isFinite(Number(body.salary)) || Number(body.salary) < 0)) ||
+    (body.commissionRate !== undefined && (!Number.isFinite(Number(body.commissionRate)) || Number(body.commissionRate) < 0 || Number(body.commissionRate) > 100)) ||
+    (body.active !== undefined && typeof body.active !== 'boolean')
+  ) {
+    return res.status(400).json({ error: 'بيانات تعديل الموظف غير صالحة' });
+  }
+
+  const data = {
+    ...(body.name !== undefined ? { name: body.name.trim() } : {}),
+    ...(body.phone !== undefined ? { phone: body.phone.trim() } : {}),
+    ...(body.email !== undefined ? { email: typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null } : {}),
+    ...(body.nationalId !== undefined ? { nationalId: typeof body.nationalId === 'string' && body.nationalId.trim() ? body.nationalId.trim() : null } : {}),
+    ...(body.jobId !== undefined ? { jobId: body.jobId } : {}),
+    ...(body.department !== undefined ? { department: body.department.trim() } : {}),
+    ...(body.hireDate !== undefined ? { hireDate: new Date(body.hireDate) } : {}),
+    ...(body.salary !== undefined ? { salary: Number(body.salary) } : {}),
+    ...(body.commissionRate !== undefined ? { commissionRate: Number(body.commissionRate) } : {}),
+    ...(body.branchId !== undefined ? { branchId: body.branchId || null } : {}),
+    ...(body.active !== undefined ? { active: body.active } : {}),
+  };
+
+  try {
+    const employee = await prisma.$transaction(async (transaction) => {
+      const updated = await transaction.employee.update({
+        where: { id: req.params.id },
+        data,
+        include: { job: true, branch: true },
+      });
+      if (body.active === false) {
+        await transaction.user.updateMany({ where: { employeeId: updated.id }, data: { active: false } });
+      }
+      return updated;
+    });
+    await logAudit({ userId: req.user?.id, action: 'UPDATE', entity: 'Employee', entityId: employee.id, details: `تعديل الموظف ${employee.name}`, ipAddress: req.ip });
+    res.json(employee);
+  } catch (err: any) {
+    console.error('Failed to update employee:', err);
+    if (err.code === 'P2025') return res.status(404).json({ error: 'الموظف غير موجود' });
+    if (err.code === 'P2002') return res.status(409).json({ error: 'رقم الهوية مستخدم بالفعل' });
+    res.status(400).json({ error: 'تعذر تعديل بيانات الموظف' });
+  }
+});
+
+router.delete('/employees/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const employee = await prisma.$transaction(async (transaction) => {
+      const updated = await transaction.employee.update({
+        where: { id: req.params.id },
+        data: { active: false },
+      });
+      await transaction.user.updateMany({ where: { employeeId: updated.id }, data: { active: false } });
+      return updated;
+    });
+    await logAudit({ userId: req.user?.id, action: 'DELETE', entity: 'Employee', entityId: employee.id, details: `إيقاف الموظف ${employee.name}`, ipAddress: req.ip });
+    res.json({ success: true, employee });
+  } catch (err: any) {
+    console.error('Failed to deactivate employee:', err);
+    if (err.code === 'P2025') return res.status(404).json({ error: 'الموظف غير موجود' });
+    res.status(400).json({ error: 'تعذر إيقاف الموظف' });
   }
 });
 
