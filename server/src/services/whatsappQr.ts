@@ -2,6 +2,8 @@ import makeWASocket, {
   AuthenticationState,
   BufferJSON,
   DisconnectReason,
+  Browsers,
+  fetchLatestBaileysVersion,
   initAuthCreds,
   proto,
   SignalDataTypeMap,
@@ -20,7 +22,7 @@ type QRStatus = {
   error: string | null;
 };
 
-const logger = pino({ level: 'silent' });
+const logger = pino({ level: 'warn' });
 const status: QRStatus = { connected: false, connecting: false, phoneNumber: '', qrCode: null, error: null };
 let socket: ReturnType<typeof makeWASocket> | null = null;
 let generation = 0;
@@ -126,16 +128,21 @@ const clearSession = async () => {
 const connect = async () => {
   if (socket || status.connecting) return;
   status.connecting = true;
-  status.error = null;
   const currentGeneration = ++generation;
   try {
     const auth = await createAuthState();
     if (currentGeneration !== generation) return;
+    const latestVersion = await fetchLatestBaileysVersion({ timeout: 8000 });
+    if (!latestVersion.isLatest) {
+      console.warn('Could not fetch the latest WhatsApp Web protocol version; using Baileys bundled version:', latestVersion.error);
+    }
+    if (currentGeneration !== generation) return;
     const client = makeWASocket({
       auth: auth.state,
       logger,
+      version: latestVersion.version,
       printQRInTerminal: false,
-      browser: ['Alasly ERP', 'Chrome', '1.0'],
+      browser: Browsers.ubuntu('Chrome'),
       shouldSyncHistoryMessage: () => false,
       syncFullHistory: false,
     });
@@ -149,6 +156,7 @@ const connect = async () => {
       if (currentGeneration !== generation) return;
       if (update.qr) {
         status.qrCode = null;
+        status.error = null;
         void QRCode.toDataURL(update.qr, { errorCorrectionLevel: 'M', margin: 2 })
           .then((qrCode) => {
             if (currentGeneration === generation) status.qrCode = qrCode;
@@ -174,14 +182,22 @@ const connect = async () => {
       const disconnectCode = update.lastDisconnect?.error
         ? new Boom(update.lastDisconnect.error).output.statusCode
         : undefined;
+      const disconnectError = update.lastDisconnect?.error;
+      const disconnectMessage = disconnectError instanceof Error
+        ? disconnectError.message
+        : String(disconnectError || 'WhatsApp closed the connection without a reason');
+      console.error('WhatsApp QR connection closed:', {
+        code: disconnectCode,
+        message: disconnectMessage.slice(0, 240),
+      });
       if (disconnectCode === DisconnectReason.loggedOut) {
         status.phoneNumber = '';
-        status.error = 'انتهى ربط WhatsApp؛ امسح رمز QR جديدًا';
+        status.error = 'انتهى ربط WhatsApp؛ أعد إنشاء رمز QR لإعادة الربط';
         void clearSession().catch((error) => console.error('Failed to clear logged-out WhatsApp session:', error));
         return;
       }
       status.connecting = true;
-      status.error = 'انقطع الاتصال، جارٍ إعادة المحاولة';
+      status.error = `انقطع اتصال WhatsApp (رمز ${disconnectCode ?? 'غير معروف'}): ${disconnectMessage.slice(0, 180)}`;
       if (!reconnectTimer) {
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null;
@@ -217,6 +233,7 @@ export const startWhatsappQrPairing = async () => {
   if (socket || status.connecting) {
     return getWhatsappQrStatus();
   }
+  status.error = null;
   await connect();
   return getWhatsappQrStatus();
 };

@@ -140,6 +140,7 @@ export const NotificationIntegrations: React.FC = () => {
   const startQrPairing = async () => {
     setTesting('whatsapp');
     try {
+      if (status?.whatsapp.error) await api.settings.disconnectWhatsappQr();
       const { data } = await api.settings.startWhatsappQrPairing();
       setStatus((current) => current ? { ...current, whatsapp: data } : current);
     } catch (error: any) {
@@ -248,9 +249,9 @@ export const NotificationIntegrations: React.FC = () => {
           )}
           <div className="flex flex-wrap gap-2">
             {!status.whatsapp.connected ? (
-              <button type="button" disabled={testing !== null || status.whatsapp.connecting} onClick={startQrPairing} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
+              <button type="button" disabled={testing !== null || (status.whatsapp.connecting && !status.whatsapp.error)} onClick={startQrPairing} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
                 {testing === 'whatsapp' ? <Loader2 className="h-4 w-4 animate-spin" /> : status.whatsapp.qrCode ? <RefreshCw className="h-4 w-4" /> : <QrCode className="h-4 w-4" />}
-                {status.whatsapp.connecting ? 'جارٍ إنشاء QR...' : status.whatsapp.qrCode ? 'إنشاء QR جديد' : 'إنشاء رمز QR للربط'}
+                {status.whatsapp.connecting && !status.whatsapp.error ? 'جارٍ إنشاء QR...' : status.whatsapp.error ? 'إعادة محاولة الربط' : status.whatsapp.qrCode ? 'إنشاء QR جديد' : 'إنشاء رمز QR للربط'}
               </button>
             ) : (
               <>
@@ -301,9 +302,9 @@ export const NotificationIntegrations: React.FC = () => {
           )}
           <div className="flex flex-wrap gap-2">
             {!status.telegram.connected ? (
-              <button type="button" disabled={testing !== null || status.telegram.connecting} onClick={startTelegramQrPairing} className="flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-50">
+              <button type="button" disabled={testing !== null || (status.telegram.connecting && !status.telegram.error)} onClick={startTelegramQrPairing} className="flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-50">
                 {testing === 'telegram' ? <Loader2 className="h-4 w-4 animate-spin" /> : status.telegram.qrCode ? <RefreshCw className="h-4 w-4" /> : <QrCode className="h-4 w-4" />}
-                {status.telegram.connecting ? 'جارٍ إنشاء QR...' : status.telegram.qrCode ? 'إنشاء QR جديد' : 'إنشاء رمز QR للربط'}
+                {status.telegram.connecting && !status.telegram.error ? 'جارٍ إنشاء QR...' : status.telegram.error ? 'إعادة محاولة الربط' : status.telegram.qrCode ? 'إنشاء QR جديد' : 'إنشاء رمز QR للربط'}
               </button>
             ) : (
               <>

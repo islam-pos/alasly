@@ -59,7 +59,7 @@ const apiCredentials = () => {
   const apiId = Number(process.env.TELEGRAM_API_ID);
   const apiHash = process.env.TELEGRAM_API_HASH?.trim();
   if (!Number.isInteger(apiId) || apiId <= 0 || !apiHash) {
-    throw new Error('Set TELEGRAM_API_ID and TELEGRAM_API_HASH from my.telegram.org/apps before connecting Telegram');
+    throw new Error('أضف TELEGRAM_API_ID و TELEGRAM_API_HASH من my.telegram.org/apps إلى متغيرات الخادم ثم أعد المحاولة');
   }
   return { apiId, apiHash };
 };
