@@ -3,6 +3,12 @@ import { prisma } from '../lib/prisma';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { getIntegrationStatus, saveIntegrationSettings, testIntegration, type NotificationChannel } from '../services/notifications';
 import { disconnectWhatsappQr, getWhatsappQrStatus, startWhatsappQrPairing } from '../services/whatsappQr';
+import {
+  disconnectTelegramQr,
+  getTelegramQrStatus,
+  startTelegramQrPairing,
+  submitTelegramQrPassword,
+} from '../services/telegramQr';
 
 const router = Router();
 
@@ -73,6 +79,46 @@ router.delete('/integrations/whatsapp/connect', async (req, res) => {
   } catch (error) {
     console.error('Failed to disconnect WhatsApp QR session:', error);
     res.status(500).json({ error: 'تعذر فصل حساب WhatsApp' });
+  }
+});
+
+router.get('/integrations/telegram/qr', async (req, res) => {
+  if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
+  try {
+    res.json(await getTelegramQrStatus());
+  } catch (error) {
+    console.error('Failed to load Telegram QR status:', error);
+    res.status(500).json({ error: 'تعذر تحميل حالة ربط Telegram' });
+  }
+});
+
+router.post('/integrations/telegram/connect', async (req, res) => {
+  if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
+  try {
+    res.json(await startTelegramQrPairing());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'تعذر بدء ربط Telegram';
+    res.status(400).json({ error: message });
+  }
+});
+
+router.post('/integrations/telegram/password', async (req, res) => {
+  if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
+  try {
+    res.json(await submitTelegramQrPassword(String(req.body?.password || '')));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'تعذر التحقق من كلمة مرور Telegram';
+    res.status(400).json({ error: message });
+  }
+});
+
+router.delete('/integrations/telegram/connect', async (req, res) => {
+  if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
+  try {
+    res.json(await disconnectTelegramQr());
+  } catch (error) {
+    console.error('Failed to disconnect Telegram QR session:', error);
+    res.status(500).json({ error: 'تعذر فصل حساب Telegram' });
   }
 });
 

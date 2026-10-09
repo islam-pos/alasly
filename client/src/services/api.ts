@@ -5,6 +5,7 @@ import type {
   NotificationIntegrationInput,
   NotificationIntegrationStatus,
   NotificationQrStatus,
+  NotificationTelegramQrStatus,
 } from '../types/notifications';
 
 const BASE_URL = '/api';
@@ -517,6 +518,29 @@ const apiClient = {
       headers: getHeaders(),
     }).then((res) => handleResponse<{ data: NotificationQrStatus }>(res)),
 
+  getTelegramQrStatus: () =>
+    fetch(`${BASE_URL}/settings/integrations/telegram/qr`, { headers: getHeaders() })
+      .then((res) => handleResponse<{ data: NotificationTelegramQrStatus }>(res)),
+
+  startTelegramQrPairing: () =>
+    fetch(`${BASE_URL}/settings/integrations/telegram/connect`, {
+      method: 'POST',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<{ data: NotificationTelegramQrStatus }>(res)),
+
+  submitTelegramQrPassword: (password: string) =>
+    fetch(`${BASE_URL}/settings/integrations/telegram/password`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ password }),
+    }).then((res) => handleResponse<{ data: NotificationTelegramQrStatus }>(res)),
+
+  disconnectTelegramQr: () =>
+    fetch(`${BASE_URL}/settings/integrations/telegram/connect`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<{ data: NotificationTelegramQrStatus }>(res)),
+
   saveNotificationIntegrations: (data: NotificationIntegrationInput) =>
     fetch(`${BASE_URL}/settings/integrations`, {
       method: 'PUT',
@@ -600,6 +624,10 @@ export const api = Object.assign(apiClient, {
     getWhatsappQrStatus: apiClient.getWhatsappQrStatus,
     startWhatsappQrPairing: apiClient.startWhatsappQrPairing,
     disconnectWhatsappQr: apiClient.disconnectWhatsappQr,
+    getTelegramQrStatus: apiClient.getTelegramQrStatus,
+    startTelegramQrPairing: apiClient.startTelegramQrPairing,
+    submitTelegramQrPassword: apiClient.submitTelegramQrPassword,
+    disconnectTelegramQr: apiClient.disconnectTelegramQr,
     saveNotificationIntegrations: apiClient.saveNotificationIntegrations,
     testNotificationIntegration: apiClient.testNotificationIntegration,
   },

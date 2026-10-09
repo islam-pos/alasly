@@ -13,6 +13,8 @@ const migrate = async () => {
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "NumberSequence" ("key" TEXT NOT NULL PRIMARY KEY, "lastValue" INTEGER NOT NULL DEFAULT 0)`;
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "NotificationIntegration" ("id" INTEGER NOT NULL PRIMARY KEY, "whatsapp" TEXT, "whatsappPhone" TEXT, "telegram" TEXT, "options" TEXT NOT NULL DEFAULT '{}', "shiftEndTime" TEXT NOT NULL DEFAULT '23:00', "timeZone" TEXT NOT NULL DEFAULT 'Africa/Cairo', "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`;
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "WhatsappAuthData" ("key" TEXT NOT NULL PRIMARY KEY, "encryptedValue" TEXT NOT NULL)`;
+  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "TelegramAuthSession" ("id" INTEGER NOT NULL PRIMARY KEY, "encryptedSession" TEXT)`;
+  await prisma.$executeRaw`UPDATE "NotificationIntegration" SET "telegram" = NULL WHERE "telegram" IS NOT NULL`;
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "NotificationDelivery" ("id" TEXT NOT NULL PRIMARY KEY, "channel" TEXT NOT NULL, "eventKey" TEXT NOT NULL, "sentAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`;
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "NotificationDelivery_channel_eventKey_key" ON "NotificationDelivery"("channel", "eventKey")`;
   await ensureColumn('CompanySetting', 'nameEn', 'TEXT');

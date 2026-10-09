@@ -56,6 +56,11 @@ model WhatsappAuthData {
   encryptedValue String
 }
 
+model TelegramAuthSession {
+  id               Int     @id @default(1)
+  encryptedSession String?
+}
+
 model NotificationDelivery {
   id        String   @id @default(uuid())
   channel   String

@@ -10,24 +10,20 @@ export type NotificationOptions = {
 
 export type NotificationIntegrationStatus = {
   whatsapp: NotificationQrStatus;
-  telegram: { connected: boolean; chatId: string };
+  telegram: NotificationTelegramQrStatus;
   options: NotificationOptions;
   shiftEndTime: string;
   timeZone: string;
-  credentialsResetRequired: boolean;
 };
 
 export type NotificationIntegrationInput = {
   whatsappPhone: string;
-  telegram: { botToken: string; chatId: string };
   options: NotificationOptions;
   shiftEndTime: string;
   timeZone: 'Africa/Cairo';
 };
 
 export type NotificationConnectionInput = {
-  botToken?: string;
-  chatId?: string;
   phoneNumber?: string;
 };
 
@@ -39,5 +35,15 @@ export type NotificationQrStatus = {
   phoneNumber: string;
   recipientPhone: string;
   qrCode: string | null;
+  error: string | null;
+};
+
+export type NotificationTelegramQrStatus = {
+  connected: boolean;
+  connecting: boolean;
+  account: string;
+  qrCode: string | null;
+  passwordRequired: boolean;
+  passwordHint: string;
   error: string | null;
 };

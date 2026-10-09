@@ -1,6 +1,7 @@
-import { createCipheriv, createDecipheriv, randomBytes, randomUUID, scryptSync } from 'crypto';
+import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma';
 import { getWhatsappQrStatus, sendWhatsappQrMessage } from './whatsappQr';
+import { getTelegramQrStatus, sendTelegramQrMessage } from './telegramQr';
 
 export type NotificationChannel = 'whatsapp' | 'telegram';
 export type NotificationOptions = {
@@ -12,10 +13,8 @@ export type NotificationOptions = {
   updates: boolean;
   shiftSummary: boolean;
 };
-type TelegramConfig = { botToken: string; chatId: string };
 type IntegrationState = {
   whatsappPhone: string;
-  telegram?: TelegramConfig;
   options: NotificationOptions;
   shiftEndTime: string;
   timeZone: string;
@@ -34,37 +33,6 @@ const defaultOptions: NotificationOptions = {
   shiftSummary: false,
 };
 
-const encryptionKey = () => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret || Buffer.byteLength(secret) < 32) {
-    throw new Error('JWT_SECRET must contain at least 32 bytes to encrypt integration credentials');
-  }
-  return scryptSync(secret, 'alasly-notification-integrations-v1', 32);
-};
-
-const encrypt = (value: unknown) => {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', encryptionKey(), iv);
-  const encrypted = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()]);
-  return `v1:${iv.toString('base64')}:${cipher.getAuthTag().toString('base64')}:${encrypted.toString('base64')}`;
-};
-
-const decrypt = <T>(value: string): T => {
-  const [version, iv, tag, data] = value.split(':');
-  if (version !== 'v1' || !iv || !tag || !data) throw new Error('Stored integration credentials have an unsupported format');
-  const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(iv, 'base64'));
-  decipher.setAuthTag(Buffer.from(tag, 'base64'));
-  return JSON.parse(Buffer.concat([
-    decipher.update(Buffer.from(data, 'base64')),
-    decipher.final(),
-  ]).toString('utf8')) as T;
-};
-
-const nonEmpty = (value: unknown, name: string) => {
-  if (typeof value !== 'string' || !value.trim()) throw new Error(`${name} is required`);
-  return value.trim();
-};
-
 const integrationRow = () => prisma.notificationIntegration.upsert({
   where: { id: 1 },
   create: { id: 1 },
@@ -72,41 +40,25 @@ const integrationRow = () => prisma.notificationIntegration.upsert({
 });
 
 export const getIntegrationState = async (): Promise<IntegrationState> => {
-  const result = await readIntegrationState();
-  if (result.credentialsResetRequired) {
-    throw new Error('Integration credentials cannot be decrypted; re-enter the affected credentials in notification settings');
-  }
-  return result.state;
+  return (await readIntegrationState()).state;
 };
 
 const readIntegrationState = async () => {
   const row = await integrationRow();
-  let credentialsResetRequired = false;
-  const readCredential = <T>(value: string | null) => {
-    if (!value) return undefined;
-    try {
-      return decrypt<T>(value);
-    } catch {
-      credentialsResetRequired = true;
-      return undefined;
-    }
-  };
-  const telegram = readCredential<TelegramConfig>(row.telegram);
   return {
     state: {
       whatsappPhone: row.whatsappPhone || '',
-      ...(telegram ? { telegram } : {}),
       options: { ...defaultOptions, ...JSON.parse(row.options) },
       shiftEndTime: row.shiftEndTime,
       timeZone: row.timeZone,
     } as IntegrationState,
-    credentialsResetRequired,
   };
 };
 
 export const getIntegrationStatus = async () => {
-  const { state, credentialsResetRequired } = await readIntegrationState();
+  const { state } = await readIntegrationState();
   const whatsapp = await getWhatsappQrStatus();
+  const telegram = await getTelegramQrStatus();
   return {
     whatsapp: {
       connected: whatsapp.connected,
@@ -116,31 +68,18 @@ export const getIntegrationStatus = async () => {
       qrCode: whatsapp.qrCode,
       error: whatsapp.error,
     },
-    telegram: {
-      connected: Boolean(state.telegram?.botToken && state.telegram.chatId),
-      chatId: state.telegram?.chatId || '',
-    },
+    telegram,
     options: state.options,
     shiftEndTime: state.shiftEndTime,
     timeZone: state.timeZone,
-    credentialsResetRequired,
   };
 };
 
 export const saveIntegrationSettings = async (input: Record<string, unknown>) => {
   const { state: current } = await readIntegrationState();
-  const telegramInput = input.telegram && typeof input.telegram === 'object'
-    ? input.telegram as Record<string, unknown>
-    : {};
   const whatsappPhone = typeof input.whatsappPhone === 'string' && input.whatsappPhone.trim()
     ? input.whatsappPhone.trim()
     : current.whatsappPhone;
-  const telegram = {
-    botToken: typeof telegramInput.botToken === 'string' && telegramInput.botToken.trim()
-      ? telegramInput.botToken.trim() : current.telegram?.botToken || '',
-    chatId: typeof telegramInput.chatId === 'string' && telegramInput.chatId.trim()
-      ? telegramInput.chatId.trim() : current.telegram?.chatId || '',
-  };
   const rawOptions = input.options && typeof input.options === 'object'
     ? input.options as Record<string, unknown>
     : current.options;
@@ -163,7 +102,7 @@ export const saveIntegrationSettings = async (input: Record<string, unknown>) =>
       id: 1,
       whatsapp: null,
       whatsappPhone,
-      telegram: telegram.botToken ? encrypt(telegram) : null,
+      telegram: null,
       options: JSON.stringify(options),
       shiftEndTime,
       timeZone: 'Africa/Cairo',
@@ -171,28 +110,13 @@ export const saveIntegrationSettings = async (input: Record<string, unknown>) =>
     update: {
       whatsapp: null,
       whatsappPhone,
-      telegram: telegram.botToken ? encrypt(telegram) : null,
+      telegram: null,
       options: JSON.stringify(options),
       shiftEndTime,
       timeZone: 'Africa/Cairo',
     },
   });
   return getIntegrationStatus();
-};
-
-const requestJson = async (url: string, init?: RequestInit) => {
-  const response = await fetch(url, init);
-  let body: { ok?: boolean; error?: { message?: string }; description?: string };
-  try {
-    body = await response.json() as typeof body;
-  } catch {
-    throw new Error('Messaging provider returned an invalid response');
-  }
-  if (!response.ok) {
-    throw new Error(body.error?.message || body.description || `Messaging provider returned HTTP ${response.status}`);
-  }
-  if (body.ok === false) throw new Error(body.description || 'Messaging provider rejected the request');
-  return body;
 };
 
 const sendToChannel = async (channel: NotificationChannel, text: string, state?: IntegrationState) => {
@@ -203,13 +127,7 @@ const sendToChannel = async (channel: NotificationChannel, text: string, state?:
     return;
   }
   if (channel === 'telegram') {
-    const config = settings.telegram;
-    if (!config?.botToken || !config.chatId) throw new Error('Telegram is not fully configured');
-    await requestJson(`https://api.telegram.org/bot${encodeURIComponent(config.botToken)}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: config.chatId, text: text.slice(0, 3900) }),
-    });
+    await sendTelegramQrMessage(text);
     return;
   }
 };
@@ -220,19 +138,10 @@ export const testIntegration = async (
 ) => {
   const { state } = await readIntegrationState();
   if (channel === 'telegram') {
-    const config = {
-      botToken: typeof input.botToken === 'string' && input.botToken.trim()
-        ? input.botToken.trim() : state.telegram?.botToken || '',
-      chatId: typeof input.chatId === 'string' && input.chatId.trim()
-        ? input.chatId.trim() : state.telegram?.chatId || '',
-    };
-    nonEmpty(config.botToken, 'Telegram bot token');
-    nonEmpty(config.chatId, 'Telegram chat ID');
-    const response = await requestJson(
-      `https://api.telegram.org/bot${encodeURIComponent(config.botToken)}/getMe`,
-    ) as { result?: { username?: string } };
-    await sendToChannel('telegram', 'تم اختبار اتصال Alasly بنجاح.', { ...state, telegram: config });
-    return { success: true, account: response.result?.username || 'Telegram bot' };
+    const telegram = await getTelegramQrStatus();
+    if (!telegram.connected) throw new Error('Connect Telegram by scanning the QR code first');
+    await sendTelegramQrMessage('تم اختبار اتصال Alasly بنجاح.');
+    return { success: true, account: telegram.account };
   }
   const whatsapp = await getWhatsappQrStatus();
   const phoneNumber = typeof input.phoneNumber === 'string' && input.phoneNumber.trim()
@@ -256,10 +165,13 @@ export const notifyEvent = async (category: NotificationCategory, text: string) 
 
 const sendToConfiguredChannels = async (text: string, state: IntegrationState, category: string) => {
   const channels = (['whatsapp', 'telegram'] as NotificationChannel[]).filter((channel) => channel === 'telegram'
-    ? Boolean(state.telegram?.botToken && state.telegram.chatId)
+    ? true
     : Boolean(state.whatsappPhone));
   const whatsapp = channels.includes('whatsapp') ? await getWhatsappQrStatus() : null;
-  const enabledChannels = channels.filter((channel) => channel !== 'whatsapp' || whatsapp?.connected);
+  const telegram = channels.includes('telegram') ? await getTelegramQrStatus() : null;
+  const enabledChannels = channels.filter((channel) => channel === 'whatsapp'
+    ? Boolean(whatsapp?.connected)
+    : Boolean(telegram?.connected));
   const results = await Promise.allSettled(enabledChannels.map((channel) => sendToChannel(channel, text, state)));
   results.forEach((result, index) => {
     if (result.status === 'rejected') {
@@ -411,7 +323,7 @@ export const sendShiftSummary = async (date: string) => {
   for (const channel of ['whatsapp', 'telegram'] as NotificationChannel[]) {
     const configured = channel === 'whatsapp'
       ? Boolean(state.whatsappPhone && (await getWhatsappQrStatus()).connected)
-      : Boolean(state.telegram?.botToken && state.telegram.chatId);
+      : (await getTelegramQrStatus()).connected;
     if (!configured) continue;
     const eventKey = `shift-summary:${date}`;
     const claimed = await prisma.$executeRaw`
