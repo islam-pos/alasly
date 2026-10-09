@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
+import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
 
 const router = Router();
 
@@ -519,9 +520,6 @@ router.post('/job-cards/:id/invoice', async (req, res) => {
     const taxAmount = (taxable * 15) / 100;
     const grandTotal = taxable + taxAmount;
 
-    const count = await prisma.salesInvoice.count();
-    const invoiceNumber = `MINV-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
-
     let paid = 0;
     let cash = parseFloat(cashPaid) || 0;
     let card = parseFloat(cardPaid) || 0;
@@ -538,7 +536,8 @@ router.post('/job-cards/:id/invoice', async (req, res) => {
 
     const remainingAmount = Math.max(0, grandTotal - paid);
 
-    const invoice = await prisma.$transaction(async (tx) => {
+    const invoice = await withInvoiceTransaction(prisma, async (tx) => {
+      const invoiceNumber = await nextInvoiceNumber(tx, 'MINV');
       // 1. Create Final Sales Invoice
       const inv = await tx.salesInvoice.create({
         data: {

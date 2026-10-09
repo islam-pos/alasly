@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { sendInvoicePdf, sendShortageRequest } from '../services/whatsapp';
+import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
 
 const router = Router();
 
@@ -85,9 +86,6 @@ router.get('/invoices', async (req, res) => {
 router.post('/invoices', async (req, res) => {
   try {
     const { items, ...data } = req.body;
-    const count = await prisma.purchaseInvoice.count();
-    const invoiceNumber = `PINV-${new Date().getFullYear()}-${String(count + 1).padStart(3, '0')}`;
-
     const subtotal = items.reduce((sum: number, it: any) => sum + (parseFloat(it.unitPrice) * parseInt(it.quantity)), 0);
     const discount = parseFloat(data.discount) || 0;
     const taxableAmount = Math.max(0, subtotal - discount);
@@ -96,7 +94,8 @@ router.post('/invoices', async (req, res) => {
     const paidAmount = parseFloat(data.paidAmount) || 0;
     const remainingAmount = Math.max(0, grandTotal - paidAmount);
 
-    const invoice = await prisma.$transaction(async (tx) => {
+    const invoice = await withInvoiceTransaction(prisma, async (tx) => {
+      const invoiceNumber = await nextInvoiceNumber(tx, 'PINV');
       // 1. Create invoice
       const createdInvoice = await tx.purchaseInvoice.create({
         data: {
@@ -204,7 +203,7 @@ router.post('/invoices', async (req, res) => {
       return createdInvoice;
     });
 
-    await logAudit({ action: 'POST', entity: 'PurchaseInvoice', entityId: invoice.id, details: `اعتماد فاتورة مشتريات ${invoiceNumber} بمبلغ ${grandTotal} ر.س` });
+    await logAudit({ action: 'POST', entity: 'PurchaseInvoice', entityId: invoice.id, details: `اعتماد فاتورة مشتريات ${invoice.invoiceNumber} بمبلغ ${grandTotal} ر.س` });
 
     let whatsappNotification: { sent: boolean; reason?: string } | { sent: false; error: string } = {
       sent: false,

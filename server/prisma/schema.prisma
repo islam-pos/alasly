@@ -35,6 +35,30 @@ model CompanySetting {
   updatedAt          DateTime @updatedAt
 }
 
+model NumberSequence {
+  key       String @id
+  lastValue Int    @default(0)
+}
+
+model NotificationIntegration {
+  id          Int      @id @default(1)
+  whatsapp    String?
+  telegram    String?
+  options     String   @default("{}")
+  shiftEndTime String  @default("23:00")
+  timeZone    String   @default("Africa/Cairo")
+  updatedAt   DateTime @updatedAt
+}
+
+model NotificationDelivery {
+  id        String   @id @default(uuid())
+  channel   String
+  eventKey  String
+  sentAt    DateTime @default(now())
+
+  @@unique([channel, eventKey])
+}
+
 model Branch {
   id         String      @id @default(uuid())
   code       String      @unique

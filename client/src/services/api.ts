@@ -1,4 +1,10 @@
 // API Client for AutoCare ERP
+import type {
+  NotificationConnectionInput,
+  NotificationConnectionTest,
+  NotificationIntegrationInput,
+  NotificationIntegrationStatus,
+} from '../types/notifications';
 
 const BASE_URL = '/api';
 
@@ -489,6 +495,27 @@ const apiClient = {
 
   getPermissionsList: () =>
     fetch(`${BASE_URL}/settings/permissions`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  getNotificationIntegrations: () =>
+    fetch(`${BASE_URL}/settings/integrations`, { headers: getHeaders() })
+      .then((res) => handleResponse<{ data: NotificationIntegrationStatus }>(res)),
+
+  saveNotificationIntegrations: (data: NotificationIntegrationInput) =>
+    fetch(`${BASE_URL}/settings/integrations`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<{ data: NotificationIntegrationStatus }>(res)),
+
+  testNotificationIntegration: (
+    channel: 'whatsapp' | 'telegram',
+    data: NotificationConnectionInput,
+  ) =>
+    fetch(`${BASE_URL}/settings/integrations/test/${channel}`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<{ data: NotificationConnectionTest }>(res)),
 };
 
 export const api = Object.assign(apiClient, {
@@ -552,5 +579,8 @@ export const api = Object.assign(apiClient, {
   settings: {
     getAuditLogs: apiClient.getAuditLogs,
     getPermissions: apiClient.getPermissionsList,
+    getNotificationIntegrations: apiClient.getNotificationIntegrations,
+    saveNotificationIntegrations: apiClient.saveNotificationIntegrations,
+    testNotificationIntegration: apiClient.testNotificationIntegration,
   },
 });

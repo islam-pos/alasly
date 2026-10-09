@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { sendInvoicePdf } from '../services/whatsapp';
+import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
 
 const router = Router();
 
@@ -96,9 +97,6 @@ router.post('/pos', async (req, res) => {
       }
     }
 
-    const count = await prisma.salesInvoice.count();
-    const invoiceNumber = `POS-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
-
     const subtotal = items.reduce((sum: number, it: any) => sum + (parseFloat(it.unitPrice) * parseInt(it.quantity)), 0);
     const disc = parseFloat(discount) || 0;
     const taxable = Math.max(0, subtotal - disc);
@@ -123,7 +121,8 @@ router.post('/pos', async (req, res) => {
 
     const remainingAmount = Math.max(0, grandTotal - paid);
 
-    const invoice = await prisma.$transaction(async (tx) => {
+    const invoice = await withInvoiceTransaction(prisma, async (tx) => {
+      const invoiceNumber = await nextInvoiceNumber(tx, 'POS');
       // 1. Create Invoice
       const inv = await tx.salesInvoice.create({
         data: {
@@ -238,7 +237,7 @@ router.post('/pos', async (req, res) => {
       action: 'POST',
       entity: 'SalesInvoice',
       entityId: invoice.id,
-      details: `إصدار فاتورة بيع كاشير ${invoiceNumber} بمبلغ ${grandTotal} ر.س`,
+      details: `إصدار فاتورة بيع كاشير ${invoice.invoiceNumber} بمبلغ ${grandTotal} ر.س`,
     });
 
     let whatsappNotification: { sent: boolean; reason?: string } | { sent: false; error: string } = {

@@ -21,6 +21,8 @@ import settingsRouter from './routes/settings';
 import publicPurchaseRequestsRouter from './routes/publicPurchaseRequests';
 import { authenticate } from './middleware/auth';
 import { migrateEgyptianLocationDefaults } from './migrations/egyptianLocationDefaults';
+import { startNotificationScheduler } from './services/notifications';
+import { withRequestContext } from './middleware/requestContext';
 
 dotenv.config();
 
@@ -57,6 +59,7 @@ app.use('/api/public/purchase-requests', publicPurchaseRequestsRouter);
 // API Routes
 app.use('/api/auth', authRouter);
 app.use('/api', authenticate);
+app.use('/api', withRequestContext);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/master', masterDataRouter);
 app.use('/api/items', itemsRouter);
@@ -94,6 +97,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 migrateEgyptianLocationDefaults()
   .then(() => {
     app.listen(PORT, () => {
+      startNotificationScheduler();
       console.log(`====================================================`);
       console.log(`🚗 AutoCare ERP Backend Server running on port ${PORT}`);
       console.log(`🔗 http://localhost:${PORT}`);

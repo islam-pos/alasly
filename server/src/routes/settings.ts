@@ -1,7 +1,64 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
+import { AuthenticatedRequest } from '../middleware/auth';
+import { getIntegrationStatus, saveIntegrationSettings, testIntegration, type NotificationChannel } from '../services/notifications';
 
 const router = Router();
+
+const requireAdmin = async (req: AuthenticatedRequest, res: import('express').Response) => {
+  if (!req.user) {
+    res.status(401).json({ error: 'يرجى تسجيل الدخول أولاً' });
+    return false;
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { active: true, role: { select: { name: true } } },
+    });
+    if (user?.active && user.role.name === 'admin') return true;
+    res.status(403).json({ error: 'إدارة ربط التنبيهات متاحة لمدير النظام فقط' });
+    return false;
+  } catch (error) {
+    console.error('Failed to authorize notification settings access:', error);
+    res.status(500).json({ error: 'تعذر التحقق من صلاحية إدارة التنبيهات' });
+    return false;
+  }
+};
+
+router.get('/integrations', async (req, res) => {
+  if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
+  try {
+    res.json(await getIntegrationStatus());
+  } catch (error) {
+    console.error('Failed to load notification integrations:', error);
+    res.status(500).json({ error: 'تعذر تحميل إعدادات التنبيهات' });
+  }
+});
+
+router.put('/integrations', async (req, res) => {
+  if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
+  try {
+    res.json(await saveIntegrationSettings(req.body || {}));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'تعذر حفظ إعدادات التنبيهات';
+    res.status(400).json({ error: message });
+  }
+});
+
+router.post('/integrations/test/:channel', async (req, res) => {
+  if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
+  const channel = req.params.channel;
+  if (channel !== 'whatsapp' && channel !== 'telegram') {
+    res.status(400).json({ error: 'قناة التنبيه غير معروفة' });
+    return;
+  }
+  try {
+    res.json(await testIntegration(channel as NotificationChannel, req.body || {}));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'فشل اختبار الاتصال';
+    res.status(502).json({ error: message });
+  }
+});
 
 router.get('/audit-logs', async (req, res) => {
   try {

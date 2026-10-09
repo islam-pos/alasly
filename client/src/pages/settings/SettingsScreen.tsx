@@ -3,11 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import { 
   Settings, Building, ShieldCheck, History, 
   Save, Plus, MapPin, Phone, Mail, CheckCircle2, Printer,
-  Users, Key, FileText, Search
+  Users, Key, FileText, Search, MessageCircle
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import { NotificationIntegrations } from './NotificationIntegrations';
 import {
   defaultPrintSettings,
   parsePrintSettings,
@@ -42,7 +43,7 @@ export const SettingsScreen: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { showToast } = useToast();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'company' | 'branches' | 'rbac' | 'users' | 'audit'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'branches' | 'rbac' | 'users' | 'audit' | 'integrations'>('company');
   const [loading, setLoading] = useState(true);
 
   // Data states
@@ -112,6 +113,9 @@ export const SettingsScreen: React.FC = () => {
         break;
       case 'audit':
         setActiveTab('audit');
+        break;
+      case 'integrations':
+        if (user?.role === 'admin') setActiveTab('integrations');
         break;
     }
   }, [searchParams, user?.role]);
@@ -279,6 +283,17 @@ export const SettingsScreen: React.FC = () => {
           <History className="w-4 h-4" />
           سجل الرقابة والعمليات ({auditLogs.length})
         </button>
+        {user?.role === 'admin' && (
+          <button
+            onClick={() => setActiveTab('integrations')}
+            className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+              activeTab === 'integrations' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <MessageCircle className="w-4 h-4" />
+            ربط التنبيهات
+          </button>
+        )}
       </div>
 
       {/* Tab 1: Company Settings */}
@@ -760,11 +775,14 @@ export const SettingsScreen: React.FC = () => {
                     </tr>
                   ))
                 )}
+
               </tbody>
             </table>
           </div>
         </div>
       )}
+
+      {activeTab === 'integrations' && user?.role === 'admin' && <NotificationIntegrations />}
 
       {/* Add Branch Modal */}
       {isBranchModalOpen && (

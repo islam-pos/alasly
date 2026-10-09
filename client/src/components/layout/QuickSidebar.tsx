@@ -13,11 +13,15 @@ import {
   PackagePlus,
   Warehouse,
   Car,
+  MessageCircle,
+  Send,
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 export const QuickSidebar: React.FC = () => {
   const location = useLocation();
+  const { user } = useAuth();
   const [support, setSupport] = useState({
     supportTitle: 'الدعم الفني والخدمات',
     supportDescription: 'مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.',
@@ -104,6 +108,26 @@ export const QuickSidebar: React.FC = () => {
           );
         })}
       </div>
+
+      {user?.role === 'admin' && (
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <div className="px-3 pb-2 text-[11px] font-bold text-slate-400">ربط التنبيهات والتقارير</div>
+          <Link
+            to="/settings?tab=integrations&provider=whatsapp"
+            className="flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-emerald-100 hover:bg-emerald-50 hover:text-emerald-800"
+          >
+            <span className="rounded-lg bg-emerald-50 p-1.5 text-emerald-600"><MessageCircle className="h-4 w-4" /></span>
+            <span>ربط WhatsApp</span>
+          </Link>
+          <Link
+            to="/settings?tab=integrations&provider=telegram"
+            className="flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-sky-100 hover:bg-sky-50 hover:text-sky-800"
+          >
+            <span className="rounded-lg bg-sky-50 p-1.5 text-sky-600"><Send className="h-4 w-4" /></span>
+            <span>ربط Telegram</span>
+          </Link>
+        </div>
+      )}
 
       <div className="mt-6 p-3 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl shadow-sm text-center">
         <div className="text-xs font-bold mb-1 text-slate-200">{support.supportTitle}</div>
