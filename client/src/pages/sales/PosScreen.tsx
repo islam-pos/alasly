@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 import {
   Search,
   Barcode,
+  Camera,
   ShoppingCart,
   Trash2,
   Plus,
@@ -24,6 +26,8 @@ export const PosScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
+  const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
+  const [cameraError, setCameraError] = useState('');
   const [cart, setCart] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
@@ -37,6 +41,9 @@ export const PosScreen: React.FC = () => {
 
   const { success, error } = useToast();
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
+  const barcodeReadRef = useRef(false);
 
   useEffect(() => {
     loadData();
@@ -91,10 +98,13 @@ export const PosScreen: React.FC = () => {
   // Barcode scanner trigger
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!barcodeInput.trim()) return;
+    await handleBarcodeValue(barcodeInput);
+  };
 
+  const handleBarcodeValue = async (value: string) => {
+    if (!value.trim()) return;
     try {
-      const item = await api.lookupItemByBarcode(barcodeInput.trim());
+      const item = await api.lookupItemByBarcode(value.trim());
       if (item) {
         addToCart(item);
         setBarcodeInput('');
@@ -103,6 +113,54 @@ export const PosScreen: React.FC = () => {
     } catch (err: any) {
       error(err.message || 'الصنف غير موجود بهذا الباركود');
     }
+  };
+
+  useEffect(() => {
+    if (!cameraScannerOpen || !videoRef.current) return;
+
+    let cancelled = false;
+    barcodeReadRef.current = false;
+    setCameraError('');
+    const reader = new BrowserMultiFormatReader();
+
+    reader.decodeFromConstraints(
+      { video: { facingMode: { ideal: 'environment' } } },
+      videoRef.current,
+      (result, _scanError, controls) => {
+      if (cancelled || !result || barcodeReadRef.current) return;
+      barcodeReadRef.current = true;
+      controls.stop();
+      scannerControlsRef.current = null;
+      setCameraScannerOpen(false);
+      void handleBarcodeValue(result.getText());
+      },
+    ).then((controls) => {
+      if (cancelled) {
+        controls.stop();
+      } else {
+        scannerControlsRef.current = controls;
+      }
+    }).catch((scanError: unknown) => {
+      if (!cancelled) {
+        setCameraError(
+          scanError instanceof Error
+            ? scanError.message
+            : 'تعذر تشغيل الكاميرا. تحقق من السماح باستخدامها ومن اتصال آمن (HTTPS).',
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      scannerControlsRef.current?.stop();
+      scannerControlsRef.current = null;
+    };
+  }, [cameraScannerOpen]);
+
+  const closeCameraScanner = () => {
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
+    setCameraScannerOpen(false);
   };
 
   const updateQuantity = (itemId: string, newQty: number) => {
@@ -213,6 +271,14 @@ export const PosScreen: React.FC = () => {
               />
               <Barcode className="w-5 h-5 text-slate-400 absolute right-3 top-2.5" />
             </form>
+            <button
+              type="button"
+              onClick={() => setCameraScannerOpen(true)}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold"
+            >
+              <Camera className="w-4 h-4" />
+              مسح بالكاميرا
+            </button>
 
             {/* Keyword Search */}
             <div className="flex-1 relative">
@@ -559,6 +625,43 @@ export const PosScreen: React.FC = () => {
                 </>
               )}
             </button>
+          </div>
+        </div>
+      )}
+
+      {cameraScannerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b p-4">
+              <div>
+                <h2 className="font-bold text-slate-900">قراءة الباركود بالكاميرا</h2>
+                <p className="mt-1 text-xs text-slate-500">وجّه الكاميرا نحو الباركود حتى يتم التقاطه تلقائياً</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeCameraScanner}
+                aria-label="إغلاق قارئ الكاميرا"
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-3 p-4">
+              <video
+                ref={videoRef}
+                className="aspect-video w-full rounded-xl bg-black object-cover"
+                muted
+                playsInline
+              />
+              {cameraError && (
+                <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+                  {cameraError}
+                </p>
+              )}
+              <p className="text-xs text-slate-500">
+                يلزم السماح بالوصول للكاميرا، ويجب فتح النظام عبر HTTPS أو localhost.
+              </p>
+            </div>
           </div>
         </div>
       )}
