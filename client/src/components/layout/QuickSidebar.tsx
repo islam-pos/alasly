@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Zap,
+  Home,
+  Search,
   ShoppingCart,
   Wrench,
   Receipt,
@@ -18,10 +20,12 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { GlobalSearchModal } from './GlobalSearchModal';
 
 export const QuickSidebar: React.FC = () => {
   const location = useLocation();
   const { user, hasPermission } = useAuth();
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [support, setSupport] = useState({
     supportTitle: 'الدعم الفني والخدمات',
     supportDescription: 'مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.',
@@ -90,7 +94,31 @@ export const QuickSidebar: React.FC = () => {
   });
 
   return (
-    <aside className="w-56 flex-shrink-0 hidden xl:block bg-white border-l border-slate-200 h-[calc(100vh-6.5rem)] sticky top-28 overflow-y-auto p-3 select-none">
+    <>
+      <aside className="w-56 flex-shrink-0 hidden xl:block bg-white border-l border-slate-200 h-[calc(100vh-6.5rem)] sticky top-28 overflow-y-auto p-3 select-none">
+      <Link
+        to="/"
+        className={`mb-2 flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs transition-all ${
+          location.pathname === '/'
+            ? 'border-brand-200 bg-brand-50 font-bold text-brand-700 shadow-sm'
+            : 'border-transparent font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+        }`}
+      >
+        <span className="rounded-lg bg-brand-100 p-1.5 text-brand-700">
+          <Home className="h-4 w-4" />
+        </span>
+        <span>الصفحة الرئيسية</span>
+      </Link>
+
+      <button
+        type="button"
+        onClick={() => setIsSearchOpen(true)}
+        className="mb-4 flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right text-xs text-slate-500 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+      >
+        <Search className="h-4 w-4 shrink-0" />
+        <span className="truncate">بحث عام سريع...</span>
+      </button>
+
       <div className="flex items-center gap-2 px-3 py-2 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
         <Zap className="w-3.5 h-3.5 text-amber-500" />
         اختصارات العمليات السريعة
@@ -147,6 +175,8 @@ export const QuickSidebar: React.FC = () => {
         </div>
         <div className="text-[10px] text-amber-400 font-mono font-bold">{support.supportPhoneLabel}: {support.supportPhone}</div>
       </div>
-    </aside>
+      </aside>
+      <GlobalSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+    </>
   );
 };
