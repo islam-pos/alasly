@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { AuthenticatedRequest, authenticate, loadUserPermissions, requirePermission } from '../middleware/auth';
@@ -21,13 +22,52 @@ router.get('/company', async (req, res) => {
 
 router.put('/company', async (req, res) => {
   try {
+    const input = req.body as Record<string, unknown>;
+    const data: Prisma.CompanySettingCreateInput = {};
+    const stringFields = [
+      'name', 'nameEn', 'logoUrl', 'taxNumber', 'commercialRegister', 'address',
+      'city', 'country', 'phone', 'mobile', 'email', 'website', 'currency',
+      'currencySymbol', 'invoiceHeader', 'invoiceFooter', 'termsAndConditions',
+      'supportTitle', 'supportDescription', 'supportPhoneLabel', 'supportPhone',
+    ] as const;
+
+    for (const field of stringFields) {
+      if (typeof input[field] === 'string') {
+        Object.assign(data, { [field]: input[field] });
+      } else if (
+        input[field] === null
+        && ['nameEn', 'logoUrl', 'invoiceHeader', 'invoiceFooter', 'termsAndConditions'].includes(field)
+      ) {
+        Object.assign(data, { [field]: null });
+      }
+    }
+
+    if (input.commercialRegister === undefined && typeof input.crNumber === 'string') {
+      data.commercialRegister = input.crNumber;
+    }
+
+    const taxRate = input.taxRate ?? input.vatRate;
+    if (typeof taxRate === 'number' && Number.isFinite(taxRate)) {
+      data.taxRate = taxRate;
+    } else if (taxRate !== undefined) {
+      return res.status(400).json({ error: 'نسبة الضريبة يجب أن تكون رقمًا صالحًا' });
+    }
+
+    if (typeof input.printSettings === 'string') {
+      data.printSettings = input.printSettings;
+    } else if (input.printSettings && typeof input.printSettings === 'object') {
+      data.printSettings = JSON.stringify(input.printSettings);
+    } else if (input.printSettings !== undefined) {
+      return res.status(400).json({ error: 'إعدادات الطباعة غير صالحة' });
+    }
+
     let company = await prisma.companySetting.findFirst();
     if (!company) {
-      company = await prisma.companySetting.create({ data: req.body });
+      company = await prisma.companySetting.create({ data });
     } else {
       company = await prisma.companySetting.update({
         where: { id: company.id },
-        data: req.body,
+        data,
       });
     }
     await logAudit({ action: 'UPDATE', entity: 'CompanySetting', entityId: company.id, details: 'تحديث بيانات المنشأة والضريبة' });
@@ -139,6 +179,7 @@ router.get('/suppliers', async (req, res) => {
     const suppliers = await prisma.supplier.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
+        customer: { select: { id: true, code: true } },
         _count: { select: { purchaseInvoices: true, purchaseOrders: true } },
       },
     });
@@ -150,10 +191,43 @@ router.get('/suppliers', async (req, res) => {
 
 router.post('/suppliers', async (req, res) => {
   try {
+    const { alsoCustomer = false, ...supplierData } = req.body;
     const count = await prisma.supplier.count();
-    const code = req.body.code || `SUP-${String(count + 1).padStart(2, '0')}`;
-    const supplier = await prisma.supplier.create({
-      data: { ...req.body, code },
+    const customerCount = alsoCustomer ? await prisma.customer.count() : 0;
+    const code = supplierData.code || `SUP-${String(count + 1).padStart(2, '0')}`;
+    const supplier = await prisma.$transaction(async (tx) => {
+      const createdSupplier = await tx.supplier.create({
+        data: {
+          ...supplierData,
+          code,
+          currentBalance: supplierData.currentBalance ?? supplierData.openingBalance ?? 0,
+        },
+      });
+      if (!alsoCustomer) return createdSupplier;
+
+      const customer = await tx.customer.create({
+        data: {
+          code: `CUS-${String(customerCount + 1).padStart(3, '0')}`,
+          name: supplierData.name,
+          phone: supplierData.phone,
+          whatsappNumber: supplierData.whatsappNumber || null,
+          whatsappOptIn: supplierData.whatsappOptIn === true,
+          mobile: supplierData.mobile || null,
+          email: supplierData.email || null,
+          address: supplierData.address || null,
+          taxNumber: supplierData.taxNumber || null,
+          customerType: supplierData.company ? 'COMPANY' : 'INDIVIDUAL',
+          openingBalance: supplierData.openingBalance || 0,
+          currentBalance: supplierData.currentBalance ?? supplierData.openingBalance ?? 0,
+          creditLimit: supplierData.creditLimit || 0,
+          notes: supplierData.notes || null,
+        },
+      });
+      return tx.supplier.update({
+        where: { id: createdSupplier.id },
+        data: { customerId: customer.id },
+        include: { customer: { select: { id: true, code: true } } },
+      });
     });
     res.status(201).json(supplier);
   } catch (err: any) {
@@ -179,6 +253,7 @@ router.get('/customers', async (req, res) => {
     const customers = await prisma.customer.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
+        supplier: { select: { id: true, code: true } },
         vehicles: true,
         _count: { select: { repairOrders: true, salesInvoices: true } },
       },
@@ -191,10 +266,43 @@ router.get('/customers', async (req, res) => {
 
 router.post('/customers', async (req, res) => {
   try {
+    const { alsoSupplier = false, ...customerData } = req.body;
     const count = await prisma.customer.count();
-    const code = req.body.code || `CUS-${String(count + 1).padStart(3, '0')}`;
-    const customer = await prisma.customer.create({
-      data: { ...req.body, code },
+    const supplierCount = alsoSupplier ? await prisma.supplier.count() : 0;
+    const code = customerData.code || `CUS-${String(count + 1).padStart(3, '0')}`;
+    const customer = await prisma.$transaction(async (tx) => {
+      const createdCustomer = await tx.customer.create({
+        data: {
+          ...customerData,
+          code,
+          currentBalance: customerData.currentBalance ?? customerData.openingBalance ?? 0,
+        },
+      });
+      if (!alsoSupplier) return createdCustomer;
+
+      const supplier = await tx.supplier.create({
+        data: {
+          code: `SUP-${String(supplierCount + 1).padStart(2, '0')}`,
+          name: customerData.name,
+          company: customerData.customerType === 'COMPANY' ? customerData.name : null,
+          phone: customerData.phone,
+          whatsappNumber: customerData.whatsappNumber || null,
+          whatsappOptIn: customerData.whatsappOptIn === true,
+          mobile: customerData.mobile || null,
+          email: customerData.email || null,
+          address: customerData.address || null,
+          taxNumber: customerData.taxNumber || null,
+          openingBalance: customerData.openingBalance || 0,
+          currentBalance: customerData.currentBalance ?? customerData.openingBalance ?? 0,
+          creditLimit: customerData.creditLimit || 0,
+          notes: customerData.notes || null,
+          customerId: createdCustomer.id,
+        },
+      });
+      return tx.customer.findUniqueOrThrow({
+        where: { id: createdCustomer.id },
+        include: { supplier: { select: { id: true, code: true } } },
+      });
     });
     res.status(201).json(customer);
   } catch (err: any) {
@@ -342,17 +450,125 @@ router.get('/employees', async (req, res) => {
   }
 });
 
-router.post('/employees', async (req, res) => {
+router.post('/employees', async (req: AuthenticatedRequest, res) => {
   try {
+    const { name, phone, email, nationalId, jobId, department, hireDate, salary, commissionRate, branchId, active } = req.body || {};
+    if (
+      typeof name !== 'string' || !name.trim() ||
+      typeof phone !== 'string' || !phone.trim() ||
+      typeof jobId !== 'string' || !jobId ||
+      !Number.isFinite(Number(salary)) || Number(salary) < 0 ||
+      (commissionRate !== undefined && (!Number.isFinite(Number(commissionRate)) || Number(commissionRate) < 0 || Number(commissionRate) > 100)) ||
+      (email !== undefined && email !== null && typeof email !== 'string') ||
+      (nationalId !== undefined && nationalId !== null && typeof nationalId !== 'string') ||
+      (branchId !== undefined && branchId !== null && typeof branchId !== 'string') ||
+      (active !== undefined && typeof active !== 'boolean') ||
+      (hireDate !== undefined && Number.isNaN(new Date(hireDate).getTime()))
+    ) {
+      return res.status(400).json({ error: 'بيانات الموظف غير صالحة' });
+    }
     const count = await prisma.employee.count();
     const code = req.body.code || `EMP-${String(count + 101)}`;
     const employee = await prisma.employee.create({
-      data: { ...req.body, code },
-      include: { job: true },
+      data: {
+        code,
+        name: name.trim(),
+        phone: phone.trim(),
+        email: typeof email === 'string' && email.trim() ? email.trim() : null,
+        nationalId: typeof nationalId === 'string' && nationalId.trim() ? nationalId.trim() : null,
+        jobId,
+        department: typeof department === 'string' && department.trim() ? department.trim() : 'الورشة',
+        hireDate: hireDate ? new Date(hireDate) : new Date(),
+        salary: Number(salary),
+        commissionRate: Number(commissionRate || 0),
+        branchId: typeof branchId === 'string' && branchId ? branchId : null,
+        active: active ?? true,
+      },
+      include: { job: true, branch: true },
     });
+    await logAudit({ userId: req.user?.id, action: 'CREATE', entity: 'Employee', entityId: employee.id, details: `إضافة الموظف ${employee.name}`, ipAddress: req.ip });
     res.status(201).json(employee);
   } catch (err: any) {
+    console.error('Failed to create employee:', err);
+    if (err.code === 'P2002') return res.status(409).json({ error: 'رقم الهوية أو كود الموظف مستخدم بالفعل' });
     res.status(400).json({ error: err.message });
+  }
+});
+
+router.patch('/employees/:id', async (req: AuthenticatedRequest, res) => {
+  const body = req.body || {};
+  const allowedFields = ['name', 'phone', 'email', 'nationalId', 'jobId', 'department', 'hireDate', 'salary', 'commissionRate', 'branchId', 'active'];
+  if (!Object.keys(body).length || Object.keys(body).some((key) => !allowedFields.includes(key))) {
+    return res.status(400).json({ error: 'بيانات تعديل الموظف غير صالحة' });
+  }
+  if (
+    (body.name !== undefined && (typeof body.name !== 'string' || !body.name.trim())) ||
+    (body.phone !== undefined && (typeof body.phone !== 'string' || !body.phone.trim())) ||
+    (body.email !== undefined && body.email !== null && typeof body.email !== 'string') ||
+    (body.nationalId !== undefined && body.nationalId !== null && typeof body.nationalId !== 'string') ||
+    (body.jobId !== undefined && (typeof body.jobId !== 'string' || !body.jobId)) ||
+    (body.department !== undefined && typeof body.department !== 'string') ||
+    (body.branchId !== undefined && body.branchId !== null && typeof body.branchId !== 'string') ||
+    (body.hireDate !== undefined && Number.isNaN(new Date(body.hireDate).getTime())) ||
+    (body.salary !== undefined && (!Number.isFinite(Number(body.salary)) || Number(body.salary) < 0)) ||
+    (body.commissionRate !== undefined && (!Number.isFinite(Number(body.commissionRate)) || Number(body.commissionRate) < 0 || Number(body.commissionRate) > 100)) ||
+    (body.active !== undefined && typeof body.active !== 'boolean')
+  ) {
+    return res.status(400).json({ error: 'بيانات تعديل الموظف غير صالحة' });
+  }
+
+  const data = {
+    ...(body.name !== undefined ? { name: body.name.trim() } : {}),
+    ...(body.phone !== undefined ? { phone: body.phone.trim() } : {}),
+    ...(body.email !== undefined ? { email: typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null } : {}),
+    ...(body.nationalId !== undefined ? { nationalId: typeof body.nationalId === 'string' && body.nationalId.trim() ? body.nationalId.trim() : null } : {}),
+    ...(body.jobId !== undefined ? { jobId: body.jobId } : {}),
+    ...(body.department !== undefined ? { department: body.department.trim() } : {}),
+    ...(body.hireDate !== undefined ? { hireDate: new Date(body.hireDate) } : {}),
+    ...(body.salary !== undefined ? { salary: Number(body.salary) } : {}),
+    ...(body.commissionRate !== undefined ? { commissionRate: Number(body.commissionRate) } : {}),
+    ...(body.branchId !== undefined ? { branchId: body.branchId || null } : {}),
+    ...(body.active !== undefined ? { active: body.active } : {}),
+  };
+
+  try {
+    const employee = await prisma.$transaction(async (transaction) => {
+      const updated = await transaction.employee.update({
+        where: { id: req.params.id },
+        data,
+        include: { job: true, branch: true },
+      });
+      if (body.active === false) {
+        await transaction.user.updateMany({ where: { employeeId: updated.id }, data: { active: false } });
+      }
+      return updated;
+    });
+    await logAudit({ userId: req.user?.id, action: 'UPDATE', entity: 'Employee', entityId: employee.id, details: `تعديل الموظف ${employee.name}`, ipAddress: req.ip });
+    res.json(employee);
+  } catch (err: any) {
+    console.error('Failed to update employee:', err);
+    if (err.code === 'P2025') return res.status(404).json({ error: 'الموظف غير موجود' });
+    if (err.code === 'P2002') return res.status(409).json({ error: 'رقم الهوية مستخدم بالفعل' });
+    res.status(400).json({ error: 'تعذر تعديل بيانات الموظف' });
+  }
+});
+
+router.delete('/employees/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const employee = await prisma.$transaction(async (transaction) => {
+      const updated = await transaction.employee.update({
+        where: { id: req.params.id },
+        data: { active: false },
+      });
+      await transaction.user.updateMany({ where: { employeeId: updated.id }, data: { active: false } });
+      return updated;
+    });
+    await logAudit({ userId: req.user?.id, action: 'DELETE', entity: 'Employee', entityId: employee.id, details: `إيقاف الموظف ${employee.name}`, ipAddress: req.ip });
+    res.json({ success: true, employee });
+  } catch (err: any) {
+    console.error('Failed to deactivate employee:', err);
+    if (err.code === 'P2025') return res.status(404).json({ error: 'الموظف غير موجود' });
+    res.status(400).json({ error: 'تعذر إيقاف الموظف' });
   }
 });
 

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wrench, Lock, User as UserIcon, ArrowLeft, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Wrench, Lock, User as UserIcon, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
 export const Login: React.FC = () => {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
   const { success, error } = useToast();
@@ -29,11 +29,6 @@ export const Login: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleQuickLogin = (u: string, p: string = 'admin123') => {
-    setUsername(u);
-    setPassword(p);
   };
 
   return (
@@ -99,79 +94,6 @@ export const Login: React.FC = () => {
           </button>
         </form>
 
-        {/* Quick Demo Logins Section */}
-        <div className="mt-8 pt-6 border-t border-slate-100">
-          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center mb-3">
-            تجربة فورية بحسابات النظام التجريبية (اختر الدور):
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('admin')}
-              className={`p-2 rounded-xl border text-xs font-bold text-right transition-all flex items-center justify-between ${
-                username === 'admin'
-                  ? 'bg-brand-50 border-brand-300 text-brand-700'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span>المدير العام (Admin)</span>
-              {username === 'admin' && <CheckCircle2 className="w-3.5 h-3.5 text-brand-600" />}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('workshop')}
-              className={`p-2 rounded-xl border text-xs font-bold text-right transition-all flex items-center justify-between ${
-                username === 'workshop'
-                  ? 'bg-amber-50 border-amber-300 text-amber-800'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span>مدير الورشة</span>
-              {username === 'workshop' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-600" />}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('cashier')}
-              className={`p-2 rounded-xl border text-xs font-bold text-right transition-all flex items-center justify-between ${
-                username === 'cashier'
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span>كاشير المبيعات</span>
-              {username === 'cashier' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('store')}
-              className={`p-2 rounded-xl border text-xs font-bold text-right transition-all flex items-center justify-between ${
-                username === 'store'
-                  ? 'bg-purple-50 border-purple-300 text-purple-800'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span>أمين المستودع</span>
-              {username === 'store' && <CheckCircle2 className="w-3.5 h-3.5 text-purple-600" />}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('accountant')}
-              className={`col-span-2 p-2 rounded-xl border text-xs font-bold text-right transition-all flex items-center justify-between ${
-                username === 'accountant'
-                  ? 'bg-teal-50 border-teal-300 text-teal-800'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span>المحاسب المالي (Accountant)</span>
-              {username === 'accountant' && <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />}
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

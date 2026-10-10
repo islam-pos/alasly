@@ -33,7 +33,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
   }, [isOpen]);
 
   useEffect(() => {
-    if (!query.trim() || query.length < 2) {
+    if (!query.trim()) {
       setResults({ vehicles: [], customers: [], items: [], jobCards: [], invoices: [], suppliers: [] });
       return;
     }
@@ -110,7 +110,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
             </div>
           )}
 
-          {!loading && query.length >= 2 && !hasResults && (
+          {!loading && query.length > 0 && !hasResults && (
             <div className="text-center py-12">
               <Search className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-600 font-medium">لم يتم العثور على أي نتائج مطابقة لـ "{query}"</p>
@@ -296,6 +296,30 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
                     </div>
                     <ArrowLeft className="w-4 h-4 text-slate-400 group-hover:text-purple-700 group-hover:-translate-x-1 transition-all" />
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {results.suppliers.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                <Building2 className="w-4 h-4 text-indigo-600" />
+                الموردون ({results.suppliers.length})
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {results.suppliers.map((supplier: any) => (
+                  <button
+                    key={supplier.id}
+                    type="button"
+                    onClick={() => handleSelect('/suppliers')}
+                    className="p-3 bg-slate-50 hover:bg-indigo-50/70 border border-slate-100 hover:border-indigo-200 rounded-xl text-right transition-all"
+                  >
+                    <span className="block text-sm font-bold text-slate-800">{supplier.name}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">
+                      {supplier.code} • {supplier.company || supplier.phone}
+                    </span>
+                  </button>
                 ))}
               </div>
             </div>

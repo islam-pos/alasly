@@ -4,6 +4,26 @@ import { logAudit } from '../middleware/audit';
 
 const router = Router();
 
+router.get('/cashboxes', async (_req, res) => {
+  try {
+    const cashboxes = await prisma.cashbox.findMany({ orderBy: { name: 'asc' } });
+    res.json(cashboxes);
+  } catch (error) {
+    console.error('Failed to load cashboxes:', error);
+    res.status(500).json({ error: 'تعذر تحميل بيانات الصناديق النقدية' });
+  }
+});
+
+router.get('/expense-categories', async (_req, res) => {
+  try {
+    const categories = await prisma.expenseCategory.findMany({ orderBy: { name: 'asc' } });
+    res.json(categories);
+  } catch (error) {
+    console.error('Failed to load expense categories:', error);
+    res.status(500).json({ error: 'تعذر تحميل تصنيفات المصروفات' });
+  }
+});
+
 // --- Expenses ---
 router.get('/expenses', async (req, res) => {
   try {
@@ -150,7 +170,7 @@ router.post('/revenues', async (req, res) => {
 router.get('/cash/transactions', async (req, res) => {
   try {
     const transactions = await prisma.cashTransaction.findMany({
-      include: { cashbox: true },
+      include: { cashbox: true, customer: true, supplier: true },
       orderBy: { date: 'desc' },
     });
     res.json(transactions);
@@ -212,6 +232,8 @@ router.post('/cash/vouchers', async (req, res) => {
           amount: amountVal,
           partyType: customerId ? 'CUSTOMER' : supplierId ? 'SUPPLIER' : 'OTHER',
           partyName,
+          customerId: customerId || null,
+          supplierId: supplierId || null,
           description,
           referenceType: referenceType || (customerId ? 'CUSTOMER_PAYMENT' : 'SUPPLIER_PAYMENT'),
           referenceId,

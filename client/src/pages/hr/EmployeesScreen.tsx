@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Users, UserCheck, Award, FileSpreadsheet, Plus, 
   Clock, CheckCircle2, DollarSign, Calendar, Search, 
-  Briefcase, Phone, Mail, ShieldAlert
+  Briefcase, Phone, Mail, ShieldAlert, Pencil, UserX
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
+
+const payrollYears = Array.from({ length: 5 }, (_, index) => new Date().getFullYear() - 2 + index);
 
 export const EmployeesScreen: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
+  const canManageEmployees = hasPermission('manage_employees');
+  const canManagePayroll = hasPermission('manage_payroll');
   const [activeTab, setActiveTab] = useState<'employees' | 'attendance' | 'commissions' | 'payroll'>('employees');
 
   // Data
@@ -18,6 +26,8 @@ export const EmployeesScreen: React.FC = () => {
   const [attendances, setAttendances] = useState<any[]>([]);
   const [commissions, setCommissions] = useState<any[]>([]);
   const [payrolls, setPayrolls] = useState<any[]>([]);
+  const [standardMonthlyHours, setStandardMonthlyHours] = useState('208');
+  const [savingHrSettings, setSavingHrSettings] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -26,6 +36,7 @@ export const EmployeesScreen: React.FC = () => {
 
   // Modals
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
+  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
   const [isGeneratePayrollModalOpen, setIsGeneratePayrollModalOpen] = useState(false);
 
@@ -39,7 +50,8 @@ export const EmployeesScreen: React.FC = () => {
     branchId: '',
     salary: '',
     commissionRate: '0',
-    hireDate: new Date().toISOString().split('T')[0]
+    hireDate: new Date().toISOString().split('T')[0],
+    active: true,
   });
 
   const [checkInForm, setCheckInForm] = useState({
@@ -55,13 +67,15 @@ export const EmployeesScreen: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [empRes, jobRes, brRes, attRes, comRes, payRes] = await Promise.all([
-        api.master.getEmployees(),
-        api.master.getJobs(),
-        api.master.getBranches(),
-        api.hr.getAttendance(),
-        api.hr.getCommissions(),
-        api.hr.getPayroll({ month: payrollForm.month, year: payrollForm.year })
+      const empty = { data: [] };
+      const [empRes, jobRes, brRes, attRes, comRes, payRes, hrSettingsRes] = await Promise.all([
+        canManageEmployees ? api.master.getEmployees() : Promise.resolve(empty),
+        canManageEmployees ? api.master.getJobs() : Promise.resolve(empty),
+        canManageEmployees ? api.master.getBranches() : Promise.resolve(empty),
+        canManageEmployees ? api.hr.getAttendance() : Promise.resolve(empty),
+        canManagePayroll ? api.hr.getCommissions() : Promise.resolve(empty),
+        canManagePayroll ? api.hr.getPayroll({ month: payrollForm.month, year: payrollForm.year }) : Promise.resolve(empty),
+        canManagePayroll ? api.hr.getHrSettings() : Promise.resolve({ data: { standardMonthlyHours: 208 } })
       ]);
       setEmployees(empRes.data);
       setJobs(jobRes.data);
@@ -69,6 +83,7 @@ export const EmployeesScreen: React.FC = () => {
       setAttendances(attRes.data);
       setCommissions(comRes.data);
       setPayrolls(payRes.data);
+      setStandardMonthlyHours(String(hrSettingsRes.data.standardMonthlyHours));
     } catch (err: any) {
       showToast(err.response?.data?.error || 'فشل تحميل بيانات الموارد البشرية', 'error');
     } finally {
@@ -78,34 +93,84 @@ export const EmployeesScreen: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [payrollForm.month, payrollForm.year]);
+  }, [payrollForm.month, payrollForm.year, canManageEmployees, canManagePayroll]);
+
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    if (requestedTab === 'attendance' && canManageEmployees) setActiveTab('attendance');
+    else if (requestedTab === 'employees' && canManageEmployees) setActiveTab('employees');
+    else if (requestedTab === 'commissions' && canManagePayroll) setActiveTab('commissions');
+    else if (requestedTab === 'payroll' && canManagePayroll) setActiveTab('payroll');
+    else if (canManageEmployees) setActiveTab('employees');
+    else if (canManagePayroll) setActiveTab('payroll');
+  }, [searchParams, canManageEmployees, canManagePayroll]);
 
   // KPIs
-  const totalEmployees = employees.length;
-  const techniciansCount = employees.filter(e => e.job?.nameAr?.includes('فني') || e.job?.nameAr?.includes('ميكانيك') || e.job?.nameAr?.includes('كهربائي')).length;
+  const totalEmployees = employees.filter((employee) => employee.active).length;
+  const techniciansCount = employees.filter(e => e.active && (e.job?.nameAr?.includes('فني') || e.job?.nameAr?.includes('ميكانيك') || e.job?.nameAr?.includes('كهربائي'))).length;
   const pendingCommissionsSum = commissions.filter(c => c.status === 'PENDING').reduce((sum, c) => sum + (c.amount || 0), 0);
   const currentMonthPayrollSum = payrolls.reduce((sum, p) => sum + (p.netSalary || 0), 0);
 
   // Handle Add Employee
-  const handleCreateEmployee = async (e: React.FormEvent) => {
+  const resetEmployeeForm = () => setEmployeeForm({
+    name: '', phone: '', email: '', nationalId: '',
+    jobId: '', branchId: '', salary: '', commissionRate: '0',
+    hireDate: new Date().toISOString().split('T')[0], active: true,
+  });
+
+  const openEmployeeModal = (employee?: any) => {
+    setEditingEmployeeId(employee?.id || null);
+    setEmployeeForm(employee ? {
+      name: employee.name || '',
+      phone: employee.phone || '',
+      email: employee.email || '',
+      nationalId: employee.nationalId || '',
+      jobId: employee.jobId || '',
+      branchId: employee.branchId || '',
+      salary: String(employee.salary ?? ''),
+      commissionRate: String(employee.commissionRate ?? 0),
+      hireDate: employee.hireDate ? new Date(employee.hireDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      active: employee.active !== false,
+    } : {
+      name: '', phone: '', email: '', nationalId: '',
+      jobId: '', branchId: '', salary: '', commissionRate: '0',
+      hireDate: new Date().toISOString().split('T')[0], active: true,
+    });
+    setIsEmployeeModalOpen(true);
+  };
+
+  const handleSaveEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.master.createEmployee({
+      const employeeData = {
         ...employeeForm,
         salary: parseFloat(employeeForm.salary) || 0,
         commissionRate: parseFloat(employeeForm.commissionRate) || 0,
         hireDate: new Date(employeeForm.hireDate),
-      });
-      showToast('تمت إضافة الموظف بنجاح', 'success');
+      };
+      if (editingEmployeeId) {
+        await api.master.updateEmployee(editingEmployeeId, employeeData);
+      } else {
+        await api.master.createEmployee(employeeData);
+      }
+      showToast(editingEmployeeId ? 'تم تعديل بيانات الموظف' : 'تمت إضافة الموظف بنجاح', 'success');
       setIsEmployeeModalOpen(false);
-      setEmployeeForm({
-        name: '', phone: '', email: '', nationalId: '',
-        jobId: '', branchId: '', salary: '', commissionRate: '0',
-        hireDate: new Date().toISOString().split('T')[0]
-      });
+      setEditingEmployeeId(null);
+      resetEmployeeForm();
       loadData();
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'فشل إضافة الموظف', 'error');
+      showToast(err.response?.data?.error || 'تعذر حفظ بيانات الموظف', 'error');
+    }
+  };
+
+  const handleDeleteEmployee = async (employee: any) => {
+    if (!window.confirm(`هل تريد إيقاف الموظف ${employee.name}؟ ستظل سجلات الحضور والرواتب محفوظة.`)) return;
+    try {
+      await api.master.deleteEmployee(employee.id);
+      showToast('تم إيقاف الموظف وتعطيل حسابه المرتبط إن وجد', 'success');
+      loadData();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'تعذر إيقاف الموظف', 'error');
     }
   };
 
@@ -138,13 +203,38 @@ export const EmployeesScreen: React.FC = () => {
   const handleGeneratePayroll = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.hr.generatePayroll(payrollForm);
-      showToast('تم توليد مسير الرواتب بنجاح', 'success');
+      const result = await api.hr.generatePayroll(payrollForm);
+      showToast(result.data?.length ? 'تم توليد مسير الرواتب بنجاح' : 'المسير موجود مسبقاً؛ لم تتم إضافة سجلات مكررة', 'success');
       setIsGeneratePayrollModalOpen(false);
       loadData();
     } catch (err: any) {
       showToast(err.response?.data?.error || 'فشل توليد مسير الرواتب', 'error');
     }
+  };
+
+  const handleSaveHrSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const hours = Number(standardMonthlyHours);
+    if (!Number.isFinite(hours) || hours < 1 || hours > 744) {
+      showToast('يجب أن تكون ساعات العمل الشهرية بين 1 و744 ساعة', 'error');
+      return;
+    }
+    try {
+      setSavingHrSettings(true);
+      const result = await api.hr.updateHrSettings({ standardMonthlyHours: hours });
+      setStandardMonthlyHours(String(result.data.standardMonthlyHours));
+      showToast('تم حفظ ساعات العمل الشهرية المعيارية', 'success');
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'فشل حفظ إعدادات الموارد البشرية', 'error');
+    } finally {
+      setSavingHrSettings(false);
+    }
+  };
+
+  const formatWorkDuration = (minutes?: number | null, legacyHours?: number) => {
+    const totalMinutes = typeof minutes === 'number' ? minutes : Math.round((legacyHours || 0) * 60);
+    if (!totalMinutes) return '-';
+    return `${Math.floor(totalMinutes / 60)} س ${totalMinutes % 60} د`;
   };
 
   // Filtered employees
@@ -171,27 +261,27 @@ export const EmployeesScreen: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button
+          {canManageEmployees && <button
             onClick={() => setIsCheckInModalOpen(true)}
             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition"
           >
             <Clock className="w-4 h-4" />
             تسجيل حضور اليوم
-          </button>
-          <button
+          </button>}
+          {canManagePayroll && <button
             onClick={() => setIsGeneratePayrollModalOpen(true)}
             className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition"
           >
             <FileSpreadsheet className="w-4 h-4" />
             توليد مسير الرواتب
-          </button>
-          <button
-            onClick={() => setIsEmployeeModalOpen(true)}
+          </button>}
+          {canManageEmployees && <button
+            onClick={() => openEmployeeModal()}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition"
           >
             <Plus className="w-4 h-4" />
             إضافة موظف
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -244,7 +334,7 @@ export const EmployeesScreen: React.FC = () => {
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 bg-white px-6 pt-2 rounded-t-2xl overflow-x-auto">
-        <button
+        {canManageEmployees && <button
           onClick={() => setActiveTab('employees')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
             activeTab === 'employees' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -252,8 +342,8 @@ export const EmployeesScreen: React.FC = () => {
         >
           <Users className="w-4 h-4" />
           دليل الموظفين ({employees.length})
-        </button>
-        <button
+        </button>}
+        {canManageEmployees && <button
           onClick={() => setActiveTab('attendance')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
             activeTab === 'attendance' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -261,8 +351,8 @@ export const EmployeesScreen: React.FC = () => {
         >
           <Clock className="w-4 h-4" />
           سجل الحضور والانصراف ({attendances.length})
-        </button>
-        <button
+        </button>}
+        {canManagePayroll && <button
           onClick={() => setActiveTab('commissions')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
             activeTab === 'commissions' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -270,8 +360,8 @@ export const EmployeesScreen: React.FC = () => {
         >
           <Award className="w-4 h-4" />
           عمولات الفنيين ({commissions.length})
-        </button>
-        <button
+        </button>}
+        {canManagePayroll && <button
           onClick={() => setActiveTab('payroll')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
             activeTab === 'payroll' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -279,11 +369,11 @@ export const EmployeesScreen: React.FC = () => {
         >
           <FileSpreadsheet className="w-4 h-4" />
           مسير الرواتب الشهرية ({payrolls.length})
-        </button>
+        </button>}
       </div>
 
       {/* Tab 1: Employees List */}
-      {activeTab === 'employees' && (
+      {activeTab === 'employees' && canManageEmployees && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="relative">
@@ -320,6 +410,7 @@ export const EmployeesScreen: React.FC = () => {
                   <th className="py-3 px-4 text-center">نسبة العمولة</th>
                   <th className="py-3 px-4 text-center">أوامر الصيانة المنجزة</th>
                   <th className="py-3 px-4 text-center">الحالة</th>
+                  <th className="py-3 px-4 text-center">إدارة</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -359,6 +450,16 @@ export const EmployeesScreen: React.FC = () => {
                         {emp.active ? 'على رأس العمل' : 'معطل'}
                       </span>
                     </td>
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex justify-center gap-2">
+                        <button type="button" onClick={() => openEmployeeModal(emp)} className="rounded-lg border border-blue-200 p-2 text-blue-700 hover:bg-blue-50" title="تعديل الموظف">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button type="button" onClick={() => handleDeleteEmployee(emp)} disabled={!emp.active} className="rounded-lg border border-rose-200 p-2 text-rose-700 hover:bg-rose-50 disabled:opacity-40" title="إيقاف الموظف">
+                          <UserX className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -368,7 +469,7 @@ export const EmployeesScreen: React.FC = () => {
       )}
 
       {/* Tab 2: Attendance */}
-      {activeTab === 'attendance' && (
+      {activeTab === 'attendance' && canManageEmployees && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6">
           <div className="overflow-x-auto border rounded-xl">
             <table className="w-full text-right text-sm">
@@ -396,7 +497,7 @@ export const EmployeesScreen: React.FC = () => {
                       {att.checkOut ? new Date(att.checkOut).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }) : '-'}
                     </td>
                     <td className="py-3 px-4 text-center font-mono font-bold text-slate-800">
-                      {att.workHours ? `${att.workHours} ساعة` : '-'}
+                      {formatWorkDuration(att.workMinutes, att.workHours)}
                     </td>
                     <td className="py-3 px-4 text-center">
                       {!att.checkOut ? (
@@ -421,7 +522,7 @@ export const EmployeesScreen: React.FC = () => {
       )}
 
       {/* Tab 3: Commissions */}
-      {activeTab === 'commissions' && (
+      {activeTab === 'commissions' && canManagePayroll && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6">
           <div className="overflow-x-auto border rounded-xl">
             <table className="w-full text-right text-sm">
@@ -472,8 +573,29 @@ export const EmployeesScreen: React.FC = () => {
       )}
 
       {/* Tab 4: Payroll */}
-      {activeTab === 'payroll' && (
+      {activeTab === 'payroll' && canManagePayroll && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6 space-y-4">
+          <form onSubmit={handleSaveHrSettings} className="flex flex-wrap items-end gap-3 rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+            <div className="flex-1 min-w-52">
+              <label className="block text-xs font-bold text-slate-700 mb-1">ساعات العمل المعيارية للشهر</label>
+              <input
+                type="number"
+                min="1"
+                max="744"
+                step="0.01"
+                required
+                value={standardMonthlyHours}
+                onChange={(e) => setStandardMonthlyHours(e.target.value)}
+                className="w-full rounded-lg border bg-white px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <p className="flex-1 min-w-60 text-xs leading-5 text-slate-600">
+              أجر الساعة = الراتب الشهري ÷ هذه القيمة. الأجر الأساسي للمسير يساوي أجر الساعة × دقائق الحضور المكتملة؛ تُقرّب المبالغ فقط إلى منزلتين عشريتين.
+            </p>
+            <button type="submit" disabled={savingHrSettings} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-60">
+              {savingHrSettings ? 'جارٍ الحفظ...' : 'حفظ الإعداد'}
+            </button>
+          </form>
           <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border">
             <span className="text-xs font-bold text-slate-700">تصفية حسب شهر المسير:</span>
             <select
@@ -490,7 +612,7 @@ export const EmployeesScreen: React.FC = () => {
               onChange={(e) => setPayrollForm({ ...payrollForm, year: parseInt(e.target.value) })}
               className="border rounded-lg px-3 py-1.5 text-xs bg-white font-bold outline-none"
             >
-              {[2024, 2025, 2026, 2027].map(y => (
+              {payrollYears.map(y => (
                 <option key={y} value={y}>سنة {y}</option>
               ))}
             </select>
@@ -502,7 +624,8 @@ export const EmployeesScreen: React.FC = () => {
                 <tr>
                   <th className="py-3 px-4">الموظف</th>
                   <th className="py-3 px-4">المسمى الوظيفي</th>
-                  <th className="py-3 px-4 text-left">الأساسي</th>
+                  <th className="py-3 px-4 text-center">وقت الحضور الفعلي</th>
+                  <th className="py-3 px-4 text-left">أجر الساعات</th>
                   <th className="py-3 px-4 text-left">البدلات</th>
                   <th className="py-3 px-4 text-left">العمولات المكتسبة</th>
                   <th className="py-3 px-4 text-left">الخصومات</th>
@@ -513,7 +636,7 @@ export const EmployeesScreen: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {payrolls.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-8 text-slate-400">
+                    <td colSpan={9} className="text-center py-8 text-slate-400">
                       لا يوجد مسير معتمد لهذا الشهر، اضغط "توليد مسير الرواتب" بالأعلى لحساب الاستحقاقات.
                     </td>
                   </tr>
@@ -522,6 +645,7 @@ export const EmployeesScreen: React.FC = () => {
                     <tr key={pay.id} className="hover:bg-slate-50/80">
                       <td className="py-3 px-4 font-bold text-slate-900">{pay.employee?.name}</td>
                       <td className="py-3 px-4 text-xs text-slate-600">{pay.employee?.job?.nameAr}</td>
+                      <td className="py-3 px-4 text-center font-mono text-xs">{formatWorkDuration(pay.attendedMinutes)}</td>
                       <td className="py-3 px-4 text-left font-mono">{pay.basicSalary.toLocaleString()} ر.س</td>
                       <td className="py-3 px-4 text-left font-mono text-slate-600">{(pay.allowances || 0).toLocaleString()} ر.س</td>
                       <td className="py-3 px-4 text-left font-mono font-bold text-emerald-600">{(pay.commissions || 0).toLocaleString()} ر.س</td>
@@ -544,12 +668,12 @@ export const EmployeesScreen: React.FC = () => {
       {/* Add Employee Modal */}
       {isEmployeeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-xl w-full p-6 border border-slate-200">
+          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
             <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
               <Users className="w-5 h-5 text-blue-600" />
-              إضافة موظف / فني جديد
+              {editingEmployeeId ? 'تعديل بيانات الموظف' : 'إضافة موظف / فني جديد'}
             </h3>
-            <form onSubmit={handleCreateEmployee} className="space-y-4">
+            <form onSubmit={handleSaveEmployee} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">الاسم الكامل:</label>
@@ -657,10 +781,24 @@ export const EmployeesScreen: React.FC = () => {
                 </div>
               </div>
 
+              {editingEmployeeId && (
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={employeeForm.active}
+                    onChange={(e) => setEmployeeForm({ ...employeeForm, active: e.target.checked })}
+                  />
+                  الموظف على رأس العمل
+                </label>
+              )}
+
               <div className="flex justify-end gap-2 pt-4 border-t">
                 <button
                   type="button"
-                  onClick={() => setIsEmployeeModalOpen(false)}
+                  onClick={() => {
+                    setIsEmployeeModalOpen(false);
+                    setEditingEmployeeId(null);
+                  }}
                   className="px-4 py-2 border rounded-xl text-sm font-semibold hover:bg-slate-100"
                 >
                   إلغاء
@@ -669,7 +807,7 @@ export const EmployeesScreen: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md"
                 >
-                  حفظ وتعيين الموظف
+                  {editingEmployeeId ? 'حفظ التعديلات' : 'حفظ وتعيين الموظف'}
                 </button>
               </div>
             </form>
@@ -695,7 +833,7 @@ export const EmployeesScreen: React.FC = () => {
                   className="w-full border rounded-xl px-3 py-2 text-sm bg-white outline-none"
                 >
                   <option value="">اختر من القائمة</option>
-                  {employees.map(e => (
+                  {employees.filter((employee) => employee.active).map(e => (
                     <option key={e.id} value={e.id}>{e.name} - ({e.job?.nameAr})</option>
                   ))}
                 </select>
@@ -741,7 +879,7 @@ export const EmployeesScreen: React.FC = () => {
               توليد مسير رواتب وعمولات الشهر
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              يقوم النظام بحساب الراتب الأساسي + البدلات المستحقة + إضافة عمولات أوامر الصيانة المعلقة للفنيين آلياً
+              يحتسب النظام أجر الساعات الفعلية وفق الراتب الشهري وساعات العمل المعيارية، ويضيف العمولات المعلقة دون بدل تجريبي.
             </p>
             <form onSubmit={handleGeneratePayroll} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
@@ -764,7 +902,7 @@ export const EmployeesScreen: React.FC = () => {
                     onChange={(e) => setPayrollForm({ ...payrollForm, year: parseInt(e.target.value) })}
                     className="w-full border rounded-xl px-3 py-2 text-sm bg-white outline-none"
                   >
-                    {[2024, 2025, 2026, 2027].map(y => (
+                    {payrollYears.map(y => (
                       <option key={y} value={y}>سنة {y}</option>
                     ))}
                   </select>

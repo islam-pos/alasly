@@ -30,19 +30,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // Attempt auto-login with token or fallback to demo admin
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    let active = true;
     api
       .getMe()
       .then((res) => {
-        if (res.user) setUser(res.user);
+        if (active && res.user) setUser(res.user);
       })
       .catch((err) => {
+        if (!active) return;
         console.warn('Auto-login session expired or unavailable:', err);
+        localStorage.removeItem('autocare_token');
+        setToken(null);
       })
       .finally(() => {
-        setLoading(false);
+        if (active) setLoading(false);
       });
-  }, []);
+
+    return () => {
+      active = false;
+    };
+  }, [token]);
 
   const login = async (credentials: any) => {
     setLoading(true);

@@ -1,6 +1,24 @@
 // API Client for AutoCare ERP
+import type {
+  NotificationConnectionInput,
+  NotificationConnectionTest,
+  NotificationIntegrationInput,
+  NotificationIntegrationStatus,
+  NotificationQrStatus,
+  NotificationTelegramQrStatus,
+} from '../types/notifications';
 
 const BASE_URL = '/api';
+
+class ApiError extends Error {
+  response: { data: { error: string } };
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.response = { data: { error: message } };
+  }
+}
 
 function getHeaders(): HeadersInit {
   const token = localStorage.getItem('autocare_token');
@@ -13,12 +31,17 @@ function getHeaders(): HeadersInit {
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ error: 'حدث خطأ في الاتصال بالخادم' }));
-    throw new Error(errorData.error || `Error ${res.status}: ${res.statusText}`);
+    throw new ApiError(errorData.error || `Error ${res.status}: ${res.statusText}`);
   }
-  return res.json();
+  const payload = await res.json();
+  if (Array.isArray(payload)) return { data: payload } as T;
+  if (payload && typeof payload === 'object' && !('data' in payload)) {
+    return { ...payload, data: payload } as T;
+  }
+  return payload as T;
 }
 
-export const api = {
+const apiClient = {
   // Auth
   login: (credentials: any) =>
     fetch(`${BASE_URL}/auth/login`, {
@@ -32,6 +55,33 @@ export const api = {
 
   getUsers: () =>
     fetch(`${BASE_URL}/auth/users`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  createUser: (data: any) =>
+    fetch(`${BASE_URL}/auth/users`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  updateUser: (id: string, data: any) =>
+    fetch(`${BASE_URL}/auth/users/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  deleteUser: (id: string) =>
+    fetch(`${BASE_URL}/auth/users/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<any>(res)),
+
+  resetUserPassword: (id: string, password: string) =>
+    fetch(`${BASE_URL}/auth/users/${encodeURIComponent(id)}/password`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({ password }),
+    }).then((res) => handleResponse<any>(res)),
 
   // Dashboard
   getDashboardStats: () =>
@@ -83,12 +133,26 @@ export const api = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
+  updateSupplier: (id: string, data: any) =>
+    fetch(`${BASE_URL}/master/suppliers/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
   getCustomers: () =>
     fetch(`${BASE_URL}/master/customers`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
   createCustomer: (data: any) =>
     fetch(`${BASE_URL}/master/customers`, {
       method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  updateCustomer: (id: string, data: any) =>
+    fetch(`${BASE_URL}/master/customers/${encodeURIComponent(id)}`, {
+      method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
@@ -114,6 +178,19 @@ export const api = {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  updateEmployee: (id: string, data: any) =>
+    fetch(`${BASE_URL}/master/employees/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  deleteEmployee: (id: string) =>
+    fetch(`${BASE_URL}/master/employees/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
     }).then((res) => handleResponse<any>(res)),
 
   getJobs: () =>
@@ -151,6 +228,13 @@ export const api = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
+  importItems: (rows: Record<string, unknown>[]) =>
+    fetch(`${BASE_URL}/items/import`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ rows }),
+    }).then((res) => handleResponse<{ created: number; duplicates: { row: number; sku: string; reason: string }[]; errors: { row: number; sku?: string; reason: string }[] }>(res)),
+
   updateItem: (id: string, data: any) =>
     fetch(`${BASE_URL}/items/${id}`, {
       method: 'PUT',
@@ -181,6 +265,9 @@ export const api = {
 
   getSupplierStatement: (id: string) =>
     fetch(`${BASE_URL}/purchases/suppliers/${id}/statement`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  getAllSupplierStatements: () =>
+    fetch(`${BASE_URL}/purchases/suppliers/statement`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
   // Sales & POS
   getSalesInvoices: (params?: { type?: string; customerId?: string }) => {
@@ -297,6 +384,13 @@ export const api = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<{ updatedCount: number }>(res)),
 
+  updateItemLocation: (itemId: string, location: string) =>
+    fetch(`${BASE_URL}/inventory/items/${itemId}/location`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ location }),
+    }).then((res) => handleResponse<any>(res)),
+
   getTransfers: () =>
     fetch(`${BASE_URL}/inventory/transfers`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
@@ -361,6 +455,12 @@ export const api = {
   getBanks: () =>
     fetch(`${BASE_URL}/financials/banks`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
+  getCashboxes: () =>
+    fetch(`${BASE_URL}/financials/cashboxes`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  getExpenseCategories: () =>
+    fetch(`${BASE_URL}/financials/expense-categories`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
   createBankTransaction: (data: any) =>
     fetch(`${BASE_URL}/financials/banks/transactions`, {
       method: 'POST',
@@ -369,6 +469,16 @@ export const api = {
     }).then((res) => handleResponse<any>(res)),
 
   // HR
+  getHrSettings: () =>
+    fetch(`${BASE_URL}/hr/settings`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  updateHrSettings: (data: { standardMonthlyHours: number }) =>
+    fetch(`${BASE_URL}/hr/settings`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
   getAttendance: (params?: { employeeId?: string }) => {
     const query = new URLSearchParams();
     if (params?.employeeId) query.append('employeeId', params.employeeId);
@@ -438,6 +548,10 @@ export const api = {
   globalSearch: (q: string) =>
     fetch(`${BASE_URL}/search?q=${encodeURIComponent(q)}`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
+  getSmartSearchSuggestions: (q: string) =>
+    fetch(`${BASE_URL}/search/suggestions?q=${encodeURIComponent(q)}`, { headers: getHeaders() })
+      .then((res) => handleResponse<{ suggestions: { value: string; label: string }[] }>(res)),
+
   // Settings & Audit
   getAuditLogs: (params?: { action?: string; entity?: string; limit?: number }) => {
     const query = new URLSearchParams();
@@ -449,4 +563,142 @@ export const api = {
 
   getPermissionsList: () =>
     fetch(`${BASE_URL}/settings/permissions`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  getNotificationIntegrations: () =>
+    fetch(`${BASE_URL}/settings/integrations`, { headers: getHeaders() })
+      .then((res) => handleResponse<{ data: NotificationIntegrationStatus }>(res)),
+
+  getWhatsappQrStatus: () =>
+    fetch(`${BASE_URL}/settings/integrations/whatsapp/qr`, { headers: getHeaders() })
+      .then((res) => handleResponse<{ data: NotificationQrStatus }>(res)),
+
+  startWhatsappQrPairing: () =>
+    fetch(`${BASE_URL}/settings/integrations/whatsapp/connect`, {
+      method: 'POST',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<{ data: NotificationQrStatus }>(res)),
+
+  disconnectWhatsappQr: () =>
+    fetch(`${BASE_URL}/settings/integrations/whatsapp/connect`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<{ data: NotificationQrStatus }>(res)),
+
+  getTelegramQrStatus: () =>
+    fetch(`${BASE_URL}/settings/integrations/telegram/qr`, { headers: getHeaders() })
+      .then((res) => handleResponse<{ data: NotificationTelegramQrStatus }>(res)),
+
+  startTelegramQrPairing: () =>
+    fetch(`${BASE_URL}/settings/integrations/telegram/connect`, {
+      method: 'POST',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<{ data: NotificationTelegramQrStatus }>(res)),
+
+  submitTelegramQrPassword: (password: string) =>
+    fetch(`${BASE_URL}/settings/integrations/telegram/password`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ password }),
+    }).then((res) => handleResponse<{ data: NotificationTelegramQrStatus }>(res)),
+
+  disconnectTelegramQr: () =>
+    fetch(`${BASE_URL}/settings/integrations/telegram/connect`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<{ data: NotificationTelegramQrStatus }>(res)),
+
+  saveNotificationIntegrations: (data: NotificationIntegrationInput) =>
+    fetch(`${BASE_URL}/settings/integrations`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<{ data: NotificationIntegrationStatus }>(res)),
+
+  testNotificationIntegration: (
+    channel: 'whatsapp' | 'telegram',
+    data: NotificationConnectionInput,
+  ) =>
+    fetch(`${BASE_URL}/settings/integrations/test/${channel}`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<{ data: NotificationConnectionTest }>(res)),
 };
+
+export const api = Object.assign(apiClient, {
+  master: {
+    getCompany: apiClient.getCompany,
+    updateCompany: apiClient.updateCompany,
+    getBranches: apiClient.getBranches,
+    createBranch: apiClient.createBranch,
+    getCategories: apiClient.getCategories,
+    getUnits: apiClient.getUnits,
+    getWarehouses: apiClient.getWarehouses,
+    getSuppliers: apiClient.getSuppliers,
+    createSupplier: apiClient.createSupplier,
+    getCustomers: apiClient.getCustomers,
+    createCustomer: apiClient.createCustomer,
+    getVehicles: apiClient.getVehicles,
+    getVehicleProfile: apiClient.getVehicleProfile,
+    createVehicle: apiClient.createVehicle,
+    getEmployees: apiClient.getEmployees,
+    createEmployee: apiClient.createEmployee,
+    updateEmployee: apiClient.updateEmployee,
+    deleteEmployee: apiClient.deleteEmployee,
+    getJobs: apiClient.getJobs,
+    getRoles: apiClient.getRoles,
+  },
+  inventory: {
+    getBalances: apiClient.getStockBalances,
+    updateItemLocation: apiClient.updateItemLocation,
+    getTransfers: apiClient.getTransfers,
+    createTransfer: apiClient.createTransfer,
+    getCounts: apiClient.getCounts,
+    createCount: apiClient.createCount,
+  },
+  financials: {
+    getExpenses: apiClient.getExpenses,
+    createExpense: apiClient.createExpense,
+    getExpenseCategories: apiClient.getExpenseCategories,
+    getRevenues: apiClient.getRevenues,
+    createRevenue: apiClient.createRevenue,
+    getCashTransactions: apiClient.getCashTransactions,
+    createCashVoucher: apiClient.createCashVoucher,
+    getCashShifts: apiClient.getCashShifts,
+    closeCashShift: apiClient.closeCashShift,
+    getBanks: apiClient.getBanks,
+    getCashboxes: apiClient.getCashboxes,
+  },
+  hr: {
+    getHrSettings: apiClient.getHrSettings,
+    updateHrSettings: apiClient.updateHrSettings,
+    getAttendance: apiClient.getAttendance,
+    checkIn: apiClient.checkIn,
+    checkOut: apiClient.checkOut,
+    getCommissions: apiClient.getCommissions,
+    getPayroll: apiClient.getPayroll,
+    generatePayroll: apiClient.generatePayroll,
+  },
+  reports: {
+    getSalesReport: apiClient.getSalesReport,
+    getInventoryReport: apiClient.getInventoryReport,
+    getWorkshopReport: apiClient.getWorkshopReport,
+  },
+  profits: {
+    getSummary: apiClient.getProfitsSummary,
+  },
+  settings: {
+    getAuditLogs: apiClient.getAuditLogs,
+    getPermissions: apiClient.getPermissionsList,
+    getNotificationIntegrations: apiClient.getNotificationIntegrations,
+    getWhatsappQrStatus: apiClient.getWhatsappQrStatus,
+    startWhatsappQrPairing: apiClient.startWhatsappQrPairing,
+    disconnectWhatsappQr: apiClient.disconnectWhatsappQr,
+    getTelegramQrStatus: apiClient.getTelegramQrStatus,
+    startTelegramQrPairing: apiClient.startTelegramQrPairing,
+    submitTelegramQrPassword: apiClient.submitTelegramQrPassword,
+    disconnectTelegramQr: apiClient.disconnectTelegramQr,
+    saveNotificationIntegrations: apiClient.saveNotificationIntegrations,
+    testNotificationIntegration: apiClient.testNotificationIntegration,
+  },
+});

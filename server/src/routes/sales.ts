@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
+import { sendInvoicePdf } from '../services/whatsapp';
+import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
 
 const router = Router();
 
@@ -95,9 +97,6 @@ router.post('/pos', async (req, res) => {
       }
     }
 
-    const count = await prisma.salesInvoice.count();
-    const invoiceNumber = `POS-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
-
     const subtotal = items.reduce((sum: number, it: any) => sum + (parseFloat(it.unitPrice) * parseInt(it.quantity)), 0);
     const disc = parseFloat(discount) || 0;
     const taxable = Math.max(0, subtotal - disc);
@@ -122,7 +121,8 @@ router.post('/pos', async (req, res) => {
 
     const remainingAmount = Math.max(0, grandTotal - paid);
 
-    const invoice = await prisma.$transaction(async (tx) => {
+    const invoice = await withInvoiceTransaction(prisma, async (tx) => {
+      const invoiceNumber = await nextInvoiceNumber(tx, 'POS');
       // 1. Create Invoice
       const inv = await tx.salesInvoice.create({
         data: {
@@ -237,10 +237,25 @@ router.post('/pos', async (req, res) => {
       action: 'POST',
       entity: 'SalesInvoice',
       entityId: invoice.id,
-      details: `إصدار فاتورة بيع كاشير ${invoiceNumber} بمبلغ ${grandTotal} ر.س`,
+      details: `إصدار فاتورة بيع كاشير ${invoice.invoiceNumber} بمبلغ ${grandTotal} ر.س`,
     });
 
-    res.status(201).json(invoice);
+    let whatsappNotification: { sent: boolean; reason?: string } | { sent: false; error: string } = {
+      sent: false,
+      reason: 'no_opt_in_or_number',
+    };
+    if (invoice.customer?.whatsappOptIn && invoice.customer.whatsappNumber) {
+      try {
+        const company = await prisma.companySetting.findFirst();
+        if (!company) throw new Error('بيانات المنشأة غير موجودة لإنشاء ملف الفاتورة');
+        whatsappNotification = await sendInvoicePdf('sales', invoice, company, invoice.customer);
+      } catch (whatsappError: any) {
+        console.error(`WhatsApp sales invoice send failed for ${invoice.invoiceNumber}:`, whatsappError);
+        whatsappNotification = { sent: false, error: whatsappError.message || 'تعذر إرسال الفاتورة عبر واتساب' };
+      }
+    }
+
+    res.status(201).json({ ...invoice, whatsappNotification });
   } catch (err: any) {
     console.error('POS Checkout error:', err);
     res.status(400).json({ error: err.message });

@@ -2,7 +2,13 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'autocare_erp_super_secret_jwt_key_2026';
+const getJwtSecret = (): string => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || Buffer.byteLength(secret) < 32) {
+    throw new Error('JWT_SECRET must contain at least 32 bytes');
+  }
+  return secret;
+};
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -18,27 +24,27 @@ export interface AuthenticatedRequest extends Request {
 export const authenticate = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    // If no token provided, we allow default demo user for frictionless demo testing if desired, or require 401
-    // Let's verify token if present
-    const token = authHeader?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({ error: 'غير مصرح لك بالدخول، يرجى تسجيل الدخول أولاً' });
-    }
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET) as any;
-      req.user = decoded;
-      return next();
-    } catch (err) {
-      return res.status(401).json({ error: 'انتهت صلاحية الجلسة، يرجى إعادة تسجيل الدخول' });
-    }
+    return res.status(401).json({ error: 'غير مصرح لك بالدخول، يرجى تسجيل الدخول أولاً' });
   }
 
   try {
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    req.user = decoded;
-    next();
-  } catch (err) {
+    const decoded = jwt.verify(authHeader.slice('Bearer '.length), getJwtSecret());
+    if (
+      typeof decoded === 'string' ||
+      typeof decoded.id !== 'string' ||
+      typeof decoded.username !== 'string' ||
+      typeof decoded.role !== 'string'
+    ) {
+      return res.status(401).json({ error: 'رمز الدخول غير صالح أو منتهي الصلاحية' });
+    }
+    req.user = {
+      id: decoded.id,
+      username: decoded.username,
+      role: decoded.role,
+      ...(typeof decoded.branchId === 'string' ? { branchId: decoded.branchId } : {}),
+    };
+    return next();
+  } catch {
     return res.status(401).json({ error: 'رمز الدخول غير صالح أو منتهي الصلاحية' });
   }
 };
@@ -62,7 +68,7 @@ export const loadUserPermissions = async (
     }
 
     req.authenticatedRole = user.role.name;
-    req.rolePermissions = JSON.parse(user.role.permissions) as string[];
+    req.rolePermissions = JSON.parse(user.permissionOverrides ?? user.role.permissions) as string[];
     next();
   } catch (error) {
     next(error);
@@ -81,5 +87,5 @@ export const requirePermission = (permission: string) => (
 };
 
 export const generateToken = (payload: { id: string; username: string; role: string; branchId?: string }) => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
 };

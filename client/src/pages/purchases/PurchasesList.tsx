@@ -12,18 +12,25 @@ import {
   FileSpreadsheet,
   X,
   Check,
+  Download,
+  Printer,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { exportToExcel, exportToPdf, formatExportDate } from '../../utils/exports';
 
 export const PurchasesList: React.FC = () => {
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [purchaseRequests, setPurchaseRequests] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [shortageModalOpen, setShortageModalOpen] = useState(false);
+  const [shortageQuantities, setShortageQuantities] = useState<Record<string, number>>({});
+  const [shortageSubmitting, setShortageSubmitting] = useState(false);
 
   // New Invoice Form
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
@@ -49,18 +56,20 @@ export const PurchasesList: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [invRes, supRes, whRes, itRes] = await Promise.all([
+      const [invRes, supRes, whRes, itRes, requestRes] = await Promise.all([
         api.getPurchaseInvoices(),
         api.getSuppliers(),
         api.getWarehouses(),
         api.getItems(),
+        api.getPurchaseRequests(),
       ]);
-      setInvoices(invRes);
-      setSuppliers(supRes);
-      setWarehouses(whRes);
-      setItems(itRes);
-      if (supRes.length > 0) setSelectedSupplierId(supRes[0].id);
-      if (whRes.length > 0) setSelectedWarehouseId(whRes[0].id);
+      setInvoices(invRes.data);
+      setSuppliers(supRes.data);
+      setWarehouses(whRes.data);
+      setItems(itRes.data);
+      setPurchaseRequests(requestRes.data);
+      if (supRes.data.length > 0) setSelectedSupplierId(supRes.data[0].id);
+      if (whRes.data.length > 0) setSelectedWarehouseId(whRes.data[0].id);
     } catch (err) {
       console.error(err);
     } finally {
@@ -115,7 +124,7 @@ export const PurchasesList: React.FC = () => {
 
     setSubmitting(true);
     try {
-      await api.createPurchaseInvoice({
+      const createdInvoice = await api.createPurchaseInvoice({
         supplierId: selectedSupplierId,
         warehouseId: selectedWarehouseId,
         supplierInvoiceNumber: supplierInvoiceNo,
@@ -125,6 +134,15 @@ export const PurchasesList: React.FC = () => {
       });
 
       success('تم اعتماد فاتورة المشتريات وزيادة رصيد المخزن بنجاح!');
+      if (createdInvoice.whatsappNotification?.sent) {
+        success('تم إرسال نسخة PDF للمورد عبر واتساب');
+      } else if (createdInvoice.whatsappNotification?.reason === 'not_configured') {
+        error('لم تُرسل الفاتورة: إعدادات WhatsApp Cloud API غير مكتملة');
+      } else if (createdInvoice.whatsappNotification?.reason === 'no_supplier_or_opt_in') {
+        error('لم تُرسل الفاتورة: رقم واتساب المورد أو موافقته على الاستلام غير مسجل');
+      } else if (createdInvoice.whatsappNotification?.error) {
+        error(`تعذر إرسال فاتورة المورد عبر واتساب: ${createdInvoice.whatsappNotification.error}`);
+      }
       setModalOpen(false);
       setInvoiceItems([{ itemId: '', quantity: 10, unitPrice: 0 }]);
       setSupplierInvoiceNo('');
@@ -136,12 +154,86 @@ export const PurchasesList: React.FC = () => {
     }
   };
 
+  const lowStockItems = items.filter((item) =>
+    item.isLowStock || (Number(item.totalQuantity) || 0) <= (Number(item.minStock) || 0),
+  );
+
+  const openShortageRequest = () => {
+    setShortageQuantities(Object.fromEntries(lowStockItems.map((item) => [
+      item.id,
+      Math.max(1, (Number(item.maxStock) || Number(item.minStock) || 1) - (Number(item.totalQuantity) || 0)),
+    ])));
+    setShortageModalOpen(true);
+  };
+
+  const handleCreateShortageRequest = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const requestItems = lowStockItems
+      .filter((item) => Number.isInteger(shortageQuantities[item.id]) && shortageQuantities[item.id] > 0)
+      .map((item) => ({
+        itemId: item.id,
+        quantity: shortageQuantities[item.id],
+        estimatedPrice: item.purchasePrice || 0,
+      }));
+    if (!selectedSupplierId || !selectedWarehouseId || requestItems.length === 0) {
+      error('اختر المورد والمخزن وحدد كمية لصنف ناقص واحد على الأقل');
+      return;
+    }
+
+    setShortageSubmitting(true);
+    try {
+      const request = await api.createPurchaseRequest({
+        supplierId: selectedSupplierId,
+        warehouseId: selectedWarehouseId,
+        reason: 'نواقص المخزون',
+        notes: 'طلب نواقص تم إنشاؤه من شاشة المشتريات',
+        items: requestItems,
+      });
+      setShortageModalOpen(false);
+      loadData();
+      if (request.whatsappNotification?.sent) {
+        success(`تم إنشاء الطلب وإرساله للمورد عبر واتساب (${request.requestNumber})`);
+      } else {
+        error(`تم إنشاء الطلب ${request.requestNumber} لكن لم يُرسل عبر واتساب: ${
+          request.whatsappNotification?.error
+          || (request.whatsappNotification?.reason === 'not_configured'
+            ? 'إعدادات WhatsApp Cloud API غير مكتملة'
+            : 'رقم واتساب المورد أو موافقته على الرسائل غير مسجل')
+        }`);
+      }
+    } catch (err: any) {
+      error(err.message || 'فشل إنشاء طلب النواقص');
+    } finally {
+      setShortageSubmitting(false);
+    }
+  };
+
   const filteredInvoices = invoices.filter(
     (inv) =>
       inv.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       inv.supplier?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (inv.supplierInvoiceNumber && inv.supplierInvoiceNumber.includes(searchQuery))
   );
+
+  const exportInvoices = (format: 'excel' | 'pdf') => {
+    const headers = ['رقم الفاتورة', 'المورد', 'رقم فاتورة المورد', 'المستودع', 'التاريخ', 'الإجمالي', 'المدفوع', 'المتبقي', 'الحالة'];
+    const rows = filteredInvoices.map((invoice) => [
+      invoice.invoiceNumber,
+      invoice.supplier?.name || '',
+      invoice.supplierInvoiceNumber || '',
+      invoice.warehouse?.name || '',
+      formatExportDate(invoice.date),
+      invoice.grandTotal,
+      invoice.paidAmount,
+      invoice.remainingAmount,
+      invoice.status,
+    ]);
+    if (format === 'excel') {
+      exportToExcel('فواتير-المشتريات', rows.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']))));
+    } else {
+      exportToPdf('فواتير المشتريات', headers, rows);
+    }
+  };
 
   return (
     <div className="space-y-6 pb-12">
@@ -157,13 +249,28 @@ export const PurchasesList: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20"
-        >
-          <Plus className="w-4 h-4" />
-          <span>فاتورة مشتريات جديدة</span>
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={openShortageRequest}
+            disabled={!lowStockItems.length}
+            className="flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs font-bold text-amber-800 disabled:opacity-50"
+          >
+            <Package className="h-4 w-4" /> طلب النواقص من مورد
+          </button>
+          <button onClick={() => exportInvoices('excel')} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white">
+            <Download className="h-4 w-4" /> Excel
+          </button>
+          <button onClick={() => exportInvoices('pdf')} className="flex items-center gap-2 rounded-xl bg-slate-800 px-3 py-2.5 text-xs font-bold text-white">
+            <Printer className="h-4 w-4" /> PDF
+          </button>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            <span>فاتورة مشتريات جديدة</span>
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -239,6 +346,117 @@ export const PurchasesList: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {shortageModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <form onSubmit={handleCreateShortageRequest} className="max-h-[90vh] w-full max-w-3xl space-y-4 overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h2 className="font-bold text-slate-900">إرسال طلب نواقص لمورد</h2>
+                <p className="mt-1 text-xs text-slate-500">تُجمع الأصناف تحت حد المخزون، ويمكن تعديل كميات الطلب.</p>
+              </div>
+              <button type="button" onClick={() => setShortageModalOpen(false)} aria-label="إغلاق" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-xs font-bold text-slate-700">
+                <span className="mb-1 block">المورد</span>
+                <select value={selectedSupplierId} onChange={(e) => setSelectedSupplierId(e.target.value)} className="w-full rounded-xl border px-3 py-2">
+                  <option value="">اختر المورد</option>
+                  {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+                </select>
+              </label>
+              <label className="text-xs font-bold text-slate-700">
+                <span className="mb-1 block">المخزن</span>
+                <select value={selectedWarehouseId} onChange={(e) => setSelectedWarehouseId(e.target.value)} className="w-full rounded-xl border px-3 py-2">
+                  <option value="">اختر المخزن</option>
+                  {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="max-h-80 overflow-auto rounded-xl border">
+              <table className="w-full text-right text-xs">
+                <thead className="sticky top-0 bg-slate-50">
+                  <tr><th className="p-3">الصنف</th><th className="p-3">المتاح</th><th className="p-3">حد الطلب</th><th className="p-3">كمية الطلب</th></tr>
+                </thead>
+                <tbody className="divide-y">
+                  {lowStockItems.map((item) => (
+                    <tr key={item.id}>
+                      <td className="p-3 font-semibold">{item.nameAr}</td>
+                      <td className="p-3">{item.totalQuantity || 0}</td>
+                      <td className="p-3">{item.minStock}</td>
+                      <td className="p-3">
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={shortageQuantities[item.id] || 0}
+                          onChange={(e) => setShortageQuantities((current) => ({
+                            ...current,
+                            [item.id]: Math.max(0, parseInt(e.target.value, 10) || 0),
+                          }))}
+                          className="w-24 rounded-lg border px-2 py-1 text-center"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                  {!lowStockItems.length && <tr><td colSpan={4} className="p-6 text-center text-slate-500">لا توجد أصناف تحت حد الطلب.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end gap-2 border-t pt-4">
+              <button type="button" onClick={() => setShortageModalOpen(false)} className="rounded-xl border px-4 py-2 text-sm">إلغاء</button>
+              <button type="submit" disabled={shortageSubmitting || !lowStockItems.length} className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+                {shortageSubmitting ? 'جارٍ إنشاء وإرسال الطلب...' : 'إنشاء وإرسال الطلب'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b bg-slate-50 px-4 py-3">
+          <h2 className="text-sm font-bold text-slate-800">طلبات النواقص المرسلة للموردين</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-right text-xs">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="p-3">رقم الطلب</th>
+                <th className="p-3">المورد</th>
+                <th className="p-3">المخزن</th>
+                <th className="p-3">عدد الأصناف</th>
+                <th className="p-3">حالة الطلب</th>
+                <th className="p-3">رد المورد</th>
+                <th className="p-3">تاريخ الطلب</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {purchaseRequests.slice(0, 20).map((request) => (
+                <tr key={request.id}>
+                  <td className="p-3 font-mono font-bold">{request.requestNumber}</td>
+                  <td className="p-3">{request.supplier?.name || 'غير محدد'}</td>
+                  <td className="p-3">{request.warehouse?.name || '-'}</td>
+                  <td className="p-3">{request.items?.length || 0}</td>
+                  <td className="p-3">{request.status}</td>
+                  <td className="p-3">
+                    {request.supplierResponse === 'ACCEPTED'
+                      ? 'وافق المورد'
+                      : request.supplierResponse === 'DECLINED'
+                        ? 'اعتذر المورد'
+                        : 'بانتظار رد المورد'}
+                  </td>
+                  <td className="p-3">{new Date(request.createdAt).toLocaleDateString('ar-EG')}</td>
+                </tr>
+              ))}
+              {!purchaseRequests.length && (
+                <tr><td colSpan={7} className="p-5 text-center text-slate-500">لا توجد طلبات نواقص بعد.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {/* New Purchase Invoice Modal (Section 5) */}
       {modalOpen && (

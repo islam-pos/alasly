@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Zap,
@@ -13,10 +13,56 @@ import {
   PackagePlus,
   Warehouse,
   Car,
+  MessageCircle,
+  Send,
 } from 'lucide-react';
+import { api } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 export const QuickSidebar: React.FC = () => {
   const location = useLocation();
+  const { user, hasPermission } = useAuth();
+  const [support, setSupport] = useState({
+    supportTitle: 'الدعم الفني والخدمات',
+    supportDescription: 'مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.',
+    supportPhoneLabel: 'الرقم الموحد',
+    supportPhone: '920000000',
+  });
+
+  useEffect(() => {
+    const cachedCompany = localStorage.getItem('alasly-print-company');
+    if (cachedCompany) {
+      try {
+        const company = JSON.parse(cachedCompany);
+        setSupport({
+          supportTitle: company.supportTitle || 'الدعم الفني والخدمات',
+          supportDescription: company.supportDescription || 'مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.',
+          supportPhoneLabel: company.supportPhoneLabel || 'الرقم الموحد',
+          supportPhone: company.supportPhone || '920000000',
+        });
+      } catch (error) {
+        console.error('Failed to read cached company support details:', error);
+      }
+    }
+
+    const loadSupport = () => {
+      api.master.getCompany()
+        .then(({ data }) => {
+          const details = {
+            supportTitle: data.supportTitle || 'الدعم الفني والخدمات',
+            supportDescription: data.supportDescription || 'مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.',
+            supportPhoneLabel: data.supportPhoneLabel || 'الرقم الموحد',
+            supportPhone: data.supportPhone || '920000000',
+          };
+          setSupport(details);
+          localStorage.setItem('alasly-print-company', JSON.stringify(data));
+        })
+        .catch((error) => console.error('Failed to load company support details:', error));
+    };
+    loadSupport();
+    window.addEventListener('alasly-company-updated', loadSupport);
+    return () => window.removeEventListener('alasly-company-updated', loadSupport);
+  }, []);
 
   const shortcuts = [
     { label: 'فاتورة بيع (POS)', to: '/pos', icon: ShoppingCart, color: 'text-emerald-600 bg-emerald-50' },
@@ -31,6 +77,17 @@ export const QuickSidebar: React.FC = () => {
     { label: 'المخزون', to: '/warehouses', icon: Warehouse, color: 'text-slate-600 bg-slate-100' },
     { label: 'سيارات الورشة', to: '/workshop/job-cards?filter=in_shop', icon: Car, color: 'text-red-600 bg-red-50' },
   ];
+  const visibleShortcuts = shortcuts.filter((shortcut) => {
+    if (shortcut.to.startsWith('/pos')) return hasPermission('pos_access');
+    if (shortcut.to.startsWith('/workshop')) return hasPermission('manage_workshop');
+    if (shortcut.to.startsWith('/sales')) return hasPermission('manage_sales');
+    if (shortcut.to.startsWith('/purchases')) return hasPermission('manage_purchases');
+    if (shortcut.to.startsWith('/warehouses')) return hasPermission('manage_inventory');
+    if (shortcut.to.startsWith('/financials')) return hasPermission('manage_cashbox');
+    if (shortcut.to.startsWith('/customers')) return ['manage_sales', 'manage_workshop', 'manage_purchases'].some(hasPermission);
+    if (shortcut.to.startsWith('/items')) return hasPermission('manage_items');
+    return true;
+  });
 
   return (
     <aside className="w-56 flex-shrink-0 hidden xl:block bg-white border-l border-slate-200 h-[calc(100vh-6.5rem)] sticky top-28 overflow-y-auto p-3 select-none">
@@ -40,7 +97,7 @@ export const QuickSidebar: React.FC = () => {
       </div>
 
       <div className="space-y-1">
-        {shortcuts.map((sc, i) => {
+        {visibleShortcuts.map((sc, i) => {
           const Icon = sc.icon;
           const isActive = location.pathname === sc.to;
 
@@ -63,12 +120,32 @@ export const QuickSidebar: React.FC = () => {
         })}
       </div>
 
-      <div className="mt-6 p-3 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl shadow-sm text-center">
-        <div className="text-xs font-bold mb-1 text-slate-200">الدعم الفني والخدمات</div>
-        <div className="text-[11px] text-slate-400 leading-relaxed mb-2">
-          مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.
+      {user?.role === 'admin' && (
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <div className="px-3 pb-2 text-[11px] font-bold text-slate-400">ربط التنبيهات والتقارير</div>
+          <Link
+            to="/settings?tab=integrations&provider=whatsapp"
+            className="flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-emerald-100 hover:bg-emerald-50 hover:text-emerald-800"
+          >
+            <span className="rounded-lg bg-emerald-50 p-1.5 text-emerald-600"><MessageCircle className="h-4 w-4" /></span>
+            <span>ربط WhatsApp</span>
+          </Link>
+          <Link
+            to="/settings?tab=integrations&provider=telegram"
+            className="flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-sky-100 hover:bg-sky-50 hover:text-sky-800"
+          >
+            <span className="rounded-lg bg-sky-50 p-1.5 text-sky-600"><Send className="h-4 w-4" /></span>
+            <span>ربط Telegram</span>
+          </Link>
         </div>
-        <div className="text-[10px] text-amber-400 font-mono font-bold">الرقم الموحد: 920000000</div>
+      )}
+
+      <div className="mt-6 p-3 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl shadow-sm text-center">
+        <div className="text-xs font-bold mb-1 text-slate-200">{support.supportTitle}</div>
+        <div className="text-[11px] text-slate-400 leading-relaxed mb-2">
+          {support.supportDescription}
+        </div>
+        <div className="text-[10px] text-amber-400 font-mono font-bold">{support.supportPhoneLabel}: {support.supportPhone}</div>
       </div>
     </aside>
   );

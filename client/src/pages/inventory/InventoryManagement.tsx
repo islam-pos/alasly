@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { 
   Boxes, ArrowLeftRight, ClipboardCheck, AlertTriangle, 
   Search, Plus, Filter, Warehouse, CheckCircle2, 
-  RefreshCw, TrendingDown, DollarSign, PackageCheck
+  RefreshCw, TrendingDown, DollarSign, PackageCheck, MapPin, Pencil, Save, X, Printer, Barcode
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import { printBarcodeLabels } from '../../utils/barcodePrint';
+import type { BarcodeLabelItem } from '../../utils/barcodePrint';
+import { BarcodePrintDialog } from '../../components/common/BarcodePrintDialog';
 
 export const InventoryManagement: React.FC = () => {
   const { showToast } = useToast();
@@ -21,6 +24,10 @@ export const InventoryManagement: React.FC = () => {
   const [transfers, setTransfers] = useState<any[]>([]);
   const [counts, setCounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingLocationItemId, setEditingLocationItemId] = useState<string | null>(null);
+  const [locationDraft, setLocationDraft] = useState('');
+  const [savingLocation, setSavingLocation] = useState(false);
+  const [barcodePrintItems, setBarcodePrintItems] = useState<BarcodeLabelItem[] | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,6 +89,40 @@ export const InventoryManagement: React.FC = () => {
     loadData();
   }, []);
 
+  const handleSaveLocation = async (itemId: string) => {
+    try {
+      setSavingLocation(true);
+      await api.inventory.updateItemLocation(itemId, locationDraft);
+      showToast('تم تحديث موقع الصنف بنجاح', 'success');
+      setEditingLocationItemId(null);
+      await loadData();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'فشل تحديث موقع الصنف', 'error');
+    } finally {
+      setSavingLocation(false);
+    }
+  };
+
+  const handlePrintBarcodes = (selectedItems: any[]) => {
+    if (selectedItems.length === 0) {
+      showToast('لا توجد أصناف لطباعة باركودها', 'error');
+      return;
+    }
+    setBarcodePrintItems(selectedItems);
+  };
+
+  const printSelectedBarcodes = (selectedItems: BarcodeLabelItem[]) => {
+    try {
+      const result = printBarcodeLabels(selectedItems);
+      if (result === 'empty') showToast('لا توجد أصناف لطباعة باركودها', 'error');
+      if (result === 'blocked') showToast('يرجى السماح بالنوافذ المنبثقة لطباعة ملصقات الباركود', 'error');
+      return result === 'opened';
+    } catch (printError: any) {
+      showToast(printError.message || 'تعذرت طباعة ملصقات الباركود', 'error');
+      return false;
+    }
+  };
+
   // Filtered Balances
   const filteredBalances = balances.filter(item => {
     const matchesSearch = !searchQuery || 
@@ -104,7 +145,7 @@ export const InventoryManagement: React.FC = () => {
   const totalItemsCount = balances.length;
   const lowStockCount = balances.filter(b => b.isLowStock).length;
   const totalStockValuation = balances.reduce((sum, b) => sum + (b.totalValue || 0), 0);
-  const balanceColumnCount = 5 + (canManagePrices ? 4 : 0);
+  const balanceColumnCount = 7 + (canManagePrices ? 4 : 0);
 
   const toggleSelectedPriceItem = (itemId: string, selected: boolean) => {
     setSelectedPriceItemIds((current) => selected
@@ -263,6 +304,14 @@ export const InventoryManagement: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => handlePrintBarcodes(filteredBalances)}
+            disabled={filteredBalances.length === 0}
+            className="flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-800 shadow-sm transition hover:bg-blue-100 disabled:opacity-50"
+          >
+            <Barcode className="h-4 w-4" />
+            طباعة باركود النتائج
+          </button>
           <button
             onClick={() => setIsTransferModalOpen(true)}
             className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition"
@@ -438,6 +487,7 @@ export const InventoryManagement: React.FC = () => {
                   <th className="py-3 px-4">رقم القطعة / الصنف</th>
                   <th className="py-3 px-4">التصنيف</th>
                   <th className="py-3 px-4">التوزيع بالمستودعات</th>
+                  <th className="py-3 px-4">موقع التخزين</th>
                   <th className="py-3 px-4 text-center">الرصيد الكلي</th>
                   <th className="py-3 px-4 text-center">حد الطلب</th>
                   {canManagePrices && (
@@ -447,6 +497,7 @@ export const InventoryManagement: React.FC = () => {
                       <th className="py-3 px-4 text-left">إجمالي القيمة</th>
                     </>
                   )}
+                  <th className="py-3 px-4">طباعة</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -493,6 +544,61 @@ export const InventoryManagement: React.FC = () => {
                           ))}
                         </div>
                       </td>
+                      <td className="py-3 px-4">
+                        {editingLocationItemId === item.id ? (
+                          <div className="flex min-w-48 items-center gap-1">
+                            <input
+                              type="text"
+                              maxLength={120}
+                              autoFocus
+                              value={locationDraft}
+                              onChange={(e) => setLocationDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  void handleSaveLocation(item.id);
+                                }
+                                if (e.key === 'Escape') setEditingLocationItemId(null);
+                              }}
+                              aria-label={`موقع تخزين ${item.nameAr}`}
+                              placeholder="ممر، رف، صندوق..."
+                              className="w-full rounded-lg border px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => void handleSaveLocation(item.id)}
+                              disabled={savingLocation}
+                              aria-label="حفظ موقع الصنف"
+                              className="rounded-lg p-1 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                            >
+                              <Save className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingLocationItemId(null)}
+                              disabled={savingLocation}
+                              aria-label="إلغاء تعديل الموقع"
+                              className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingLocationItemId(item.id);
+                              setLocationDraft(item.defaultLocation || '');
+                            }}
+                            aria-label={`تعديل موقع ${item.nameAr}`}
+                            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+                          >
+                            <MapPin className="h-3.5 w-3.5" />
+                            <span>{item.defaultLocation || 'تحديد الموقع'}</span>
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-center font-mono">
                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${
                           item.isLowStock ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
@@ -516,6 +622,16 @@ export const InventoryManagement: React.FC = () => {
                           </td>
                         </>
                       )}
+                      <td className="py-3 px-4">
+                        <button
+                          type="button"
+                          onClick={() => handlePrintBarcodes([item])}
+                          aria-label={`طباعة باركود ${item.nameAr}`}
+                          className="rounded-lg p-2 text-blue-700 hover:bg-blue-50"
+                        >
+                          <Printer className="h-4 w-4" />
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -906,7 +1022,7 @@ export const InventoryManagement: React.FC = () => {
                   type="text"
                   value={countNotes}
                   onChange={(e) => setCountNotes(e.target.value)}
-                  placeholder="ملاحظات محضر الجرد (مثال: جرد ربع سنوي - فرع الرياض)..."
+                  placeholder="ملاحظات محضر الجرد (مثال: جرد ربع سنوي - فرع القاهرة)..."
                   className="w-full border rounded-xl px-3 py-2 text-xs outline-none"
                 />
               </div>
@@ -934,6 +1050,13 @@ export const InventoryManagement: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+      {barcodePrintItems && (
+        <BarcodePrintDialog
+          items={barcodePrintItems}
+          onClose={() => setBarcodePrintItems(null)}
+          onPrint={printSelectedBarcodes}
+        />
       )}
     </div>
   );

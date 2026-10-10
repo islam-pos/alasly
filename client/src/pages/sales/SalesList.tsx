@@ -13,9 +13,12 @@ import {
   Eye,
   X,
   Check,
+  Download,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { exportToExcel, exportToPdf, formatExportDate } from '../../utils/exports';
+import { printSalesInvoice } from '../../utils/invoicePrint';
 
 export const SalesList: React.FC = () => {
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -23,6 +26,7 @@ export const SalesList: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [company, setCompany] = useState<any>(null);
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [returnReason, setReturnReason] = useState('');
 
@@ -35,11 +39,17 @@ export const SalesList: React.FC = () => {
     loadInvoices();
   }, [searchParams]);
 
+  useEffect(() => {
+    api.master.getCompany()
+      .then((response) => setCompany(response.data))
+      .catch((err: any) => error(err.message || 'تعذر تحميل إعدادات الطباعة'));
+  }, []);
+
   const loadInvoices = async () => {
     setLoading(true);
     try {
       const res = await api.getSalesInvoices();
-      setInvoices(res);
+      setInvoices(res.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -89,6 +99,34 @@ export const SalesList: React.FC = () => {
     return matchesType && matchesQuery;
   });
 
+  const exportInvoices = (format: 'excel' | 'pdf') => {
+    const headers = ['رقم الفاتورة', 'التاريخ', 'العميل', 'نوع الفاتورة', 'الإجمالي', 'المدفوع', 'المتبقي', 'الحالة'];
+    const rows = filteredInvoices.map((invoice) => [
+      invoice.invoiceNumber,
+      formatExportDate(invoice.date),
+      invoice.customer?.name || 'عميل نقدي',
+      invoice.invoiceType,
+      invoice.grandTotal,
+      invoice.paidAmount,
+      invoice.remainingAmount,
+      invoice.status,
+    ]);
+    if (format === 'excel') {
+      exportToExcel('فواتير-المبيعات', rows.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']))));
+    } else {
+      exportToPdf('فواتير المبيعات', headers, rows);
+    }
+  };
+
+  const handlePrintInvoice = (invoice: any) => {
+    try {
+      const result = printSalesInvoice(invoice, company, company?.printSettings);
+      if (result === 'blocked') error('يرجى السماح بالنوافذ المنبثقة لطباعة الفاتورة');
+    } catch (printError: any) {
+      error(printError.message || 'تعذرت طباعة الفاتورة');
+    }
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
@@ -103,13 +141,21 @@ export const SalesList: React.FC = () => {
           </p>
         </div>
 
-        <Link
-          to="/pos"
-          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20"
-        >
-          <Plus className="w-4 h-4" />
-          <span>نقطة بيع سريعة (POS)</span>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => exportInvoices('excel')} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white">
+            <Download className="h-4 w-4" /> Excel
+          </button>
+          <button onClick={() => exportInvoices('pdf')} className="flex items-center gap-2 rounded-xl bg-slate-800 px-3 py-2.5 text-xs font-bold text-white">
+            <Printer className="h-4 w-4" /> PDF
+          </button>
+          <Link
+            to="/pos"
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20"
+          >
+            <Plus className="w-4 h-4" />
+            <span>نقطة بيع سريعة (POS)</span>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
@@ -303,7 +349,7 @@ export const SalesList: React.FC = () => {
 
             <div className="flex justify-between pt-2">
               <button
-                onClick={() => window.print()}
+                onClick={() => handlePrintInvoice(selectedInvoice)}
                 className="px-4 py-2 bg-slate-900 text-white font-bold rounded-xl text-xs flex items-center gap-1.5"
               >
                 <Printer className="w-4 h-4" />

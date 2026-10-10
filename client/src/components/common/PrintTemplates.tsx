@@ -55,7 +55,7 @@ export const TaxInvoicePrint: React.FC<{ invoice: any; company?: any }> = ({ inv
   const comp = company || {
     name: 'مركز المحترف لصيانة السيارات وقطع الغيار',
     taxNumber: '301234567800003',
-    address: 'المملكة العربية السعودية - الرياض - حي الصناعية القديمة',
+    address: 'جمهورية مصر العربية - القاهرة',
     phone: '0551234567',
     crNumber: '1010897654'
   };

@@ -4,18 +4,19 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./autocare.db"
+  url      = env("DATABASE_URL")
 }
 
 model CompanySetting {
   id                 String   @id @default(uuid())
   name               String   @default("مركز المحترف لصيانة السيارات وقطع الغيار")
+  nameEn             String?
   logoUrl            String?
   taxNumber          String   @default("310245897100003")
   commercialRegister String   @default("1010892341")
-  address            String   @default("طريق الملك عبدالعزيز، حي المروج")
-  city               String   @default("الرياض")
-  country            String   @default("المملكة العربية السعودية")
+  address            String   @default("القاهرة، جمهورية مصر العربية")
+  city               String   @default("القاهرة")
+  country            String   @default("جمهورية مصر العربية")
   phone              String   @default("0112345678")
   mobile             String   @default("0501234567")
   email              String   @default("info@autocare-center.com")
@@ -26,7 +27,47 @@ model CompanySetting {
   invoiceHeader      String?  @default("أهلاً بكم في مركز المحترف لخدمات وصيانة السيارات")
   invoiceFooter      String?  @default("الضمان يشمل قطع الغيار الأصلية لمدة شهر من تاريخ الفاتورة")
   termsAndConditions String?
+  supportTitle       String   @default("الدعم الفني والخدمات")
+  supportDescription String   @default("مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.")
+  supportPhoneLabel  String   @default("الرقم الموحد")
+  supportPhone       String   @default("920000000")
+  printSettings      String   @default("{}")
   updatedAt          DateTime @updatedAt
+}
+
+model NumberSequence {
+  key       String @id
+  lastValue Int    @default(0)
+}
+
+model NotificationIntegration {
+  id           Int      @id @default(1)
+  whatsapp     String?
+  whatsappPhone String?
+  telegram     String?
+  options      String   @default("{}")
+  shiftEndTime String  @default("23:00")
+  timeZone    String   @default("Africa/Cairo")
+  updatedAt   DateTime @updatedAt
+}
+
+model WhatsappAuthData {
+  key            String @id
+  encryptedValue String
+}
+
+model TelegramAuthSession {
+  id               Int     @id @default(1)
+  encryptedSession String?
+}
+
+model NotificationDelivery {
+  id        String   @id @default(uuid())
+  channel   String
+  eventKey  String
+  sentAt    DateTime @default(now())
+
+  @@unique([channel, eventKey])
 }
 
 model Branch {
@@ -72,6 +113,7 @@ model User {
   employee           Employee? @relation(fields: [employeeId], references: [id])
   allowedWarehouseId String?
   allowedCashboxId   String?
+  permissionOverrides String?
   active             Boolean   @default(true)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -104,7 +146,8 @@ model Employee {
   name           String
   phone          String
   email          String?
-  jobId          String
+  nationalId       String?      @unique
+  jobId            String
   job            JobTitle     @relation(fields: [jobId], references: [id])
   department     String       @default("الورشة") // الورشة، الإدارة، المستودع، الحسابات
   hireDate       DateTime     @default(now())
@@ -124,6 +167,12 @@ model Employee {
   performedLabor  RepairLabor[]
 }
 
+model HrSetting {
+  id                   Int      @id @default(1)
+  standardMonthlyHours Float    @default(208)
+  updatedAt            DateTime @updatedAt
+}
+
 model Attendance {
   id              String   @id @default(uuid())
   employeeId      String
@@ -132,6 +181,7 @@ model Attendance {
   checkIn         DateTime?
   checkOut        DateTime?
   workHours       Float    @default(0)
+  workMinutes     Int?
   delayMinutes    Int      @default(0)
   overtimeMinutes Int      @default(0)
   status          String   @default("PRESENT") // PRESENT, ABSENT, LEAVE, HOLIDAY
@@ -161,6 +211,8 @@ model Payroll {
   month          Int
   year           Int
   basicSalary    Float
+  standardMonthlyHours Float?
+  attendedMinutes Int?
   allowances     Float    @default(0)
   commissions    Float    @default(0)
   overtimeAmount Float    @default(0)
@@ -171,6 +223,8 @@ model Payroll {
   paidAt         DateTime?
   notes          String?
   createdAt      DateTime @default(now())
+
+  @@unique([employeeId, year, month])
 }
 
 model Supplier {
@@ -187,12 +241,17 @@ model Supplier {
   currentBalance   Float             @default(0)
   creditLimit      Float             @default(0)
   paymentTermsDays Int               @default(30)
+  whatsappNumber   String?
+  whatsappOptIn    Boolean           @default(false)
   notes            String?
   active           Boolean           @default(true)
   createdAt        DateTime          @default(now())
+  customerId       String?           @unique
+  customer         Customer?         @relation("SupplierCustomerLink", fields: [customerId], references: [id], onDelete: SetNull)
   purchaseOrders   PurchaseRequest[]
   purchaseInvoices PurchaseInvoice[]
   purchaseReturns  PurchaseReturn[]
+  cashTransactions CashTransaction[] @relation("SupplierCashTransactions")
 }
 
 model Customer {
@@ -205,16 +264,20 @@ model Customer {
   address        String?
   taxNumber      String?
   customerType   String         @default("INDIVIDUAL") // INDIVIDUAL, COMPANY
+  whatsappNumber String?
+  whatsappOptIn  Boolean        @default(false)
   openingBalance Float          @default(0)
   currentBalance Float          @default(0)
   creditLimit    Float          @default(0)
   notes          String?
   active         Boolean        @default(true)
   createdAt      DateTime       @default(now())
+  supplier       Supplier?      @relation("SupplierCustomerLink")
   vehicles       Vehicle[]
   repairOrders   RepairOrder[]
   salesInvoices  SalesInvoice[]
   salesReturns   SalesReturn[]
+  cashTransactions CashTransaction[] @relation("CustomerCashTransactions")
 }
 
 model Vehicle {
@@ -370,6 +433,9 @@ model PurchaseRequest {
   reason        String?
   status        String                @default("PENDING") // DRAFT, PENDING, APPROVED, ORDERED, RECEIVED, CANCELLED
   notes         String?
+  publicTokenHash String?       @unique
+  publicTokenExpiresAt DateTime?
+  supplierResponse String?
   createdById   String?
   createdAt     DateTime              @default(now())
   items         PurchaseRequestItem[]
@@ -757,6 +823,10 @@ model CashTransaction {
   referenceId   String?
   partyType     String?   // CUSTOMER, SUPPLIER, EMPLOYEE, OTHER
   partyName     String?
+  customerId    String?
+  customer      Customer? @relation("CustomerCashTransactions", fields: [customerId], references: [id], onDelete: SetNull)
+  supplierId    String?
+  supplier      Supplier? @relation("SupplierCashTransactions", fields: [supplierId], references: [id], onDelete: SetNull)
   description   String?
   createdById   String?
   createdAt     DateTime  @default(now())

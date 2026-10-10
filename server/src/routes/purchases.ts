@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
+import { sendInvoicePdf, sendShortageRequest } from '../services/whatsapp';
+import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
 
 const router = Router();
 
@@ -45,7 +47,20 @@ router.post('/requests', async (req, res) => {
 
     await logAudit({ action: 'CREATE', entity: 'PurchaseRequest', entityId: request.id, details: `إنشاء طلب شراء ${requestNumber}` });
 
-    res.status(201).json(request);
+    let whatsappNotification: { sent: boolean; reason?: string } | { sent: false; error: string } = {
+      sent: false,
+      reason: 'no_supplier_or_opt_in',
+    };
+    if (request.supplier?.whatsappOptIn && request.supplier.whatsappNumber) {
+      try {
+        whatsappNotification = await sendShortageRequest(request, request.supplier);
+      } catch (whatsappError: any) {
+        console.error(`WhatsApp shortage request send failed for ${request.requestNumber}:`, whatsappError);
+        whatsappNotification = { sent: false, error: whatsappError.message || 'تعذر إرسال طلب النواقص عبر واتساب' };
+      }
+    }
+
+    res.status(201).json({ ...request, whatsappNotification });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -71,9 +86,6 @@ router.get('/invoices', async (req, res) => {
 router.post('/invoices', async (req, res) => {
   try {
     const { items, ...data } = req.body;
-    const count = await prisma.purchaseInvoice.count();
-    const invoiceNumber = `PINV-${new Date().getFullYear()}-${String(count + 1).padStart(3, '0')}`;
-
     const subtotal = items.reduce((sum: number, it: any) => sum + (parseFloat(it.unitPrice) * parseInt(it.quantity)), 0);
     const discount = parseFloat(data.discount) || 0;
     const taxableAmount = Math.max(0, subtotal - discount);
@@ -82,7 +94,8 @@ router.post('/invoices', async (req, res) => {
     const paidAmount = parseFloat(data.paidAmount) || 0;
     const remainingAmount = Math.max(0, grandTotal - paidAmount);
 
-    const invoice = await prisma.$transaction(async (tx) => {
+    const invoice = await withInvoiceTransaction(prisma, async (tx) => {
+      const invoiceNumber = await nextInvoiceNumber(tx, 'PINV');
       // 1. Create invoice
       const createdInvoice = await tx.purchaseInvoice.create({
         data: {
@@ -190,9 +203,33 @@ router.post('/invoices', async (req, res) => {
       return createdInvoice;
     });
 
-    await logAudit({ action: 'POST', entity: 'PurchaseInvoice', entityId: invoice.id, details: `اعتماد فاتورة مشتريات ${invoiceNumber} بمبلغ ${grandTotal} ر.س` });
+    await logAudit({ action: 'POST', entity: 'PurchaseInvoice', entityId: invoice.id, details: `اعتماد فاتورة مشتريات ${invoice.invoiceNumber} بمبلغ ${grandTotal} ر.س` });
 
-    res.status(201).json(invoice);
+    let whatsappNotification: { sent: boolean; reason?: string } | { sent: false; error: string } = {
+      sent: false,
+      reason: 'no_supplier_or_opt_in',
+    };
+    const invoiceForMessage = await prisma.purchaseInvoice.findUnique({
+      where: { id: invoice.id },
+      include: { supplier: true, items: { include: { item: true } } },
+    });
+    if (invoiceForMessage?.supplier.whatsappOptIn && invoiceForMessage.supplier.whatsappNumber) {
+      try {
+        const company = await prisma.companySetting.findFirst();
+        if (!company) throw new Error('بيانات المنشأة غير موجودة لإنشاء ملف الفاتورة');
+        whatsappNotification = await sendInvoicePdf(
+          'supplier',
+          invoiceForMessage,
+          company,
+          invoiceForMessage.supplier,
+        );
+      } catch (whatsappError: any) {
+        console.error(`WhatsApp supplier invoice send failed for ${invoice.invoiceNumber}:`, whatsappError);
+        whatsappNotification = { sent: false, error: whatsappError.message || 'تعذر إرسال الفاتورة عبر واتساب' };
+      }
+    }
+
+    res.status(201).json({ ...invoice, whatsappNotification });
   } catch (err: any) {
     console.error('Purchase invoice error:', err);
     res.status(400).json({ error: err.message });
@@ -200,6 +237,59 @@ router.post('/invoices', async (req, res) => {
 });
 
 // --- Supplier Statement of Account ---
+router.get('/suppliers/statement', async (_req, res) => {
+  try {
+    const suppliers = await prisma.supplier.findMany({
+      orderBy: { name: 'asc' },
+      include: {
+        purchaseInvoices: { orderBy: { date: 'asc' } },
+        purchaseReturns: { orderBy: { date: 'asc' } },
+        cashTransactions: { where: { type: 'PAYMENT' }, orderBy: { date: 'asc' }, include: { cashbox: true } },
+      },
+    });
+    res.json({
+      suppliers: suppliers.map((supplier) => {
+        const { purchaseInvoices, purchaseReturns, cashTransactions, ...supplierDetails } = supplier;
+        return {
+          ...supplierDetails,
+          statement: [
+            ...purchaseInvoices.map((invoice) => ({
+              id: invoice.id,
+              date: invoice.date,
+              number: invoice.invoiceNumber,
+              type: 'فاتورة مشتريات',
+              debit: invoice.remainingAmount,
+              credit: 0,
+              notes: invoice.notes,
+            })),
+            ...purchaseReturns.map((purchaseReturn) => ({
+              id: purchaseReturn.id,
+              date: purchaseReturn.date,
+              number: purchaseReturn.returnNumber,
+              type: 'مرتجع مشتريات',
+              debit: 0,
+              credit: purchaseReturn.totalAmount,
+              notes: purchaseReturn.reason,
+            })),
+            ...cashTransactions.map((transaction) => ({
+              id: transaction.id,
+              date: transaction.date,
+              number: transaction.referenceId || transaction.id,
+              type: 'سند صرف',
+              debit: 0,
+              credit: transaction.amount,
+              notes: transaction.description,
+            })),
+          ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+        };
+      }),
+    });
+  } catch (err: any) {
+    console.error('Failed to load supplier statements:', err);
+    res.status(500).json({ error: 'تعذر تحميل كشوف حساب الموردين' });
+  }
+});
+
 router.get('/suppliers/:id/statement', async (req, res) => {
   try {
     const supplier = await prisma.supplier.findUnique({
@@ -207,17 +297,51 @@ router.get('/suppliers/:id/statement', async (req, res) => {
       include: {
         purchaseInvoices: { orderBy: { date: 'desc' } },
         purchaseReturns: { orderBy: { date: 'desc' } },
+        cashTransactions: { where: { type: 'PAYMENT' }, orderBy: { date: 'desc' } },
       },
     });
 
     if (!supplier) return res.status(404).json({ error: 'المورد غير موجود' });
 
+    const { purchaseInvoices, purchaseReturns, cashTransactions, ...supplierDetails } = supplier;
+    const transactions = [
+      ...purchaseInvoices.map((invoice) => ({
+        id: invoice.id,
+        date: invoice.date,
+        number: invoice.invoiceNumber,
+        type: 'فاتورة مشتريات',
+        debit: invoice.remainingAmount,
+        credit: 0,
+        notes: invoice.notes,
+      })),
+      ...purchaseReturns.map((purchaseReturn) => ({
+        id: purchaseReturn.id,
+        date: purchaseReturn.date,
+        number: purchaseReturn.returnNumber,
+        type: 'مرتجع مشتريات',
+        debit: 0,
+        credit: purchaseReturn.totalAmount,
+        notes: purchaseReturn.reason,
+      })),
+      ...cashTransactions.map((transaction) => ({
+        id: transaction.id,
+        date: transaction.date,
+        number: transaction.referenceId || transaction.id,
+        type: 'سند صرف',
+        debit: 0,
+        credit: transaction.amount,
+        notes: transaction.description,
+      })),
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
     res.json({
-      supplier,
-      invoicesCount: supplier.purchaseInvoices.length,
-      totalPurchases: supplier.purchaseInvoices.reduce((sum, i) => sum + i.grandTotal, 0),
-      totalPaid: supplier.purchaseInvoices.reduce((sum, i) => sum + i.paidAmount, 0),
+      supplier: { ...supplierDetails, statement: transactions },
+      invoicesCount: purchaseInvoices.length,
+      totalPurchases: purchaseInvoices.reduce((sum, i) => sum + i.grandTotal, 0),
+      totalPaid: purchaseInvoices.reduce((sum, i) => sum + i.paidAmount, 0)
+        + cashTransactions.reduce((sum, transaction) => sum + transaction.amount, 0),
       totalRemaining: supplier.currentBalance,
+      transactions,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { printSalesInvoice } from '../../utils/invoicePrint';
 
 export const PosScreen: React.FC = () => {
   const [items, setItems] = useState<any[]>([]);
@@ -37,6 +38,7 @@ export const PosScreen: React.FC = () => {
   const [cashPaid, setCashPaid] = useState<number>(0);
   const [cardPaid, setCardPaid] = useState<number>(0);
   const [completedInvoice, setCompletedInvoice] = useState<any>(null);
+  const [company, setCompany] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const { success, error } = useToast();
@@ -51,14 +53,16 @@ export const PosScreen: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [itemsRes, catRes, cusRes] = await Promise.all([
+      const [itemsRes, catRes, cusRes, companyRes] = await Promise.all([
         api.getItems(),
         api.getCategories(),
         api.getCustomers(),
+        api.master.getCompany(),
       ]);
-      setItems(itemsRes);
-      setCategories(catRes);
-      setCustomers(cusRes);
+      setItems(itemsRes.data);
+      setCategories(catRes.data);
+      setCustomers(cusRes.data);
+      setCompany(companyRes.data);
     } catch (err) {
       console.error(err);
     }
@@ -232,12 +236,30 @@ export const PosScreen: React.FC = () => {
       setPaymentModalOpen(false);
       clearCart();
       success(`تم إصدار فاتورة البيع ${res.invoiceNumber} بنجاح!`);
+      if (res.whatsappNotification?.sent) {
+        success('تم إرسال نسخة PDF للعميل عبر واتساب');
+      } else if (selectedCustomerId && res.whatsappNotification?.reason === 'not_configured') {
+        error('لم تُرسل الفاتورة عبر واتساب: إعدادات WhatsApp Cloud API غير مكتملة');
+      } else if (selectedCustomerId && res.whatsappNotification?.reason === 'no_opt_in_or_number') {
+        error('لم تُرسل الفاتورة: رقم واتساب العميل أو موافقته على الاستلام غير مسجل');
+      } else if (selectedCustomerId && res.whatsappNotification?.error) {
+        error(`تعذر إرسال الفاتورة عبر واتساب: ${res.whatsappNotification.error}`);
+      }
       // Refresh inventory items
       loadData();
     } catch (err: any) {
       error(err.message || 'فشلت عملية البيع');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePrintInvoice = () => {
+    try {
+      const result = printSalesInvoice(completedInvoice, company, company?.printSettings);
+      if (result === 'blocked') error('يرجى السماح بالنوافذ المنبثقة لطباعة الفاتورة');
+    } catch (printError: any) {
+      error(printError.message || 'تعذرت طباعة الفاتورة');
     }
   };
 
@@ -698,7 +720,7 @@ export const PosScreen: React.FC = () => {
 
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => window.print()}
+                onClick={handlePrintInvoice}
                 className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5"
               >
                 <Printer className="w-4 h-4" />

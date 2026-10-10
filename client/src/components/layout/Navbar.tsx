@@ -27,7 +27,7 @@ import { useAuth } from '../../context/AuthContext';
 import { GlobalSearchModal } from './GlobalSearchModal';
 
 export const Navbar: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -184,6 +184,44 @@ export const Navbar: React.FC = () => {
     },
   ];
 
+  const visibleMenuCategories = menuCategories
+    .map((category) => ({
+      ...category,
+      items: category.items.filter((item) => {
+        const [path, query = ''] = item.to.split('?');
+        const params = new URLSearchParams(query);
+        if (path === '/items') return hasPermission('manage_items');
+        if (path === '/customers') return ['manage_sales', 'manage_workshop', 'manage_purchases'].some(hasPermission);
+        if (path === '/vehicles') return hasPermission('manage_workshop') || hasPermission('manage_sales');
+        if (path === '/suppliers') return hasPermission('manage_purchases') || hasPermission('manage_expenses');
+        if (path === '/purchases') return hasPermission('manage_purchases');
+        if (path === '/sales') return hasPermission('manage_sales');
+        if (path === '/pos') return hasPermission('pos_access');
+        if (path.startsWith('/workshop')) return hasPermission('manage_workshop');
+        if (path === '/warehouses') return hasPermission('manage_inventory');
+        if (path === '/employees') {
+          return params.get('tab') === 'payroll'
+            ? hasPermission('manage_payroll')
+            : hasPermission('manage_employees');
+        }
+        if (path === '/financials') {
+          const tab = params.get('tab');
+          if (tab === 'banks') return hasPermission('manage_banks');
+          if (tab === 'cash' || tab === 'shifts') return hasPermission('manage_cashbox');
+          return hasPermission('manage_expenses');
+        }
+        if (path === '/reports') return hasPermission('view_reports');
+        if (path === '/profits') return hasPermission('view_profits');
+        if (path === '/settings') {
+          if (params.get('tab') === 'users' || params.get('tab') === 'integrations') return user?.role === 'admin';
+          if (params.get('tab') === 'audit') return hasPermission('view_audit_logs');
+          return hasPermission('manage_settings');
+        }
+        return true;
+      }),
+    }))
+    .filter((category) => category.items.length > 0);
+
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm" ref={navRef}>
       {/* 1. Top Bar: Brand, Search, Branch, User */}
@@ -231,7 +269,7 @@ export const Navbar: React.FC = () => {
           {/* Branch Selector */}
           <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
             <Building2 className="w-3.5 h-3.5 text-brand-600" />
-            <span>الفرع الرئيسي - الرياض</span>
+            <span>الفرع الرئيسي - القاهرة</span>
           </div>
 
           {/* User & Role Badge */}
@@ -257,7 +295,7 @@ export const Navbar: React.FC = () => {
       {/* 2. Mega Menu Bar (Exact 11 Items Order) */}
       <nav className="bg-slate-900 text-slate-200 border-t border-slate-800 hidden lg:block select-none">
         <div className="max-w-[1700px] mx-auto px-4 flex items-center">
-          {menuCategories.map((cat, idx) => {
+          {visibleMenuCategories.map((cat, idx) => {
             const Icon = cat.icon;
             const isOpen = activeMenu === cat.id;
 
@@ -323,7 +361,7 @@ export const Navbar: React.FC = () => {
             <Search className="w-4 h-4" />
             <span>بحث عام سريع...</span>
           </button>
-          {menuCategories.map((cat) => (
+          {visibleMenuCategories.map((cat) => (
             <div key={cat.id} className="border-b border-slate-800 pb-2">
               <div className="font-bold text-xs text-brand-400 mb-2">{cat.title}</div>
               <div className="grid grid-cols-2 gap-2 text-xs">

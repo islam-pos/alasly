@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   Users,
   Car,
@@ -15,28 +15,37 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 export const CustomersVehicles: React.FC = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'customers' | 'vehicles'>('customers');
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<'customers' | 'vehicles'>(
+    location.pathname === '/vehicles' ? 'vehicles' : 'customers',
+  );
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modals
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
+  const [whatsappEdits, setWhatsappEdits] = useState<Record<string, { number: string; optIn: boolean }>>({});
+  const [savingWhatsappId, setSavingWhatsappId] = useState<string | null>(null);
 
   // Forms
   const [customerForm, setCustomerForm] = useState({
     name: '',
     phone: '',
     mobile: '',
+    whatsappNumber: '',
+    whatsappOptIn: false,
     email: '',
-    address: 'الرياض',
+    address: 'القاهرة',
     taxNumber: '',
     customerType: 'INDIVIDUAL',
     creditLimit: 5000,
+    alsoSupplier: false,
   });
 
   const [vehicleForm, setVehicleForm] = useState({
@@ -54,9 +63,16 @@ export const CustomersVehicles: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [searchParams] = useSearchParams();
   const { success, error } = useToast();
+  const { hasPermission } = useAuth();
+  const canViewVehicles = hasPermission('manage_workshop') || hasPermission('manage_sales');
+  const canManageCustomers = canViewVehicles || hasPermission('manage_purchases');
 
   useEffect(() => {
+    setActiveTab(location.pathname === '/vehicles' ? 'vehicles' : 'customers');
     loadData();
+  }, [location.pathname]);
+
+  useEffect(() => {
     if (searchParams.get('action') === 'new') {
       setCustomerModalOpen(true);
     }
@@ -65,12 +81,16 @@ export const CustomersVehicles: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [cusRes, vehRes] = await Promise.all([api.getCustomers(), api.getVehicles()]);
-      setCustomers(cusRes);
-      setVehicles(vehRes);
-      if (cusRes.length > 0) setVehicleForm((prev) => ({ ...prev, customerId: cusRes[0].id }));
+      const [cusRes, vehRes] = await Promise.all([
+        api.getCustomers(),
+        canViewVehicles && location.pathname === '/vehicles' ? api.getVehicles() : Promise.resolve({ data: [] }),
+      ]);
+      setCustomers(cusRes.data);
+      setVehicles(vehRes.data);
+      if (cusRes.data.length > 0) setVehicleForm((prev) => ({ ...prev, customerId: cusRes.data[0].id }));
     } catch (err) {
       console.error(err);
+      error('تعذر تحميل بيانات العملاء أو المركبات');
     } finally {
       setLoading(false);
     }
@@ -92,17 +112,47 @@ export const CustomersVehicles: React.FC = () => {
         name: '',
         phone: '',
         mobile: '',
+        whatsappNumber: '',
+        whatsappOptIn: false,
         email: '',
-        address: 'الرياض',
+        address: 'القاهرة',
         taxNumber: '',
         customerType: 'INDIVIDUAL',
         creditLimit: 5000,
+        alsoSupplier: false,
       });
       loadData();
     } catch (err: any) {
       error(err.message || 'فشل حفظ العميل');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const saveCustomerWhatsapp = async (customer: any) => {
+    const values = whatsappEdits[customer.id] || {
+      number: customer.whatsappNumber || '',
+      optIn: Boolean(customer.whatsappOptIn),
+    };
+    try {
+      setSavingWhatsappId(customer.id);
+      const response = await api.updateCustomer(customer.id, {
+        whatsappNumber: values.number || null,
+        whatsappOptIn: values.optIn,
+      });
+      setCustomers((current) => current.map((entry) => entry.id === customer.id
+        ? { ...entry, ...response.data }
+        : entry));
+      setWhatsappEdits((current) => {
+        const next = { ...current };
+        delete next[customer.id];
+        return next;
+      });
+      success('تم حفظ رقم واتساب العميل');
+    } catch (err: any) {
+      error(err.message || 'تعذر حفظ رقم واتساب العميل');
+    } finally {
+      setSavingWhatsappId(null);
     }
   };
 
@@ -161,20 +211,20 @@ export const CustomersVehicles: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
+          {canManageCustomers && <button
             onClick={() => setCustomerModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20"
           >
             <Plus className="w-4 h-4" />
             <span>إضافة عميل</span>
-          </button>
-          <button
+          </button>}
+          {canViewVehicles && <button
             onClick={() => setVehicleModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold shadow-md shadow-slate-900/20"
           >
             <Car className="w-4 h-4" />
             <span>إضافة سيارة</span>
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -190,14 +240,14 @@ export const CustomersVehicles: React.FC = () => {
             >
               العملاء ({customers.length})
             </button>
-            <button
+            {canViewVehicles && <button
               onClick={() => setActiveTab('vehicles')}
               className={`px-4 py-2 rounded-lg transition-all ${
                 activeTab === 'vehicles' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
               }`}
             >
               السيارات والأسطول ({vehicles.length})
-            </button>
+            </button>}
           </div>
 
           <div className="w-full sm:w-80 relative">
@@ -229,6 +279,7 @@ export const CustomersVehicles: React.FC = () => {
                   <th className="p-3.5">اسم العميل</th>
                   <th className="p-3.5">النوع</th>
                   <th className="p-3.5">الجوال والهاتف</th>
+                  <th className="p-3.5">واتساب وموافقة الإرسال</th>
                   <th className="p-3.5">السيارات المرتبطة</th>
                   <th className="p-3.5">الرصيد المالي الحالي</th>
                   <th className="p-3.5">الحد الائتماني</th>
@@ -241,6 +292,7 @@ export const CustomersVehicles: React.FC = () => {
                     <td className="p-3.5 font-mono font-bold text-slate-700">{c.code}</td>
                     <td className="p-3.5">
                       <div className="font-bold text-slate-900">{c.name}</div>
+                      {c.supplier && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">مورد وعميل</span>}
                       {c.taxNumber && (
                         <div className="text-[10px] text-slate-400 font-mono">الرقم الضريبي: {c.taxNumber}</div>
                       )}
@@ -257,6 +309,50 @@ export const CustomersVehicles: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-3.5 font-mono text-slate-600">{c.phone}</td>
+                    <td className="p-3.5">
+                      {(() => {
+                        const values = whatsappEdits[c.id] || {
+                          number: c.whatsappNumber || '',
+                          optIn: Boolean(c.whatsappOptIn),
+                        };
+                        return (
+                          <div className="flex min-w-48 flex-col gap-1">
+                            <input
+                              type="tel"
+                              value={values.number}
+                              onChange={(event) => setWhatsappEdits((current) => ({
+                                ...current,
+                                [c.id]: { ...values, number: event.target.value },
+                              }))}
+                              placeholder="+201XXXXXXXXX"
+                              dir="ltr"
+                              className="rounded-md border px-2 py-1 font-mono"
+                            />
+                            <div className="flex items-center justify-between gap-2">
+                              <label className="flex items-center gap-1 text-[10px]">
+                                <input
+                                  type="checkbox"
+                                  checked={values.optIn}
+                                  onChange={(event) => setWhatsappEdits((current) => ({
+                                    ...current,
+                                    [c.id]: { ...values, optIn: event.target.checked },
+                                  }))}
+                                />
+                                وافق على الرسائل
+                              </label>
+                              <button
+                                type="button"
+                                disabled={savingWhatsappId === c.id}
+                                onClick={() => saveCustomerWhatsapp(c)}
+                                className="rounded bg-blue-50 px-2 py-1 font-bold text-blue-700 disabled:opacity-50"
+                              >
+                                حفظ
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td className="p-3.5">
                       <div className="flex flex-wrap gap-1">
                         {c.vehicles?.map((v: any) => (
@@ -407,6 +503,22 @@ export const CustomersVehicles: React.FC = () => {
               </div>
 
               <div>
+                <label className="block font-bold text-slate-700 mb-1">رقم واتساب العميل</label>
+                <input
+                  type="tel"
+                  value={customerForm.whatsappNumber}
+                  onChange={(e) => setCustomerForm({ ...customerForm, whatsappNumber: e.target.value })}
+                  placeholder="+201XXXXXXXXX"
+                  dir="ltr"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
+                />
+              </div>
+              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-700">
+                <input type="checkbox" checked={customerForm.whatsappOptIn} onChange={(e) => setCustomerForm({ ...customerForm, whatsappOptIn: e.target.checked })} className="h-4 w-4" />
+                وافق العميل على استلام الفواتير عبر واتساب
+              </label>
+
+              <div>
                 <label className="block font-bold text-slate-700 mb-1">الحد الائتماني (ر.س)</label>
                 <input
                   type="number"
@@ -415,6 +527,16 @@ export const CustomersVehicles: React.FC = () => {
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
                 />
               </div>
+
+              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={customerForm.alsoSupplier}
+                  onChange={(e) => setCustomerForm({ ...customerForm, alsoSupplier: e.target.checked })}
+                  className="h-4 w-4 accent-brand-600"
+                />
+                تسجيل هذا العميل كمورد أيضًا
+              </label>
 
               <div className="flex gap-2 pt-3">
                 <button

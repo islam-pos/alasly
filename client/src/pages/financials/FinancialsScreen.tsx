@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Wallet, DollarSign, ArrowUpRight, ArrowDownLeft, 
   Building2, Receipt, Plus, Printer, CheckCircle2, 
@@ -6,10 +7,17 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { PrintModal, CashVoucherPrint } from '../../components/common/PrintTemplates';
+import { exportToExcel, exportToPdf, formatExportDate } from '../../utils/exports';
 
 export const FinancialsScreen: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
+  const canManageExpenses = hasPermission('manage_expenses');
+  const canManageCashbox = hasPermission('manage_cashbox');
+  const canManageBanks = hasPermission('manage_banks');
   const [activeTab, setActiveTab] = useState<'expenses' | 'revenues' | 'cashbox' | 'shifts' | 'banks'>('expenses');
 
   // Data states
@@ -71,14 +79,15 @@ export const FinancialsScreen: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
+      const empty = { data: [] };
       const [eRes, rRes, cRes, sRes, bRes, cbRes, expCatRes] = await Promise.all([
-        api.financials.getExpenses(),
-        api.financials.getRevenues(),
-        api.financials.getCashTransactions(),
-        api.financials.getCashShifts(),
-        api.financials.getBanks(),
-        api.financials.getCashboxes(),
-        api.financials.getExpenseCategories()
+        canManageExpenses ? api.financials.getExpenses() : Promise.resolve(empty),
+        canManageExpenses ? api.financials.getRevenues() : Promise.resolve(empty),
+        canManageCashbox ? api.financials.getCashTransactions() : Promise.resolve(empty),
+        canManageCashbox ? api.financials.getCashShifts() : Promise.resolve(empty),
+        canManageBanks ? api.financials.getBanks() : Promise.resolve(empty),
+        canManageCashbox ? api.financials.getCashboxes() : Promise.resolve(empty),
+        canManageExpenses ? api.financials.getExpenseCategories() : Promise.resolve(empty)
       ]);
       setExpenses(eRes.data);
       setRevenues(rRes.data);
@@ -98,11 +107,51 @@ export const FinancialsScreen: React.FC = () => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    if ((requestedTab === 'expenses' || requestedTab === 'revenues' || requestedTab === 'categories') && canManageExpenses) setActiveTab(requestedTab === 'revenues' ? 'revenues' : 'expenses');
+    else if ((requestedTab === 'cash' || requestedTab === 'cashbox') && canManageCashbox) setActiveTab('cashbox');
+    else if (requestedTab === 'shifts' && canManageCashbox) setActiveTab('shifts');
+    else if (requestedTab === 'banks' && canManageBanks) setActiveTab('banks');
+    else if (canManageExpenses) setActiveTab('expenses');
+    else if (canManageCashbox) setActiveTab('cashbox');
+    else if (canManageBanks) setActiveTab('banks');
+  }, [searchParams, canManageExpenses, canManageCashbox, canManageBanks]);
+
   // Top KPIs
   const totalCashboxBalance = cashboxes.reduce((sum, cb) => sum + (cb.balance || 0), 0);
   const totalBankBalance = banks.reduce((sum, b) => sum + (b.currentBalance || 0), 0);
   const totalExpenses = expenses.reduce((sum, e) => sum + (e.totalAmount || 0), 0);
   const totalRevenues = revenues.reduce((sum, r) => sum + (r.amount || 0), 0);
+
+  const exportFinancialRecords = (format: 'excel' | 'pdf') => {
+    const records =
+      activeTab === 'expenses'
+        ? expenses.map((record) => [record.expenseNumber, formatExportDate(record.date), record.category?.name || '', record.beneficiary || '', record.totalAmount, record.paymentMethod])
+        : activeTab === 'revenues'
+          ? revenues.map((record) => [record.revenueNumber, formatExportDate(record.date), record.category?.name || '', record.source || '', record.amount, record.paymentMethod])
+          : activeTab === 'cashbox'
+            ? cashTransactions.map((record) => [record.type, formatExportDate(record.date), record.partyName || '', record.description || '', record.amount, record.cashbox?.name || ''])
+            : activeTab === 'shifts'
+              ? shifts.map((record) => [record.shiftNumber, formatExportDate(record.startTime), record.cashierName || '', record.status, record.expectedCash, record.actualCash])
+              : banks.map((record) => [record.bankName, record.accountNumber || '', record.currentBalance]);
+    const headers =
+      activeTab === 'expenses'
+        ? ['رقم السند', 'التاريخ', 'التصنيف', 'المستفيد', 'المبلغ', 'طريقة الدفع']
+        : activeTab === 'revenues'
+          ? ['رقم السند', 'التاريخ', 'التصنيف', 'المصدر', 'المبلغ', 'طريقة الدفع']
+          : activeTab === 'cashbox'
+            ? ['النوع', 'التاريخ', 'الطرف', 'الوصف', 'المبلغ', 'الصندوق']
+            : activeTab === 'shifts'
+              ? ['رقم الوردية', 'التاريخ', 'الكاشير', 'الحالة', 'المتوقع', 'الفعلي']
+              : ['البنك', 'رقم الحساب', 'الرصيد'];
+    const title = `السجلات المالية - ${activeTab}`;
+    if (format === 'excel') {
+      exportToExcel(title, records.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']))));
+    } else {
+      exportToPdf(title, headers, records);
+    }
+  };
 
   // Submit Expense
   const handleCreateExpense = async (e: React.FormEvent) => {
@@ -197,26 +246,38 @@ export const FinancialsScreen: React.FC = () => {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            onClick={() => exportFinancialRecords('excel')}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2.5 rounded-xl font-bold text-sm"
+          >
+            Excel
+          </button>
+          <button
+            onClick={() => exportFinancialRecords('pdf')}
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-3 py-2.5 rounded-xl font-bold text-sm"
+          >
+            PDF
+          </button>
+          {canManageCashbox && <button
             onClick={() => setIsVoucherModalOpen(true)}
             className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition"
           >
             <Receipt className="w-4 h-4" />
             سند قبض / صرف
-          </button>
-          <button
+          </button>}
+          {canManageExpenses && <button
             onClick={() => setIsExpenseModalOpen(true)}
             className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition"
           >
             <ArrowDownLeft className="w-4 h-4" />
             تسجيل مصروف
-          </button>
-          <button
+          </button>}
+          {canManageExpenses && <button
             onClick={() => setIsRevenueModalOpen(true)}
             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition"
           >
             <ArrowUpRight className="w-4 h-4" />
             تسجيل إيراد
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -269,7 +330,7 @@ export const FinancialsScreen: React.FC = () => {
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 bg-white px-6 pt-2 rounded-t-2xl overflow-x-auto">
-        <button
+        {canManageExpenses && <button
           onClick={() => setActiveTab('expenses')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
             activeTab === 'expenses' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -277,8 +338,8 @@ export const FinancialsScreen: React.FC = () => {
         >
           <ArrowDownLeft className="w-4 h-4" />
           سندات المصروفات ({expenses.length})
-        </button>
-        <button
+        </button>}
+        {canManageExpenses && <button
           onClick={() => setActiveTab('revenues')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
             activeTab === 'revenues' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -286,8 +347,8 @@ export const FinancialsScreen: React.FC = () => {
         >
           <ArrowUpRight className="w-4 h-4" />
           سندات الإيرادات ({revenues.length})
-        </button>
-        <button
+        </button>}
+        {canManageCashbox && <button
           onClick={() => setActiveTab('cashbox')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
             activeTab === 'cashbox' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -295,8 +356,8 @@ export const FinancialsScreen: React.FC = () => {
         >
           <Receipt className="w-4 h-4" />
           حركات الصناديق وسندات القبض/الصرف
-        </button>
-        <button
+        </button>}
+        {canManageCashbox && <button
           onClick={() => setActiveTab('shifts')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
             activeTab === 'shifts' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -304,8 +365,8 @@ export const FinancialsScreen: React.FC = () => {
         >
           <Clock className="w-4 h-4" />
           ورديات الكاشير والتسوية ({shifts.length})
-        </button>
-        <button
+        </button>}
+        {canManageBanks && <button
           onClick={() => setActiveTab('banks')}
           className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
             activeTab === 'banks' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -313,11 +374,11 @@ export const FinancialsScreen: React.FC = () => {
         >
           <Building2 className="w-4 h-4" />
           الحسابات المصرفية ({banks.length})
-        </button>
+        </button>}
       </div>
 
       {/* Tab 1: Expenses */}
-      {activeTab === 'expenses' && (
+      {activeTab === 'expenses' && canManageExpenses && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6">
           <div className="overflow-x-auto border rounded-xl">
             <table className="w-full text-right text-sm">
@@ -384,7 +445,7 @@ export const FinancialsScreen: React.FC = () => {
       )}
 
       {/* Tab 2: Revenues */}
-      {activeTab === 'revenues' && (
+      {activeTab === 'revenues' && canManageExpenses && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6">
           <div className="overflow-x-auto border rounded-xl">
             <table className="w-full text-right text-sm">
@@ -447,7 +508,7 @@ export const FinancialsScreen: React.FC = () => {
       )}
 
       {/* Tab 3: Cash Transactions */}
-      {activeTab === 'cashbox' && (
+      {activeTab === 'cashbox' && canManageCashbox && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {cashboxes.map(cb => (
@@ -519,7 +580,7 @@ export const FinancialsScreen: React.FC = () => {
       )}
 
       {/* Tab 4: Cash Shifts */}
-      {activeTab === 'shifts' && (
+      {activeTab === 'shifts' && canManageCashbox && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6">
           <div className="overflow-x-auto border rounded-xl">
             <table className="w-full text-right text-sm">
@@ -587,7 +648,7 @@ export const FinancialsScreen: React.FC = () => {
       )}
 
       {/* Tab 5: Bank Accounts */}
-      {activeTab === 'banks' && (
+      {activeTab === 'banks' && canManageBanks && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {banks.map(bank => (
