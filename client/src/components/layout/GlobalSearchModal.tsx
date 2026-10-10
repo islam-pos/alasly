@@ -230,7 +230,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
                       <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
                         <span className="font-mono text-[11px] bg-slate-200 px-1.5 py-0.5 rounded">{it.sku}</span>
                         <span>المخزون: {it.totalQuantity}</span>
-                        <span className="font-bold text-emerald-600">{it.sellPrice} ر.س</span>
+                        <span className="font-bold text-emerald-600">{it.sellPrice} ج.م</span>
                       </div>
                     </div>
                     <ArrowLeft className="w-4 h-4 text-slate-400 group-hover:text-emerald-700 group-hover:-translate-x-1 transition-all" />
@@ -287,7 +287,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
                       </span>
                       <div>
                         <div className="text-sm font-semibold text-slate-800">
-                          {inv.customer?.name || 'عميل نقدي'} - {inv.grandTotal} ر.س
+                          {inv.customer?.name || 'عميل نقدي'} - {inv.grandTotal} ج.م
                         </div>
                         <div className="text-xs text-slate-400">
                           {new Date(inv.date).toLocaleDateString('ar-SA')} • {inv.invoiceType}

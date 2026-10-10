@@ -303,7 +303,7 @@ export const Suppliers: React.FC = () => {
                         s.currentBalance > 0 ? 'text-rose-600' : 'text-emerald-600'
                       }`}
                     >
-                      {s.currentBalance.toLocaleString()} ر.س
+                      {s.currentBalance.toLocaleString()} ج.م
                     </span>
                   </td>
                   <td className="p-3.5 font-bold text-brand-700">
@@ -474,19 +474,19 @@ export const Suppliers: React.FC = () => {
               <div>
                 <span className="text-slate-400 block font-medium">إجمالي المشتريات:</span>
                 <span className="font-bold text-slate-900 text-sm mt-0.5 block font-mono">
-                  {selectedStatement.totalPurchases.toLocaleString()} ر.س
+                  {selectedStatement.totalPurchases.toLocaleString()} ج.م
                 </span>
               </div>
               <div>
                 <span className="text-slate-400 block font-medium">إجمالي المسدد:</span>
                 <span className="font-bold text-emerald-600 text-sm mt-0.5 block font-mono">
-                  {selectedStatement.totalPaid.toLocaleString()} ر.س
+                  {selectedStatement.totalPaid.toLocaleString()} ج.م
                 </span>
               </div>
               <div>
                 <span className="text-slate-400 block font-medium">الرصيد المستحق الحالي:</span>
                 <span className="font-bold text-rose-600 text-sm mt-0.5 block font-mono">
-                  {selectedStatement.totalRemaining.toLocaleString()} ر.س
+                  {selectedStatement.totalRemaining.toLocaleString()} ج.م
                 </span>
               </div>
             </div>}
@@ -515,7 +515,7 @@ export const Suppliers: React.FC = () => {
                       <td className="p-2.5">رصيد افتتاحي</td>
                       <td className="p-2.5 font-mono">{formatExportNumber(balance)}</td>
                       <td className="p-2.5 font-mono">{formatExportNumber(0)}</td>
-                      <td className="p-2.5 font-mono font-bold">{formatExportNumber(balance)} ر.س</td>
+                      <td className="p-2.5 font-mono font-bold">{formatExportNumber(balance)} ج.م</td>
                     </tr>] : [];
                     const transactions = (supplier.statement || []).map((transaction: any) => {
                       balance += (transaction.debit || 0) - (transaction.credit || 0);
@@ -526,7 +526,7 @@ export const Suppliers: React.FC = () => {
                         <td className="p-2.5">{transaction.type}</td>
                         <td className="p-2.5 font-mono">{formatExportNumber(transaction.debit)}</td>
                         <td className="p-2.5 font-mono">{formatExportNumber(transaction.credit)}</td>
-                        <td className="p-2.5 font-mono font-bold">{formatExportNumber(balance)} ر.س</td>
+                        <td className="p-2.5 font-mono font-bold">{formatExportNumber(balance)} ج.م</td>
                       </tr>;
                     });
                     return [...openingRow, ...transactions];

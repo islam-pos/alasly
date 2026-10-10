@@ -326,10 +326,10 @@ export const PurchasesList: React.FC = () => {
                     <td className="p-3.5 font-mono text-slate-500">{inv.supplierInvoiceNumber || '-'}</td>
                     <td className="p-3.5 text-slate-600">{inv.warehouse?.name}</td>
                     <td className="p-3.5 font-black text-slate-900 font-mono">
-                      {inv.grandTotal.toLocaleString()} ر.س
+                      {inv.grandTotal.toLocaleString()} ج.م
                     </td>
-                    <td className="p-3.5 font-mono text-emerald-600">{inv.paidAmount.toLocaleString()} ر.س</td>
-                    <td className="p-3.5 font-mono text-rose-600">{inv.remainingAmount.toLocaleString()} ر.س</td>
+                    <td className="p-3.5 font-mono text-emerald-600">{inv.paidAmount.toLocaleString()} ج.م</td>
+                    <td className="p-3.5 font-mono text-rose-600">{inv.remainingAmount.toLocaleString()} ج.م</td>
                     <td className="p-3.5 font-semibold text-slate-600">{inv.paymentMethod}</td>
                     <td className="p-3.5">
                       <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
@@ -582,15 +582,15 @@ export const PurchasesList: React.FC = () => {
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                 <div className="flex justify-between">
                   <span>المجموع الفرعي:</span>
-                  <span className="font-bold">{subtotal.toLocaleString()} ر.س</span>
+                  <span className="font-bold">{subtotal.toLocaleString()} ج.م</span>
                 </div>
                 <div className="flex justify-between">
                   <span>ضريبة القيمة المضافة (15%):</span>
-                  <span className="font-bold">{taxAmount.toFixed(2)} ر.س</span>
+                  <span className="font-bold">{taxAmount.toFixed(2)} ج.م</span>
                 </div>
                 <div className="flex justify-between text-brand-700 font-black text-sm pt-2 border-t border-slate-200">
                   <span>الإجمالي النهائي:</span>
-                  <span>{grandTotal.toFixed(2)} ر.س</span>
+                  <span>{grandTotal.toFixed(2)} ج.م</span>
                 </div>
               </div>
 
@@ -609,7 +609,7 @@ export const PurchasesList: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">المبلغ المسدد الآن (ر.س)</label>
+                  <label className="block font-bold text-slate-700 mb-1">المبلغ المسدد الآن (ج.م)</label>
                   <input
                     type="number"
                     value={paidAmount}

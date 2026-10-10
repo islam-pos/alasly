@@ -279,7 +279,7 @@ export const JobCardsList: React.FC = () => {
                     </td>
                     <td className="p-3.5">{statusBadge(jc.status)}</td>
                     <td className="p-3.5 font-bold text-slate-900">
-                      {jc.grandTotal ? `${jc.grandTotal.toLocaleString()} ر.س` : '-'}
+                      {jc.grandTotal ? `${jc.grandTotal.toLocaleString()} ج.م` : '-'}
                     </td>
                     <td className="p-3.5 text-slate-500 font-mono text-[11px]">
                       {new Date(jc.createdAt).toLocaleDateString('ar-SA')}

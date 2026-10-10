@@ -138,7 +138,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="text-xl font-black text-slate-900">
-            {stats?.salesToday?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ر.س</span>
+            {stats?.salesToday?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ج.م</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-1">عدد الفواتير اليوم: {stats?.todayInvoicesCount || 0}</div>
         </div>
@@ -152,7 +152,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="text-xl font-black text-slate-900">
-            {stats?.salesMonth?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ر.س</span>
+            {stats?.salesMonth?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ج.م</span>
           </div>
           <div className="text-[11px] text-emerald-600 font-semibold mt-1">شامل القطع والصيانة</div>
         </div>
@@ -166,7 +166,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="text-xl font-black text-slate-900">
-            {stats?.maintenanceRevenue?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ر.س</span>
+            {stats?.maintenanceRevenue?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ج.م</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-1">فواتير أوامر الإصلاح</div>
         </div>
@@ -180,7 +180,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="text-xl font-black text-slate-900">
-            {stats?.sparePartsCost?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ر.س</span>
+            {stats?.sparePartsCost?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ج.م</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-1">تكلفة البضاعة المباعة COGS</div>
         </div>
@@ -194,7 +194,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="text-xl font-black text-slate-900">
-            {stats?.expensesMonth?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ر.س</span>
+            {stats?.expensesMonth?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ج.م</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-1">تشغيلية، إيجار وكهرباء</div>
         </div>
@@ -208,7 +208,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="text-xl font-black text-emerald-600">
-            {stats?.netProfit?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ر.س</span>
+            {stats?.netProfit?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ج.م</span>
           </div>
           <div className="text-[11px] text-teal-600 font-semibold mt-1">صافي بعد التكاليف والمصروفات</div>
         </div>
@@ -264,7 +264,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="text-xl font-black text-slate-900">
-            {stats?.customerReceivables?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ر.س</span>
+            {stats?.customerReceivables?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ج.م</span>
           </div>
           <div className="text-[11px] text-orange-700 font-medium mt-1">ذمم مدينة (AR)</div>
         </div>
@@ -278,7 +278,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="text-xl font-black text-slate-900">
-            {stats?.supplierPayables?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ر.س</span>
+            {stats?.supplierPayables?.toLocaleString() || 0} <span className="text-xs font-normal text-slate-500">ج.م</span>
           </div>
           <div className="text-[11px] text-red-700 font-medium mt-1">ذمم دائنة (AP)</div>
         </div>
@@ -292,7 +292,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="text-xl font-black text-slate-900">
-            {Math.round(stats?.inventoryValue || 0).toLocaleString()} <span className="text-xs font-normal text-slate-500">ر.س</span>
+            {Math.round(stats?.inventoryValue || 0).toLocaleString()} <span className="text-xs font-normal text-slate-500">ج.م</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-1">بالتكلفة في الـ 3 مستودعات</div>
         </div>
@@ -319,7 +319,7 @@ export const Dashboard: React.FC = () => {
                 <XAxis dataKey="day" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  formatter={(value: any) => [`${value} ر.س`, '']}
+                  formatter={(value: any) => [`${value} ج.م`, '']}
                   contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', color: '#fff', border: 'none' }}
                 />
                 <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
@@ -356,7 +356,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="text-left">
                   <div className="text-xs font-bold text-slate-900">{item.quantity} قطعة</div>
-                  <div className="text-[10px] text-emerald-600 font-semibold">{item.total.toLocaleString()} ر.س</div>
+                  <div className="text-[10px] text-emerald-600 font-semibold">{item.total.toLocaleString()} ج.م</div>
                 </div>
               </div>
             ))}
@@ -386,7 +386,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="text-left">
                   <div className="text-xs font-bold text-slate-900">{srv.count} سيارة</div>
-                  <div className="text-[10px] text-brand-600 font-semibold">{srv.revenue.toLocaleString()} ر.س</div>
+                  <div className="text-[10px] text-brand-600 font-semibold">{srv.revenue.toLocaleString()} ج.م</div>
                 </div>
               </div>
             ))}
@@ -418,7 +418,7 @@ export const Dashboard: React.FC = () => {
                   </div>
                 </div>
                 <div className="text-left">
-                  <div className="text-xs font-bold text-slate-900">{tech.revenue.toLocaleString()} ر.س</div>
+                  <div className="text-xs font-bold text-slate-900">{tech.revenue.toLocaleString()} ج.م</div>
                   <div className="text-[10px] text-emerald-600 font-semibold">إجمالي أجور اليد</div>
                 </div>
               </div>

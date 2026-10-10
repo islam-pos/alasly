@@ -376,10 +376,10 @@ export const CustomersVehicles: React.FC = () => {
                             : 'text-emerald-600'
                         }`}
                       >
-                        {c.currentBalance.toLocaleString()} ر.س
+                        {c.currentBalance.toLocaleString()} ج.م
                       </span>
                     </td>
-                    <td className="p-3.5 font-mono text-slate-500">{c.creditLimit.toLocaleString()} ر.س</td>
+                    <td className="p-3.5 font-mono text-slate-500">{c.creditLimit.toLocaleString()} ج.م</td>
                     <td className="p-3.5 text-center font-bold text-brand-600">
                       {c._count?.repairOrders || 0} أمر
                     </td>
@@ -519,7 +519,7 @@ export const CustomersVehicles: React.FC = () => {
               </label>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">الحد الائتماني (ر.س)</label>
+                <label className="block font-bold text-slate-700 mb-1">الحد الائتماني (ج.م)</label>
                 <input
                   type="number"
                   value={customerForm.creditLimit}

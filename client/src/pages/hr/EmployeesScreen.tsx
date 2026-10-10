@@ -312,7 +312,7 @@ export const EmployeesScreen: React.FC = () => {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-slate-500">عمولات الفنيين المعلقة</span>
-            <div className="text-2xl font-black text-amber-600 mt-1">{pendingCommissionsSum.toLocaleString()} ر.س</div>
+            <div className="text-2xl font-black text-amber-600 mt-1">{pendingCommissionsSum.toLocaleString()} ج.م</div>
             <span className="text-[11px] text-amber-600 font-medium">مستحقة عن أوامر الصيانة المنفذة</span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
@@ -323,7 +323,7 @@ export const EmployeesScreen: React.FC = () => {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-slate-500">صافي مسير رواتب الشهر</span>
-            <div className="text-2xl font-black text-purple-700 mt-1">{currentMonthPayrollSum.toLocaleString()} ر.س</div>
+            <div className="text-2xl font-black text-purple-700 mt-1">{currentMonthPayrollSum.toLocaleString()} ج.م</div>
             <span className="text-[11px] text-purple-600 font-medium">شامل الراتب الأساسي والبدلات والعمولة</span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
@@ -431,7 +431,7 @@ export const EmployeesScreen: React.FC = () => {
                       <div className="text-slate-400">{emp.email}</div>
                     </td>
                     <td className="py-3 px-4 text-left font-mono font-bold text-slate-800">
-                      {emp.salary.toLocaleString()} ر.س
+                      {emp.salary.toLocaleString()} ج.م
                     </td>
                     <td className="py-3 px-4 text-center font-mono text-xs">
                       {emp.commissionRate > 0 ? (
@@ -553,9 +553,9 @@ export const EmployeesScreen: React.FC = () => {
                         </div>
                         <div className="text-slate-400">{com.repairOrder?.customer?.name}</div>
                       </td>
-                      <td className="py-3 px-4 text-left font-mono">{com.laborTotal?.toLocaleString()} ر.س</td>
+                      <td className="py-3 px-4 text-left font-mono">{com.laborTotal?.toLocaleString()} ج.م</td>
                       <td className="py-3 px-4 text-center font-mono font-bold text-xs">{com.rate}%</td>
-                      <td className="py-3 px-4 text-left font-mono font-black text-emerald-600">{com.amount?.toLocaleString()} ر.س</td>
+                      <td className="py-3 px-4 text-left font-mono font-black text-emerald-600">{com.amount?.toLocaleString()} ج.م</td>
                       <td className="py-3 px-4 text-center">
                         <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
                           com.status === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
@@ -646,11 +646,11 @@ export const EmployeesScreen: React.FC = () => {
                       <td className="py-3 px-4 font-bold text-slate-900">{pay.employee?.name}</td>
                       <td className="py-3 px-4 text-xs text-slate-600">{pay.employee?.job?.nameAr}</td>
                       <td className="py-3 px-4 text-center font-mono text-xs">{formatWorkDuration(pay.attendedMinutes)}</td>
-                      <td className="py-3 px-4 text-left font-mono">{pay.basicSalary.toLocaleString()} ر.س</td>
-                      <td className="py-3 px-4 text-left font-mono text-slate-600">{(pay.allowances || 0).toLocaleString()} ر.س</td>
-                      <td className="py-3 px-4 text-left font-mono font-bold text-emerald-600">{(pay.commissions || 0).toLocaleString()} ر.س</td>
-                      <td className="py-3 px-4 text-left font-mono text-rose-600">{(pay.deductions || 0).toLocaleString()} ر.س</td>
-                      <td className="py-3 px-4 text-left font-mono font-black text-blue-700 text-base">{pay.netSalary.toLocaleString()} ر.س</td>
+                      <td className="py-3 px-4 text-left font-mono">{pay.basicSalary.toLocaleString()} ج.م</td>
+                      <td className="py-3 px-4 text-left font-mono text-slate-600">{(pay.allowances || 0).toLocaleString()} ج.م</td>
+                      <td className="py-3 px-4 text-left font-mono font-bold text-emerald-600">{(pay.commissions || 0).toLocaleString()} ج.م</td>
+                      <td className="py-3 px-4 text-left font-mono text-rose-600">{(pay.deductions || 0).toLocaleString()} ج.م</td>
+                      <td className="py-3 px-4 text-left font-mono font-black text-blue-700 text-base">{pay.netSalary.toLocaleString()} ج.م</td>
                       <td className="py-3 px-4 text-center">
                         <span className="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-bold">
                           معتمد للمراجعة
@@ -756,7 +756,7 @@ export const EmployeesScreen: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">الراتب الأساسي (ر.س):</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">الراتب الأساسي (ج.م):</label>
                   <input
                     type="number"
                     step="0.01"

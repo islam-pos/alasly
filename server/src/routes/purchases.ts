@@ -203,7 +203,7 @@ router.post('/invoices', async (req, res) => {
       return createdInvoice;
     });
 
-    await logAudit({ action: 'POST', entity: 'PurchaseInvoice', entityId: invoice.id, details: `اعتماد فاتورة مشتريات ${invoice.invoiceNumber} بمبلغ ${grandTotal} ر.س` });
+    await logAudit({ action: 'POST', entity: 'PurchaseInvoice', entityId: invoice.id, details: `اعتماد فاتورة مشتريات ${invoice.invoiceNumber} بمبلغ ${grandTotal} ج.م` });
 
     let whatsappNotification: { sent: boolean; reason?: string } | { sent: false; error: string } = {
       sent: false,

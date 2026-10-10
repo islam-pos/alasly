@@ -42,6 +42,9 @@ router.put('/company', async (req, res) => {
       }
     }
 
+    data.currency = 'EGP';
+    data.currencySymbol = 'ج.م';
+
     if (input.commercialRegister === undefined && typeof input.crNumber === 'string') {
       data.commercialRegister = input.crNumber;
     }

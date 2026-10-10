@@ -100,7 +100,7 @@ router.post('/expenses', async (req, res) => {
       return exp;
     });
 
-    await logAudit({ action: 'CREATE', entity: 'Expense', entityId: expense.id, details: `تسجيل سند مصروف ${expenseNumber} بمبلغ ${totalAmount} ر.س` });
+    await logAudit({ action: 'CREATE', entity: 'Expense', entityId: expense.id, details: `تسجيل سند مصروف ${expenseNumber} بمبلغ ${totalAmount} ج.م` });
 
     res.status(201).json(expense);
   } catch (err: any) {
@@ -158,7 +158,7 @@ router.post('/revenues', async (req, res) => {
       return rev;
     });
 
-    await logAudit({ action: 'CREATE', entity: 'Revenue', entityId: revenue.id, details: `تسجيل إيراد ${revenueNumber} بمبلغ ${amountVal} ر.س` });
+    await logAudit({ action: 'CREATE', entity: 'Revenue', entityId: revenue.id, details: `تسجيل إيراد ${revenueNumber} بمبلغ ${amountVal} ج.م` });
 
     res.status(201).json(revenue);
   } catch (err: any) {
@@ -247,7 +247,7 @@ router.post('/cash/vouchers', async (req, res) => {
       action: type,
       entity: 'CashTransaction',
       entityId: transaction.id,
-      details: `${type === 'RECEIPT' ? 'سند قبض' : 'سند صرف'} بمبلغ ${amountVal} ر.س لصالح/من ${partyName}`,
+      details: `${type === 'RECEIPT' ? 'سند قبض' : 'سند صرف'} بمبلغ ${amountVal} ج.م لصالح/من ${partyName}`,
     });
 
     res.status(201).json(transaction);
@@ -295,7 +295,7 @@ router.post('/cash/shifts/close', async (req, res) => {
       action: 'CLOSE_SHIFT',
       entity: 'CashShift',
       entityId: shiftId,
-      details: `إغلاق وردية الكاشير رقم ${shift.shiftNumber} بفارق نقدي ${diff} ر.س`,
+      details: `إغلاق وردية الكاشير رقم ${shift.shiftNumber} بفارق نقدي ${diff} ج.م`,
     });
 
     res.json(closed);

@@ -198,8 +198,8 @@ export const SettingsScreen: React.FC = () => {
         mobile: company.mobile,
         email: company.email,
         website: company.website,
-        currency: company.currency,
-        currencySymbol: company.currencySymbol,
+        currency: 'EGP',
+        currencySymbol: 'ج.م',
         taxRate: company.taxRate,
         city: company.city,
         country: company.country,
@@ -561,11 +561,11 @@ export const SettingsScreen: React.FC = () => {
               </label>
               <label className="text-xs font-bold text-slate-700">
                 <span className="mb-1 block">رمز العملة</span>
-                <input value={company.currencySymbol || ''} onChange={(e) => setCompany({ ...company, currencySymbol: e.target.value })} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" />
+                <input value="ج.م" readOnly className="w-full rounded-xl border bg-slate-100 px-3 py-2 text-sm font-normal" />
               </label>
               <label className="text-xs font-bold text-slate-700">
-                <span className="mb-1 block">رمز العملة الداخلي</span>
-                <input value={company.currency || ''} onChange={(e) => setCompany({ ...company, currency: e.target.value })} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" dir="ltr" />
+                <span className="mb-1 block">رمز العملة الدولي</span>
+                <input value="EGP" readOnly className="w-full rounded-xl border bg-slate-100 px-3 py-2 text-sm font-normal" dir="ltr" />
               </label>
             </div>
 

@@ -237,7 +237,7 @@ router.post('/pos', async (req, res) => {
       action: 'POST',
       entity: 'SalesInvoice',
       entityId: invoice.id,
-      details: `إصدار فاتورة بيع كاشير ${invoice.invoiceNumber} بمبلغ ${grandTotal} ر.س`,
+      details: `إصدار فاتورة بيع كاشير ${invoice.invoiceNumber} بمبلغ ${grandTotal} ج.م`,
     });
 
     let whatsappNotification: { sent: boolean; reason?: string } | { sent: false; error: string } = {
@@ -346,7 +346,7 @@ router.post('/returns', async (req, res) => {
       return ret;
     });
 
-    await logAudit({ action: 'POST', entity: 'SalesReturn', entityId: returnRecord.id, details: `إصدار مرتجع مبيعات ${returnNumber} بمبلغ ${totalAmount} ر.س` });
+    await logAudit({ action: 'POST', entity: 'SalesReturn', entityId: returnRecord.id, details: `إصدار مرتجع مبيعات ${returnNumber} بمبلغ ${totalAmount} ج.م` });
 
     res.status(201).json(returnRecord);
   } catch (err: any) {

@@ -215,15 +215,15 @@ export const ReportsCenter: React.FC = () => {
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
               <span className="text-xs text-slate-500 font-semibold">إجمالي المبيعات (شامل الضريبة)</span>
-              <div className="text-2xl font-black text-blue-700 mt-1">{(salesReport.summary?.totalSales || 0).toLocaleString()} ر.س</div>
+              <div className="text-2xl font-black text-blue-700 mt-1">{(salesReport.summary?.totalSales || 0).toLocaleString()} ج.م</div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
               <span className="text-xs text-slate-500 font-semibold">ضريبة القيمة المضافة المحصلة</span>
-              <div className="text-2xl font-black text-slate-800 mt-1">{(salesReport.summary?.totalTax || 0).toLocaleString()} ر.س</div>
+              <div className="text-2xl font-black text-slate-800 mt-1">{(salesReport.summary?.totalTax || 0).toLocaleString()} ج.م</div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
               <span className="text-xs text-slate-500 font-semibold">إجمالي المبالغ المحصلة</span>
-              <div className="text-2xl font-black text-emerald-600 mt-1">{(salesReport.summary?.totalPaid || 0).toLocaleString()} ر.س</div>
+              <div className="text-2xl font-black text-emerald-600 mt-1">{(salesReport.summary?.totalPaid || 0).toLocaleString()} ج.م</div>
             </div>
           </div>
 
@@ -253,9 +253,9 @@ export const ReportsCenter: React.FC = () => {
                         {inv.invoiceType === 'WORKSHOP' ? 'أمر صيانة' : inv.invoiceType === 'POS' ? 'كاشير POS' : 'مبيعات'}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-left font-mono">{inv.subtotal?.toLocaleString()} ر.س</td>
-                    <td className="py-3 px-4 text-left font-mono text-slate-500">{inv.taxAmount?.toLocaleString()} ر.س</td>
-                    <td className="py-3 px-4 text-left font-mono font-black text-slate-900">{inv.grandTotal?.toLocaleString()} ر.س</td>
+                    <td className="py-3 px-4 text-left font-mono">{inv.subtotal?.toLocaleString()} ج.م</td>
+                    <td className="py-3 px-4 text-left font-mono text-slate-500">{inv.taxAmount?.toLocaleString()} ج.م</td>
+                    <td className="py-3 px-4 text-left font-mono font-black text-slate-900">{inv.grandTotal?.toLocaleString()} ج.م</td>
                     <td className="py-3 px-4 text-center">
                       <span className="text-xs px-2 py-0.5 rounded font-bold bg-slate-100 text-slate-700">
                         {inv.paymentMethod === 'CASH' ? 'نقدي' : inv.paymentMethod === 'CARD' ? 'مدى' : 'تحويل'}
@@ -280,15 +280,15 @@ export const ReportsCenter: React.FC = () => {
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
               <span className="text-xs text-slate-500 font-semibold">القيمة الإجمالية بسعر التكلفة</span>
-              <div className="text-2xl font-black text-blue-700 mt-1">{(inventoryReport.summary?.totalValuationCost || 0).toLocaleString()} ر.س</div>
+              <div className="text-2xl font-black text-blue-700 mt-1">{(inventoryReport.summary?.totalValuationCost || 0).toLocaleString()} ج.م</div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
               <span className="text-xs text-slate-500 font-semibold">القيمة التقديرية بسعر البيع</span>
-              <div className="text-2xl font-black text-emerald-600 mt-1">{(inventoryReport.summary?.totalValuationSell || 0).toLocaleString()} ر.س</div>
+              <div className="text-2xl font-black text-emerald-600 mt-1">{(inventoryReport.summary?.totalValuationSell || 0).toLocaleString()} ج.م</div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
               <span className="text-xs text-slate-500 font-semibold">الربح المتوقع عند البيع</span>
-              <div className="text-2xl font-black text-purple-700 mt-1">{(inventoryReport.summary?.expectedProfit || 0).toLocaleString()} ر.س</div>
+              <div className="text-2xl font-black text-purple-700 mt-1">{(inventoryReport.summary?.expectedProfit || 0).toLocaleString()} ج.م</div>
             </div>
           </div>
 
@@ -316,10 +316,10 @@ export const ReportsCenter: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-xs text-slate-600">{it.category}</td>
                     <td className="py-3 px-4 text-center font-mono font-bold text-slate-800">{it.quantity} {it.unit}</td>
-                    <td className="py-3 px-4 text-left font-mono">{it.avgCost?.toLocaleString()} ر.س</td>
-                    <td className="py-3 px-4 text-left font-mono font-semibold text-slate-800">{it.sellPrice?.toLocaleString()} ر.س</td>
-                    <td className="py-3 px-4 text-left font-mono text-blue-700">{it.costValue?.toLocaleString()} ر.س</td>
-                    <td className="py-3 px-4 text-left font-mono font-bold text-emerald-700">{it.sellValue?.toLocaleString()} ر.س</td>
+                    <td className="py-3 px-4 text-left font-mono">{it.avgCost?.toLocaleString()} ج.م</td>
+                    <td className="py-3 px-4 text-left font-mono font-semibold text-slate-800">{it.sellPrice?.toLocaleString()} ج.م</td>
+                    <td className="py-3 px-4 text-left font-mono text-blue-700">{it.costValue?.toLocaleString()} ج.م</td>
+                    <td className="py-3 px-4 text-left font-mono font-bold text-emerald-700">{it.sellValue?.toLocaleString()} ج.م</td>
                     <td className="py-3 px-4 text-center">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                         it.isLow ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
@@ -346,15 +346,15 @@ export const ReportsCenter: React.FC = () => {
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
               <span className="text-xs text-slate-500 font-semibold">إيرادات الورشة الكلية</span>
-              <div className="text-2xl font-black text-blue-700 mt-1">{(workshopReport.summary?.totalRevenue || 0).toLocaleString()} ر.س</div>
+              <div className="text-2xl font-black text-blue-700 mt-1">{(workshopReport.summary?.totalRevenue || 0).toLocaleString()} ج.م</div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
               <span className="text-xs text-slate-500 font-semibold">إيرادات شغل اليد (أجور الفحص والتركيب)</span>
-              <div className="text-2xl font-black text-emerald-600 mt-1">{(workshopReport.summary?.totalLaborRevenue || 0).toLocaleString()} ر.س</div>
+              <div className="text-2xl font-black text-emerald-600 mt-1">{(workshopReport.summary?.totalLaborRevenue || 0).toLocaleString()} ج.م</div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
               <span className="text-xs text-slate-500 font-semibold">متوسط قيمة أمر الصيانة</span>
-              <div className="text-2xl font-black text-purple-700 mt-1">{(workshopReport.summary?.avgOrderValue || 0).toLocaleString()} ر.س</div>
+              <div className="text-2xl font-black text-purple-700 mt-1">{(workshopReport.summary?.avgOrderValue || 0).toLocaleString()} ج.م</div>
             </div>
           </div>
 
@@ -383,9 +383,9 @@ export const ReportsCenter: React.FC = () => {
                       <div className="text-slate-400">{j.customer?.name}</div>
                     </td>
                     <td className="py-3 px-4 text-xs font-semibold text-slate-700">{j.technician?.name || '-'}</td>
-                    <td className="py-3 px-4 text-left font-mono">{j.totalParts?.toLocaleString()} ر.س</td>
-                    <td className="py-3 px-4 text-left font-mono text-emerald-700 font-semibold">{j.totalLabor?.toLocaleString()} ر.س</td>
-                    <td className="py-3 px-4 text-left font-mono font-black text-slate-900">{j.grandTotal?.toLocaleString()} ر.س</td>
+                    <td className="py-3 px-4 text-left font-mono">{j.totalParts?.toLocaleString()} ج.م</td>
+                    <td className="py-3 px-4 text-left font-mono text-emerald-700 font-semibold">{j.totalLabor?.toLocaleString()} ج.م</td>
+                    <td className="py-3 px-4 text-left font-mono font-black text-slate-900">{j.grandTotal?.toLocaleString()} ج.م</td>
                     <td className="py-3 px-4 text-center">
                       <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
                         j.status === 'CLOSED' ? 'bg-emerald-100 text-emerald-800' : 

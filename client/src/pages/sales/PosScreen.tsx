@@ -386,7 +386,7 @@ export const PosScreen: React.FC = () => {
                 <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
                   <div>
                     <span className="text-sm font-black text-brand-600">{item.sellPrice}</span>
-                    <span className="text-[10px] text-slate-400 mr-1">ر.س</span>
+                    <span className="text-[10px] text-slate-400 mr-1">ج.م</span>
                   </div>
                   <button
                     disabled={isOutOfStock}
@@ -456,8 +456,8 @@ export const PosScreen: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold text-slate-800 truncate">{it.name}</div>
                   <div className="text-[11px] text-brand-600 font-bold mt-0.5">
-                    {it.unitPrice} ر.س × {it.quantity} ={' '}
-                    <span className="text-slate-900 font-black">{it.unitPrice * it.quantity} ر.س</span>
+                    {it.unitPrice} ج.م × {it.quantity} ={' '}
+                    <span className="text-slate-900 font-black">{it.unitPrice * it.quantity} ج.م</span>
                   </div>
                 </div>
 
@@ -493,7 +493,7 @@ export const PosScreen: React.FC = () => {
         <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-600">
             <span>المجموع الفرعي:</span>
-            <span className="font-bold">{subtotal.toLocaleString()} ر.س</span>
+            <span className="font-bold">{subtotal.toLocaleString()} ج.م</span>
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-600">
@@ -506,18 +506,18 @@ export const PosScreen: React.FC = () => {
                 onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
                 className="w-16 px-1.5 py-0.5 bg-white border border-slate-300 rounded text-xs text-center font-bold"
               />
-              <span>ر.س</span>
+              <span>ج.م</span>
             </div>
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-600">
             <span>ضريبة القيمة المضافة (15%):</span>
-            <span className="font-bold">{taxAmount.toFixed(2)} ر.س</span>
+            <span className="font-bold">{taxAmount.toFixed(2)} ج.م</span>
           </div>
 
           <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-base font-black text-slate-900">
             <span>الإجمالي النهائي:</span>
-            <span className="text-brand-600 text-lg">{grandTotal.toFixed(2)} ر.س</span>
+            <span className="text-brand-600 text-lg">{grandTotal.toFixed(2)} ج.م</span>
           </div>
 
           <button
@@ -547,7 +547,7 @@ export const PosScreen: React.FC = () => {
 
             <div className="bg-brand-50 p-4 rounded-2xl border border-brand-100 text-center">
               <div className="text-xs text-brand-700 font-bold">المبلغ المطلوب سداده</div>
-              <div className="text-2xl font-black text-brand-900 mt-1">{grandTotal.toFixed(2)} ر.س</div>
+              <div className="text-2xl font-black text-brand-900 mt-1">{grandTotal.toFixed(2)} ج.م</div>
             </div>
 
             {/* Payment Method Selector */}
@@ -710,7 +710,7 @@ export const PosScreen: React.FC = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">الإجمالي شامل الضريبة:</span>
-                <span className="font-bold text-emerald-600">{completedInvoice.grandTotal} ر.س</span>
+                <span className="font-bold text-emerald-600">{completedInvoice.grandTotal} ج.م</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">طريقة الدفع:</span>

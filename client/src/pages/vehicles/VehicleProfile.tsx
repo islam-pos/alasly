@@ -133,7 +133,7 @@ export const VehicleProfile: React.FC = () => {
           <div>
             <span className="text-slate-400 block font-medium">إجمالي الإنفاق:</span>
             <span className="font-bold text-emerald-600 text-sm font-mono mt-0.5 block">
-              {(vehicle.salesInvoices?.reduce((sum: number, i: any) => sum + i.grandTotal, 0) || 0).toLocaleString()} ر.س
+              {(vehicle.salesInvoices?.reduce((sum: number, i: any) => sum + i.grandTotal, 0) || 0).toLocaleString()} ج.م
             </span>
           </div>
         </div>
@@ -185,7 +185,7 @@ export const VehicleProfile: React.FC = () => {
                       <div className="text-[11px] text-slate-500 flex items-center gap-4">
                         <span>الفني: {ro.technician?.name || 'فني الورشة'}</span>
                         <span>•</span>
-                        <span>الإجمالي: <strong className="text-slate-900">{ro.grandTotal} ر.س</strong></span>
+                        <span>الإجمالي: <strong className="text-slate-900">{ro.grandTotal} ج.م</strong></span>
                       </div>
                     </div>
                   </div>
@@ -223,7 +223,7 @@ export const VehicleProfile: React.FC = () => {
                           {ro.status}
                         </span>
                       </td>
-                      <td className="p-3 font-bold">{ro.grandTotal} ر.س</td>
+                      <td className="p-3 font-bold">{ro.grandTotal} ج.م</td>
                       <td className="p-3 text-center">
                         <Link
                           to={`/workshop/job-cards/${ro.id}`}
@@ -265,8 +265,8 @@ export const VehicleProfile: React.FC = () => {
                         <td className="p-3 font-bold text-slate-800">{p.partName}</td>
                         <td className="p-3 font-mono text-slate-400">{p.sku}</td>
                         <td className="p-3 font-bold">{p.quantity}</td>
-                        <td className="p-3">{p.unitPrice} ر.س</td>
-                        <td className="p-3 font-bold text-slate-900">{p.total} ر.س</td>
+                        <td className="p-3">{p.unitPrice} ج.م</td>
+                        <td className="p-3 font-bold text-slate-900">{p.total} ج.م</td>
                       </tr>
                     ))
                   ) : (
@@ -305,7 +305,7 @@ export const VehicleProfile: React.FC = () => {
                         <td className="p-3 font-mono font-bold text-brand-700">{s.orderNumber}</td>
                         <td className="p-3 font-bold text-slate-800">{s.serviceName}</td>
                         <td className="p-3 font-mono">{s.hours} ساعة</td>
-                        <td className="p-3 font-bold text-slate-900">{s.total} ر.س</td>
+                        <td className="p-3 font-bold text-slate-900">{s.total} ج.م</td>
                         <td className="p-3">
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
                             {s.status}
@@ -347,7 +347,7 @@ export const VehicleProfile: React.FC = () => {
                         {new Date(inv.date).toLocaleDateString('ar-SA')}
                       </td>
                       <td className="p-3">{inv.invoiceType}</td>
-                      <td className="p-3 font-bold text-slate-900">{inv.grandTotal} ر.س</td>
+                      <td className="p-3 font-bold text-slate-900">{inv.grandTotal} ج.م</td>
                       <td className="p-3 font-semibold">{inv.paymentMethod}</td>
                       <td className="p-3">
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">

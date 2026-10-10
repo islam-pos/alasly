@@ -238,9 +238,9 @@ export const SalesList: React.FC = () => {
                     )}
                   </td>
                   <td className="p-3.5 font-black text-slate-900 font-mono">
-                    {inv.grandTotal.toLocaleString()} ر.س
+                    {inv.grandTotal.toLocaleString()} ج.م
                   </td>
-                  <td className="p-3.5 font-mono text-emerald-600">{inv.paidAmount.toLocaleString()} ر.س</td>
+                  <td className="p-3.5 font-mono text-emerald-600">{inv.paidAmount.toLocaleString()} ج.م</td>
                   <td className="p-3.5 font-semibold text-slate-600">{inv.paymentMethod}</td>
                   <td className="p-3.5">
                     <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
@@ -330,9 +330,9 @@ export const SalesList: React.FC = () => {
                         {it.description || it.item?.nameAr}
                       </td>
                       <td className="p-2 font-mono">{it.quantity}</td>
-                      <td className="p-2 font-mono">{it.unitPrice} ر.س</td>
-                      <td className="p-2 font-mono">{it.taxAmount.toFixed(2)} ر.س</td>
-                      <td className="p-2 font-bold font-mono">{it.total.toFixed(2)} ر.س</td>
+                      <td className="p-2 font-mono">{it.unitPrice} ج.م</td>
+                      <td className="p-2 font-mono">{it.taxAmount.toFixed(2)} ج.م</td>
+                      <td className="p-2 font-bold font-mono">{it.total.toFixed(2)} ج.م</td>
                     </tr>
                   ))}
                 </tbody>
@@ -340,10 +340,10 @@ export const SalesList: React.FC = () => {
             </div>
 
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 text-left font-bold">
-              <div>المجموع الفرعي: {selectedInvoice.subtotal.toLocaleString()} ر.س</div>
-              <div>الضريبة (15%): {selectedInvoice.taxAmount.toFixed(2)} ر.س</div>
+              <div>المجموع الفرعي: {selectedInvoice.subtotal.toLocaleString()} ج.م</div>
+              <div>الضريبة (15%): {selectedInvoice.taxAmount.toFixed(2)} ج.م</div>
               <div className="text-brand-700 text-sm font-black pt-1 border-t border-slate-200">
-                الإجمالي الكلي: {selectedInvoice.grandTotal.toFixed(2)} ر.س
+                الإجمالي الكلي: {selectedInvoice.grandTotal.toFixed(2)} ج.م
               </div>
             </div>
 

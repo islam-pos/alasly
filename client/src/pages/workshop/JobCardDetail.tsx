@@ -633,8 +633,8 @@ export const JobCardDetail: React.FC = () => {
                               </td>
                               <td className="py-2 font-bold text-slate-800">{it.description}</td>
                               <td className="py-2 font-mono">{it.quantity}</td>
-                              <td className="py-2 font-mono">{it.unitPrice} ر.س</td>
-                              <td className="py-2 font-bold text-slate-900">{it.total} ر.س</td>
+                              <td className="py-2 font-mono">{it.unitPrice} ج.م</td>
+                              <td className="py-2 font-bold text-slate-900">{it.total} ج.م</td>
                             </tr>
                           ))}
                         </tbody>
@@ -644,19 +644,19 @@ export const JobCardDetail: React.FC = () => {
                     <div className="pt-3 border-t border-slate-200 flex justify-end gap-6 text-xs font-bold">
                       <div>
                         <span className="text-slate-400">إجمالي القطع: </span>
-                        <span>{est.subtotalParts} ر.س</span>
+                        <span>{est.subtotalParts} ج.م</span>
                       </div>
                       <div>
                         <span className="text-slate-400">إجمالي اليد: </span>
-                        <span>{est.subtotalLabor} ر.س</span>
+                        <span>{est.subtotalLabor} ج.م</span>
                       </div>
                       <div>
                         <span className="text-slate-400">الضريبة (15%): </span>
-                        <span>{est.taxAmount.toFixed(2)} ر.س</span>
+                        <span>{est.taxAmount.toFixed(2)} ج.م</span>
                       </div>
                       <div className="text-brand-700 text-sm">
                         <span>الإجمالي الكلي: </span>
-                        <span>{est.grandTotal.toFixed(2)} ر.س</span>
+                        <span>{est.grandTotal.toFixed(2)} ج.م</span>
                       </div>
                     </div>
                   </div>
@@ -705,7 +705,7 @@ export const JobCardDetail: React.FC = () => {
                           <option value="">-- اختر قطعة الغيار --</option>
                           {availableItems.map((ai) => (
                             <option key={ai.id} value={ai.id}>
-                              {ai.nameAr} ({ai.sellPrice} ر.س)
+                              {ai.nameAr} ({ai.sellPrice} ج.م)
                             </option>
                           ))}
                         </select>
@@ -825,7 +825,7 @@ export const JobCardDetail: React.FC = () => {
                           <td className="p-3 font-bold">{p.requestedQty}</td>
                           <td className="p-3 text-brand-700 font-bold">{p.issuedQty}</td>
                           <td className="p-3 text-emerald-700 font-bold">{p.usedQty}</td>
-                          <td className="p-3 font-bold">{p.unitPrice} ر.س</td>
+                          <td className="p-3 font-bold">{p.unitPrice} ج.م</td>
                           <td className="p-3">
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -890,9 +890,9 @@ export const JobCardDetail: React.FC = () => {
                             {l.technician ? l.technician.name : 'فني الورشة'}
                           </td>
                           <td className="p-3 font-mono">{l.hours} ساعة</td>
-                          <td className="p-3 font-bold text-slate-900">{l.total} ر.س</td>
+                          <td className="p-3 font-bold text-slate-900">{l.total} ج.م</td>
                           <td className="p-3 font-mono">{l.commissionRate}%</td>
-                          <td className="p-3 font-bold text-emerald-600">{l.commissionAmount} ر.س</td>
+                          <td className="p-3 font-bold text-emerald-600">{l.commissionAmount} ج.م</td>
                           <td className="p-3">
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700">
                               {l.status}
@@ -992,7 +992,7 @@ export const JobCardDetail: React.FC = () => {
                   <div className="space-y-1 text-xs text-slate-700">
                     <div className="flex justify-between">
                       <span>إجمالي الفاتورة:</span>
-                      <span className="font-bold">{jobCard.salesInvoice.grandTotal} ر.س</span>
+                      <span className="font-bold">{jobCard.salesInvoice.grandTotal} ج.م</span>
                     </div>
                     <div className="flex justify-between">
                       <span>طريقة الدفع:</span>
@@ -1071,15 +1071,15 @@ export const JobCardDetail: React.FC = () => {
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
               <div className="flex justify-between">
                 <span>إجمالي قطع الغيار:</span>
-                <span className="font-bold">{jobCard.totalParts} ر.س</span>
+                <span className="font-bold">{jobCard.totalParts} ج.م</span>
               </div>
               <div className="flex justify-between">
                 <span>إجمالي أجور اليد:</span>
-                <span className="font-bold">{jobCard.totalLabor} ر.س</span>
+                <span className="font-bold">{jobCard.totalLabor} ج.م</span>
               </div>
               <div className="flex justify-between text-brand-700 font-black text-sm pt-2 border-t border-slate-200">
                 <span>الإجمالي شامل الضريبة (15%):</span>
-                <span>{jobCard.grandTotal} ر.س</span>
+                <span>{jobCard.grandTotal} ج.م</span>
               </div>
             </div>
 

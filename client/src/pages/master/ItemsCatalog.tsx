@@ -435,8 +435,8 @@ export const ItemsCatalog: React.FC = () => {
                     <td className="p-3.5 font-mono text-slate-500">{item.defaultLocation || '-'}</td>
                     {canManagePrices && (
                       <>
-                        <td className="p-3.5 font-bold text-slate-600 font-mono">{item.purchasePrice} ر.س</td>
-                        <td className="p-3.5 font-black text-brand-600 font-mono">{item.sellPrice} ر.س</td>
+                        <td className="p-3.5 font-bold text-slate-600 font-mono">{item.purchasePrice} ج.م</td>
+                        <td className="p-3.5 font-black text-brand-600 font-mono">{item.sellPrice} ج.م</td>
                       </>
                     )}
                     <td className="p-3.5">
@@ -577,7 +577,7 @@ export const ItemsCatalog: React.FC = () => {
                 {canManagePrices && (
                   <>
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">سعر الشراء (ر.س)</label>
+                      <label className="block font-bold text-slate-700 mb-1">سعر الشراء (ج.م)</label>
                       <input
                         type="number"
                         value={formData.purchasePrice}
@@ -587,7 +587,7 @@ export const ItemsCatalog: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">سعر البيع (ر.س)</label>
+                      <label className="block font-bold text-slate-700 mb-1">سعر البيع (ج.م)</label>
                       <input
                         type="number"
                         value={formData.sellPrice}

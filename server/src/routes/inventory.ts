@@ -184,7 +184,7 @@ router.post(
         return { id: item.id, price: newPrice };
       });
 
-      const auditDetails = `تعديل ${field === 'purchasePrice' ? 'سعر الشراء' : 'سعر البيع'} لـ ${updates.length} صنف (${adjustmentType === 'percentage' ? `${value}%` : `${value} ر.س`} ${operation === 'increase' ? 'زيادة' : 'تخفيض'})`;
+      const auditDetails = `تعديل ${field === 'purchasePrice' ? 'سعر الشراء' : 'سعر البيع'} لـ ${updates.length} صنف (${adjustmentType === 'percentage' ? `${value}%` : `${value} ج.م`} ${operation === 'increase' ? 'زيادة' : 'تخفيض'})`;
       await prisma.$transaction(async (transaction) => {
         for (const { id, price } of updates) {
           await transaction.item.update({ where: { id }, data: { [field]: price } });

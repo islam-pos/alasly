@@ -21,8 +21,8 @@ model CompanySetting {
   mobile             String   @default("0501234567")
   email              String   @default("info@autocare-center.com")
   website            String   @default("www.autocare-center.com")
-  currency           String   @default("SAR")
-  currencySymbol     String   @default("ر.س")
+  currency           String   @default("EGP")
+  currencySymbol     String   @default("ج.م")
   taxRate            Float    @default(15.0)
   invoiceHeader      String?  @default("أهلاً بكم في مركز المحترف لخدمات وصيانة السيارات")
   invoiceFooter      String?  @default("الضمان يشمل قطع الغيار الأصلية لمدة شهر من تاريخ الفاتورة")
@@ -860,7 +860,7 @@ model Bank {
   bankName       String
   accountNumber  String            @unique
   iban           String?
-  currency       String            @default("SAR")
+  currency       String            @default("EGP")
   openingBalance Float             @default(0)
   currentBalance Float             @default(0)
   active         Boolean           @default(true)

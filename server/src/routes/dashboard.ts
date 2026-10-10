@@ -270,7 +270,7 @@ router.get('/alerts', async (req, res) => {
         id: `unpaid-inv-${up.id}`,
         type: 'UNPAID_INVOICE',
         title: `فاتورة غير مسددة: ${up.invoiceNumber}`,
-        message: `العميل ${up.customer?.name || 'نقدي'} - المبلغ المتبقي: ${up.remainingAmount} ر.س`,
+        message: `العميل ${up.customer?.name || 'نقدي'} - المبلغ المتبقي: ${up.remainingAmount} ج.م`,
         severity: 'warning',
         link: '/sales',
       });

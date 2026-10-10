@@ -26,7 +26,7 @@ export const printSalesInvoice = (
 ): 'opened' | 'blocked' => {
   const settings: PrintSettings = parsePrintSettings(printSettingsValue);
   const fields = settings.invoiceFields;
-  const currency = company?.currencySymbol || 'ر.س';
+  const currency = company?.currencySymbol || 'ج.م';
   const invoiceItems = Array.isArray(invoice.items) ? invoice.items : [];
 
   const columns = [

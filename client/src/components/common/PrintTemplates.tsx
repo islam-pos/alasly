@@ -122,8 +122,8 @@ export const TaxInvoicePrint: React.FC<{ invoice: any; company?: any }> = ({ inv
                 {item.item?.partNumber && <span className="text-[10px] text-slate-500 mr-2 font-mono">({item.item.partNumber})</span>}
               </td>
               <td className="py-2 px-3 text-center font-mono">{item.quantity}</td>
-              <td className="py-2 px-3 text-left font-mono">{(item.unitPrice || 0).toLocaleString()} ر.س</td>
-              <td className="py-2 px-3 text-left font-mono font-bold">{(item.subtotal || 0).toLocaleString()} ر.س</td>
+              <td className="py-2 px-3 text-left font-mono">{(item.unitPrice || 0).toLocaleString()} ج.م</td>
+              <td className="py-2 px-3 text-left font-mono font-bold">{(item.subtotal || 0).toLocaleString()} ج.م</td>
             </tr>
           ))}
           {/* Workshop parts and labor if repairOrder format */}
@@ -135,8 +135,8 @@ export const TaxInvoicePrint: React.FC<{ invoice: any; company?: any }> = ({ inv
                 <span className="text-[10px] text-slate-500 mr-2 font-mono">({p.item?.partNumber})</span>
               </td>
               <td className="py-2 px-3 text-center font-mono">{p.quantity}</td>
-              <td className="py-2 px-3 text-left font-mono">{p.unitPrice?.toLocaleString()} ر.س</td>
-              <td className="py-2 px-3 text-left font-mono font-bold">{p.totalPrice?.toLocaleString()} ر.س</td>
+              <td className="py-2 px-3 text-left font-mono">{p.unitPrice?.toLocaleString()} ج.م</td>
+              <td className="py-2 px-3 text-left font-mono font-bold">{p.totalPrice?.toLocaleString()} ج.م</td>
             </tr>
           ))}
           {invoice.repairOrder?.labors?.map((l: any, idx: number) => (
@@ -147,8 +147,8 @@ export const TaxInvoicePrint: React.FC<{ invoice: any; company?: any }> = ({ inv
                 {l.technician && <span className="text-[10px] text-blue-600 mr-2">({l.technician.name})</span>}
               </td>
               <td className="py-2 px-3 text-center font-mono">{l.hours || 1}</td>
-              <td className="py-2 px-3 text-left font-mono">{l.cost?.toLocaleString()} ر.س</td>
-              <td className="py-2 px-3 text-left font-mono font-bold">{l.cost?.toLocaleString()} ر.س</td>
+              <td className="py-2 px-3 text-left font-mono">{l.cost?.toLocaleString()} ج.م</td>
+              <td className="py-2 px-3 text-left font-mono font-bold">{l.cost?.toLocaleString()} ج.م</td>
             </tr>
           ))}
         </tbody>
@@ -175,21 +175,21 @@ export const TaxInvoicePrint: React.FC<{ invoice: any; company?: any }> = ({ inv
         <div className="w-64 space-y-1.5 text-xs">
           <div className="flex justify-between text-slate-600">
             <span>المجموع الفرعي الخاضع للضريبة:</span>
-            <span className="font-mono font-semibold">{(invoice.subtotal || 0).toLocaleString()} ر.س</span>
+            <span className="font-mono font-semibold">{(invoice.subtotal || 0).toLocaleString()} ج.م</span>
           </div>
           {Number(invoice.discountAmount) > 0 && (
             <div className="flex justify-between text-rose-600">
               <span>الخصم الممنوح:</span>
-              <span className="font-mono font-semibold">-{(invoice.discountAmount || 0).toLocaleString()} ر.س</span>
+              <span className="font-mono font-semibold">-{(invoice.discountAmount || 0).toLocaleString()} ج.م</span>
             </div>
           )}
           <div className="flex justify-between text-slate-600">
             <span>ضريبة القيمة المضافة (15%):</span>
-            <span className="font-mono font-semibold">{(invoice.taxAmount || 0).toLocaleString()} ر.س</span>
+            <span className="font-mono font-semibold">{(invoice.taxAmount || 0).toLocaleString()} ج.م</span>
           </div>
           <div className="flex justify-between text-sm font-black border-t border-slate-300 pt-2 text-slate-900">
             <span>المبلغ الصافي المستحق:</span>
-            <span className="font-mono text-blue-700 text-base">{(invoice.totalAmount || 0).toLocaleString()} ر.س</span>
+            <span className="font-mono text-blue-700 text-base">{(invoice.totalAmount || 0).toLocaleString()} ج.م</span>
           </div>
         </div>
       </div>
@@ -231,7 +231,7 @@ export const CashVoucherPrint: React.FC<{ voucher: any; company?: any }> = ({ vo
 
         <div className="flex items-center justify-between bg-blue-50/60 p-3 rounded-lg border border-blue-200">
           <span className="text-slate-700">المبلغ بالأرقام:</span>
-          <span className="font-mono text-lg font-black text-blue-900">{Number(voucher.amount).toLocaleString()} ر.س</span>
+          <span className="font-mono text-lg font-black text-blue-900">{Number(voucher.amount).toLocaleString()} ج.م</span>
         </div>
 
         <div className="bg-slate-50 p-3 rounded-lg border">

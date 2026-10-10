@@ -286,7 +286,7 @@ export const FinancialsScreen: React.FC = () => {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-slate-500">رصيد الصناديق النقدية</span>
-            <div className="text-2xl font-black text-slate-900 mt-1">{totalCashboxBalance.toLocaleString()} ر.س</div>
+            <div className="text-2xl font-black text-slate-900 mt-1">{totalCashboxBalance.toLocaleString()} ج.م</div>
             <span className="text-[11px] text-slate-400">في {cashboxes.length} صناديق نشطة</span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -297,7 +297,7 @@ export const FinancialsScreen: React.FC = () => {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-slate-500">أرصدة الحسابات البنكية</span>
-            <div className="text-2xl font-black text-blue-700 mt-1">{totalBankBalance.toLocaleString()} ر.س</div>
+            <div className="text-2xl font-black text-blue-700 mt-1">{totalBankBalance.toLocaleString()} ج.م</div>
             <span className="text-[11px] text-slate-400">في {banks.length} حسابات مصرفية</span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -308,7 +308,7 @@ export const FinancialsScreen: React.FC = () => {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-slate-500">إجمالي المصروفات المسجلة</span>
-            <div className="text-2xl font-black text-rose-600 mt-1">{totalExpenses.toLocaleString()} ر.س</div>
+            <div className="text-2xl font-black text-rose-600 mt-1">{totalExpenses.toLocaleString()} ج.م</div>
             <span className="text-[11px] text-rose-600 font-medium">تشغيلية، إيجارات، فواتير</span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
@@ -319,7 +319,7 @@ export const FinancialsScreen: React.FC = () => {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-slate-500">إجمالي الإيرادات المتنوعة</span>
-            <div className="text-2xl font-black text-emerald-600 mt-1">{totalRevenues.toLocaleString()} ر.س</div>
+            <div className="text-2xl font-black text-emerald-600 mt-1">{totalRevenues.toLocaleString()} ج.م</div>
             <span className="text-[11px] text-emerald-600 font-medium">إيرادات أخرى غير المبيعات</span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -414,9 +414,9 @@ export const FinancialsScreen: React.FC = () => {
                       <td className="py-3 px-4 text-xs">
                         {exp.paymentMethod === 'CASH' ? `نقداً (${exp.cashbox?.name || 'الخزينة'})` : `بنك (${exp.bank?.name || 'الحساب'})`}
                       </td>
-                      <td className="py-3 px-4 text-left font-mono">{exp.amount.toLocaleString()} ر.س</td>
-                      <td className="py-3 px-4 text-left font-mono text-xs text-slate-500">{(exp.taxAmount || 0).toLocaleString()} ر.س</td>
-                      <td className="py-3 px-4 text-left font-mono font-bold text-rose-600">{exp.totalAmount.toLocaleString()} ر.س</td>
+                      <td className="py-3 px-4 text-left font-mono">{exp.amount.toLocaleString()} ج.م</td>
+                      <td className="py-3 px-4 text-left font-mono text-xs text-slate-500">{(exp.taxAmount || 0).toLocaleString()} ج.م</td>
+                      <td className="py-3 px-4 text-left font-mono font-bold text-rose-600">{exp.totalAmount.toLocaleString()} ج.م</td>
                       <td className="py-3 px-4 text-center">
                         <button
                           onClick={() => setSelectedVoucherForPrint({
@@ -479,7 +479,7 @@ export const FinancialsScreen: React.FC = () => {
                       <td className="py-3 px-4 text-xs">
                         {rev.paymentMethod === 'CASH' ? `نقداً (${rev.cashbox?.name || 'الخزينة'})` : `بنك (${rev.bank?.name || 'الحساب'})`}
                       </td>
-                      <td className="py-3 px-4 text-left font-mono font-bold text-emerald-600">{rev.amount.toLocaleString()} ر.س</td>
+                      <td className="py-3 px-4 text-left font-mono font-bold text-emerald-600">{rev.amount.toLocaleString()} ج.م</td>
                       <td className="py-3 px-4 text-center">
                         <button
                           onClick={() => setSelectedVoucherForPrint({
@@ -519,7 +519,7 @@ export const FinancialsScreen: React.FC = () => {
                 </div>
                 <div className="text-left">
                   <span className="text-xs text-slate-400 block">الرصيد الدفتري الحالي</span>
-                  <span className="font-mono text-xl font-black text-emerald-700">{cb.balance?.toLocaleString()} ر.س</span>
+                  <span className="font-mono text-xl font-black text-emerald-700">{cb.balance?.toLocaleString()} ج.م</span>
                 </div>
               </div>
             ))}
@@ -558,7 +558,7 @@ export const FinancialsScreen: React.FC = () => {
                       <td className="py-3 px-4 text-xs">{tx.cashbox?.name}</td>
                       <td className="py-3 px-4 text-left font-mono font-bold">
                         <span className={isReceipt ? 'text-emerald-700' : 'text-rose-600'}>
-                          {isReceipt ? '+' : '-'}{tx.amount.toLocaleString()} ر.س
+                          {isReceipt ? '+' : '-'}{tx.amount.toLocaleString()} ج.م
                         </span>
                       </td>
                       <td className="py-3 px-4 text-center">
@@ -606,9 +606,9 @@ export const FinancialsScreen: React.FC = () => {
                       <td className="py-3 px-4 text-xs font-semibold">{shift.cashbox?.name}</td>
                       <td className="py-3 px-4 text-xs text-slate-500">{new Date(shift.startTime).toLocaleString('ar-SA')}</td>
                       <td className="py-3 px-4 text-xs text-slate-500">{shift.endTime ? new Date(shift.endTime).toLocaleString('ar-SA') : 'جارية الآن...'}</td>
-                      <td className="py-3 px-4 text-left font-mono">{shift.startCash.toLocaleString()} ر.س</td>
-                      <td className="py-3 px-4 text-left font-mono font-bold text-slate-800">{shift.expectedCash.toLocaleString()} ر.س</td>
-                      <td className="py-3 px-4 text-left font-mono">{shift.actualCash !== null ? `${shift.actualCash.toLocaleString()} ر.س` : '-'}</td>
+                      <td className="py-3 px-4 text-left font-mono">{shift.startCash.toLocaleString()} ج.م</td>
+                      <td className="py-3 px-4 text-left font-mono font-bold text-slate-800">{shift.expectedCash.toLocaleString()} ج.م</td>
+                      <td className="py-3 px-4 text-left font-mono">{shift.actualCash !== null ? `${shift.actualCash.toLocaleString()} ج.م` : '-'}</td>
                       <td className="py-3 px-4 text-left font-mono font-bold">
                         {shift.difference === null ? (
                           '-'
@@ -664,7 +664,7 @@ export const FinancialsScreen: React.FC = () => {
                   </div>
                   <div className="text-left">
                     <span className="text-xs text-slate-400 block">الرصيد المتاح</span>
-                    <span className="font-mono text-xl font-black text-blue-800">{bank.currentBalance.toLocaleString()} ر.س</span>
+                    <span className="font-mono text-xl font-black text-blue-800">{bank.currentBalance.toLocaleString()} ج.م</span>
                   </div>
                 </div>
 
@@ -678,7 +678,7 @@ export const FinancialsScreen: React.FC = () => {
                         <div key={t.id} className="flex justify-between text-xs bg-white p-2 rounded-lg border">
                           <span className="text-slate-700">{t.description || t.type}</span>
                           <span className={`font-mono font-bold ${t.type === 'DEPOSIT' || t.type === 'CARD_SETTLEMENT' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {t.type === 'DEPOSIT' || t.type === 'CARD_SETTLEMENT' ? '+' : '-'}{t.amount.toLocaleString()} ر.س
+                            {t.type === 'DEPOSIT' || t.type === 'CARD_SETTLEMENT' ? '+' : '-'}{t.amount.toLocaleString()} ج.م
                           </span>
                         </div>
                       ))
@@ -1037,7 +1037,7 @@ export const FinancialsScreen: React.FC = () => {
             </h3>
             <div className="bg-slate-50 p-3 rounded-xl mb-4 text-xs space-y-1">
               <div>رقم الوردية: <span className="font-bold">{selectedShiftToClose?.shiftNumber}</span></div>
-              <div>الرصيد الدفتري المتوقع بالدرج: <span className="font-mono font-bold text-blue-700">{selectedShiftToClose?.expectedCash?.toLocaleString()} ر.س</span></div>
+              <div>الرصيد الدفتري المتوقع بالدرج: <span className="font-mono font-bold text-blue-700">{selectedShiftToClose?.expectedCash?.toLocaleString()} ج.م</span></div>
             </div>
 
             <form onSubmit={handleCloseShift} className="space-y-4">

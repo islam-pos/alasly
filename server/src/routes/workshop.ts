@@ -337,7 +337,7 @@ router.post('/job-cards/:id/estimate', async (req, res) => {
       action: 'CREATE_ESTIMATE',
       entity: 'RepairOrder',
       entityId: repairOrderId,
-      details: `إنشاء عرض سعر مبدئي رقم ${estimateNumber} بإجمالي ${grandTotal} ر.س`,
+      details: `إنشاء عرض سعر مبدئي رقم ${estimateNumber} بإجمالي ${grandTotal} ج.م`,
     });
 
     res.status(201).json(estimate);

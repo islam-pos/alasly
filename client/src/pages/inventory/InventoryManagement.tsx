@@ -356,7 +356,7 @@ export const InventoryManagement: React.FC = () => {
         {canManagePrices && <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-slate-500">إجمالي القيمة التقديرية للمخزون</span>
-            <div className="text-2xl font-black text-emerald-600 mt-1">{totalStockValuation.toLocaleString()} ر.س</div>
+            <div className="text-2xl font-black text-emerald-600 mt-1">{totalStockValuation.toLocaleString()} ج.م</div>
             <span className="text-[11px] text-emerald-600 font-medium">محسوبة على متوسط سعر التكلفة</span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -612,13 +612,13 @@ export const InventoryManagement: React.FC = () => {
                       {canManagePrices && (
                         <>
                           <td className="py-3 px-4 text-left font-mono text-xs">
-                            {(item.purchasePrice || 0).toLocaleString()} ر.س
+                            {(item.purchasePrice || 0).toLocaleString()} ج.م
                           </td>
                           <td className="py-3 px-4 text-left font-mono font-bold text-slate-800">
-                            {(item.sellPrice || 0).toLocaleString()} ر.س
+                            {(item.sellPrice || 0).toLocaleString()} ج.م
                           </td>
                           <td className="py-3 px-4 text-left font-mono font-bold text-emerald-700">
-                            {(item.totalValue || 0).toLocaleString()} ر.س
+                            {(item.totalValue || 0).toLocaleString()} ج.م
                           </td>
                         </>
                       )}
@@ -677,7 +677,7 @@ export const InventoryManagement: React.FC = () => {
                   className="mt-1 w-full border rounded-xl px-3 py-2 bg-white"
                 >
                   <option value="percentage">نسبة مئوية</option>
-                  <option value="amount">مبلغ ثابت (ر.س)</option>
+                  <option value="amount">مبلغ ثابت (ج.م)</option>
                 </select>
               </label>
               <label className="text-xs font-bold text-slate-700">
