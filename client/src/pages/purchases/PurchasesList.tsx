@@ -133,7 +133,7 @@ export const PurchasesList: React.FC = () => {
       setBarcodeInput('');
       success(`تمت إضافة ${item.nameAr} إلى الفاتورة`);
     } catch (err: any) {
-      error(err.message || 'لم يتم العثور على صنف بهذا الباركود أو الكود');
+      error(err.message || 'لم يتم العثور على صنف بهذا الباركود أو كود SKU');
     }
   };
 

@@ -115,7 +115,7 @@ export const PosScreen: React.FC = () => {
         success(`تمت إضافة: ${item.nameAr}`);
       }
     } catch (err: any) {
-      error(err.message || 'الصنف غير موجود بهذا الباركود');
+      error(err.message || 'لم يتم العثور على صنف بهذا الباركود أو كود SKU');
     }
   };
 
@@ -288,7 +288,7 @@ export const PosScreen: React.FC = () => {
                 type="text"
                 value={barcodeInput}
                 onChange={(e) => setBarcodeInput(e.target.value)}
-                placeholder="مسح الباركود مباشرة (أو اضغط Enter)..."
+                placeholder="امسح الباركود أو أدخل كود SKU..."
                 className="w-full pl-4 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-medium focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
               />
               <Barcode className="w-5 h-5 text-slate-400 absolute right-3 top-2.5" />
@@ -308,7 +308,7 @@ export const PosScreen: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="البحث باسم الصنف، كود الـ SKU، رقم القطعة..."
+                placeholder="البحث باسم الصنف أو رقم القطعة..."
                 className="w-full pl-4 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
               />
               <Search className="w-5 h-5 text-slate-400 absolute right-3 top-2.5" />

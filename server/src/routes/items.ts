@@ -239,7 +239,7 @@ router.get('/lookup/:code', authenticate, loadUserPermissions, async (req, res) 
     const code = req.params.code.trim();
     const item = await prisma.item.findFirst({
       where: {
-        OR: [{ barcode: code }, { sku: code }, { partNumber: code }],
+        OR: [{ barcode: code }, { sku: code }],
         active: true,
       },
       include: {
@@ -250,7 +250,7 @@ router.get('/lookup/:code', authenticate, loadUserPermissions, async (req, res) 
     });
 
     if (!item) {
-      return res.status(404).json({ error: 'لم يتم العثور على صنف بهذا الباركود أو الكود' });
+      return res.status(404).json({ error: 'لم يتم العثور على صنف بهذا الباركود أو كود SKU' });
     }
 
     const totalQty = item.stockBalances.reduce((sum, sb) => sum + sb.quantity, 0);
