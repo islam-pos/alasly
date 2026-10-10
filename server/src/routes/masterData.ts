@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
+import { AuthenticatedRequest, authenticate, loadUserPermissions, requirePermission } from '../middleware/auth';
+import { isPermissionKey } from '../lib/permissions';
 
 const router = Router();
 
@@ -373,5 +375,49 @@ router.get('/roles', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+router.put(
+  '/roles/:id/permissions',
+  authenticate,
+  loadUserPermissions,
+  requirePermission('manage_settings'),
+  async (req, res) => {
+    try {
+      const authenticatedReq = req as AuthenticatedRequest;
+      const { permissions } = req.body;
+      if (
+        !Array.isArray(permissions) ||
+        permissions.some((permission) => typeof permission !== 'string' || !isPermissionKey(permission))
+      ) {
+        return res.status(400).json({ error: 'قائمة الصلاحيات غير صالحة' });
+      }
+
+      const role = await prisma.role.findUnique({ where: { id: req.params.id } });
+      if (!role) return res.status(404).json({ error: 'الدور غير موجود' });
+      if (role.name === 'admin') {
+        return res.status(400).json({ error: 'لا يمكن تعديل صلاحيات مدير النظام' });
+      }
+
+      const uniquePermissions = [...new Set(permissions)];
+      const updatedRole = await prisma.role.update({
+        where: { id: role.id },
+        data: { permissions: JSON.stringify(uniquePermissions) },
+      });
+
+      await logAudit({
+        userId: authenticatedReq.user?.id,
+        action: 'UPDATE',
+        entity: 'RolePermissions',
+        entityId: role.id,
+        details: `تحديث صلاحيات الدور ${role.nameAr}`,
+        ipAddress: req.ip,
+      });
+
+      res.json(updatedRole);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
 
 export default router;

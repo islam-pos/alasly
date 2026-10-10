@@ -107,7 +107,7 @@ async function main() {
   // 3. Roles & Permissions
   await prisma.role.deleteMany({});
   const allPermissions = JSON.stringify([
-    'view_dashboard', 'manage_items', 'manage_purchases', 'manage_sales',
+    'view_dashboard', 'manage_items', 'manage_item_prices', 'manage_purchases', 'manage_sales',
     'pos_access', 'manage_workshop', 'manage_jobcards', 'approve_estimate',
     'issue_parts', 'manage_inventory', 'manage_expenses', 'manage_employees',
     'manage_payroll', 'manage_cashbox', 'manage_banks', 'view_reports',

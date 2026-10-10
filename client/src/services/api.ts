@@ -57,6 +57,13 @@ export const api = {
   getBranches: () =>
     fetch(`${BASE_URL}/master/branches`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
+  createBranch: (data: any) =>
+    fetch(`${BASE_URL}/master/branches`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
   getCategories: () =>
     fetch(`${BASE_URL}/master/categories`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
@@ -114,6 +121,13 @@ export const api = {
 
   getRoles: () =>
     fetch(`${BASE_URL}/master/roles`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  updateRolePermissions: (roleId: string, permissions: string[]) =>
+    fetch(`${BASE_URL}/master/roles/${roleId}/permissions`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ permissions }),
+    }).then((res) => handleResponse<any>(res)),
 
   // Items
   getItems: (params?: { q?: string; categoryId?: string; lowStock?: boolean }) => {
@@ -266,6 +280,22 @@ export const api = {
     if (params?.q) query.append('q', params.q);
     return fetch(`${BASE_URL}/inventory/balances?${query.toString()}`, { headers: getHeaders() }).then((res) => handleResponse<any>(res));
   },
+
+  updateBulkItemPrices: (data: {
+    field: 'purchasePrice' | 'sellPrice';
+    target:
+      | { type: 'category'; categoryId: string }
+      | { type: 'items'; itemIds: string[] }
+      | { type: 'item'; itemId: string };
+    adjustmentType: 'percentage' | 'amount';
+    operation: 'increase' | 'decrease';
+    value: number;
+  }) =>
+    fetch(`${BASE_URL}/inventory/prices/bulk`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<{ updatedCount: number }>(res)),
 
   getTransfers: () =>
     fetch(`${BASE_URL}/inventory/transfers`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),

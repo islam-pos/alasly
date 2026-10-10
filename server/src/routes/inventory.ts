@@ -1,12 +1,39 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
+import { AuthenticatedRequest, authenticate, loadUserPermissions, requirePermission } from '../middleware/auth';
 
 const router = Router();
 
+const canViewItemPrices = (req: AuthenticatedRequest) =>
+  req.authenticatedRole === 'admin' || req.rolePermissions?.includes('manage_item_prices') === true;
+
+const withoutItemPrices = (item: any) => {
+  if (!item) return item;
+  const { purchasePrice, avgCost, sellPrice, specialSellPrice, ...safeItem } = item;
+  return safeItem;
+};
+
+const sanitizeInventoryRecord = (record: any, canViewPrices: boolean) => ({
+  ...record,
+  ...(Array.isArray(record.items) ? {
+    items: record.items.map((entry: any) => {
+      const { unitCost, totalCost, ...safeEntry } = entry;
+      return {
+        ...safeEntry,
+        ...(canViewPrices ? { unitCost, totalCost } : {}),
+        ...(entry.item ? { item: canViewPrices ? entry.item : withoutItemPrices(entry.item) } : {}),
+      };
+    }),
+  } : {}),
+});
+
 // --- Live Stock Balances across Warehouses ---
-router.get('/balances', async (req, res) => {
+router.get('/balances', authenticate, loadUserPermissions, requirePermission('manage_inventory'), async (req, res) => {
   try {
+    const authenticatedReq = req as AuthenticatedRequest;
+    const canViewPrices = authenticatedReq.authenticatedRole === 'admin'
+      || authenticatedReq.rolePermissions?.includes('manage_item_prices') === true;
     const { warehouseId, categoryId, q } = req.query;
     let whereClause: any = { active: true };
 
@@ -37,12 +64,19 @@ router.get('/balances', async (req, res) => {
     const results = items.map((it) => {
       const totalQuantity = it.stockBalances.reduce((sum, b) => sum + b.quantity, 0);
       const totalReserved = it.stockBalances.reduce((sum, b) => sum + b.reservedQty, 0);
+      const { purchasePrice, avgCost, sellPrice, specialSellPrice, ...itemDetails } = it;
       return {
-        ...it,
+        ...itemDetails,
         totalQuantity,
         availableQuantity: totalQuantity - totalReserved,
         isLowStock: totalQuantity <= it.minStock,
-        totalValue: totalQuantity * it.avgCost,
+        ...(canViewPrices ? {
+          purchasePrice,
+          avgCost,
+          sellPrice,
+          specialSellPrice,
+          totalValue: totalQuantity * avgCost,
+        } : {}),
       };
     });
 
@@ -52,9 +86,107 @@ router.get('/balances', async (req, res) => {
   }
 });
 
+router.post(
+  '/prices/bulk',
+  authenticate,
+  loadUserPermissions,
+  requirePermission('manage_inventory'),
+  requirePermission('manage_item_prices'),
+  async (req, res) => {
+    try {
+      const authenticatedReq = req as AuthenticatedRequest;
+      const { field, target, adjustmentType, operation, value } = req.body;
+      if (!['purchasePrice', 'sellPrice'].includes(field)) {
+        return res.status(400).json({ error: 'نوع السعر غير صالح' });
+      }
+      if (!target || !['category', 'items', 'item'].includes(target.type)) {
+        return res.status(400).json({ error: 'نطاق تحديث الأسعار غير صالح' });
+      }
+      if (!['percentage', 'amount'].includes(adjustmentType)) {
+        return res.status(400).json({ error: 'نوع التعديل غير صالح' });
+      }
+      if (!['increase', 'decrease'].includes(operation)) {
+        return res.status(400).json({ error: 'اتجاه التعديل غير صالح' });
+      }
+      if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+        return res.status(400).json({ error: 'يجب إدخال نسبة أو مبلغ أكبر من صفر' });
+      }
+
+      let where: { active: boolean; categoryId?: string; id?: string | { in: string[] } };
+      if (target.type === 'category' && typeof target.categoryId === 'string' && target.categoryId) {
+        where = { active: true, categoryId: target.categoryId };
+      } else if (
+        target.type === 'item' &&
+        typeof target.itemId === 'string' &&
+        target.itemId
+      ) {
+        where = { active: true, id: target.itemId };
+      } else if (
+        target.type === 'items' &&
+        Array.isArray(target.itemIds) &&
+        target.itemIds.length > 0 &&
+        target.itemIds.length <= 1000 &&
+        target.itemIds.every((id: unknown) => typeof id === 'string' && id.length > 0)
+      ) {
+        const itemIds = [...new Set(target.itemIds as string[])];
+        if (itemIds.length !== target.itemIds.length) {
+          return res.status(400).json({ error: 'قائمة الأصناف تحتوي على عناصر مكررة' });
+        }
+        where = { active: true, id: { in: itemIds } };
+      } else {
+        return res.status(400).json({ error: 'بيانات الأصناف المستهدفة غير صالحة' });
+      }
+
+      const items = await prisma.item.findMany({
+        where,
+        select: { id: true, nameAr: true, purchasePrice: true, sellPrice: true },
+      });
+      if (items.length === 0) {
+        return res.status(404).json({ error: 'لا توجد أصناف نشطة مطابقة للتحديث' });
+      }
+      if (target.type === 'items' && items.length !== target.itemIds.length) {
+        return res.status(400).json({ error: 'بعض الأصناف المحددة غير موجودة أو غير نشطة' });
+      }
+
+      const sign = operation === 'increase' ? 1 : -1;
+      const updates = items.map((item) => {
+        const currentPrice = item[field as 'purchasePrice' | 'sellPrice'];
+        const delta = adjustmentType === 'percentage' ? currentPrice * value / 100 : value;
+        const newPrice = Math.round((currentPrice + sign * delta) * 100) / 100;
+        if (!Number.isFinite(newPrice) || newPrice < 0) {
+          throw new Error(`سيؤدي التعديل إلى سعر غير صالح للصنف ${item.nameAr}`);
+        }
+        return { id: item.id, price: newPrice };
+      });
+
+      const auditDetails = `تعديل ${field === 'purchasePrice' ? 'سعر الشراء' : 'سعر البيع'} لـ ${updates.length} صنف (${adjustmentType === 'percentage' ? `${value}%` : `${value} ر.س`} ${operation === 'increase' ? 'زيادة' : 'تخفيض'})`;
+      await prisma.$transaction(async (transaction) => {
+        for (const { id, price } of updates) {
+          await transaction.item.update({ where: { id }, data: { [field]: price } });
+        }
+        await transaction.auditLog.create({
+          data: {
+            userId: authenticatedReq.user?.id,
+            action: 'UPDATE',
+            entity: 'ItemPrice',
+            entityId: target.type === 'category' ? target.categoryId : null,
+            details: auditDetails,
+            ipAddress: req.ip,
+          },
+        });
+      });
+
+      res.json({ updatedCount: updates.length });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  },
+);
+
 // --- Inter-Warehouse Transfers ---
-router.get('/transfers', async (req, res) => {
+router.get('/transfers', authenticate, loadUserPermissions, requirePermission('manage_inventory'), async (req, res) => {
   try {
+    const canViewPrices = canViewItemPrices(req as AuthenticatedRequest);
     const transfers = await prisma.warehouseTransfer.findMany({
       include: {
         fromWarehouse: true,
@@ -63,14 +195,15 @@ router.get('/transfers', async (req, res) => {
       },
       orderBy: { createdAt: 'desc' },
     });
-    res.json(transfers);
+    res.json(transfers.map((transfer) => sanitizeInventoryRecord(transfer, canViewPrices)));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-router.post('/transfers', async (req, res) => {
+router.post('/transfers', authenticate, loadUserPermissions, requirePermission('manage_inventory'), async (req, res) => {
   try {
+    const canViewPrices = canViewItemPrices(req as AuthenticatedRequest);
     const { fromWarehouseId, toWarehouseId, items, notes } = req.body;
 
     if (fromWarehouseId === toWarehouseId) {
@@ -169,15 +302,16 @@ router.post('/transfers', async (req, res) => {
 
     await logAudit({ action: 'TRANSFER', entity: 'WarehouseTransfer', entityId: transfer.id, details: `تنفيذ تحويل مخزني ${transferNumber}` });
 
-    res.status(201).json(transfer);
+    res.status(201).json(sanitizeInventoryRecord(transfer, canViewPrices));
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 });
 
 // --- Inventory Count / Stocktaking (Section 9: الجرد) ---
-router.get('/counts', async (req, res) => {
+router.get('/counts', authenticate, loadUserPermissions, requirePermission('manage_inventory'), async (req, res) => {
   try {
+    const canViewPrices = canViewItemPrices(req as AuthenticatedRequest);
     const counts = await prisma.inventoryCount.findMany({
       include: {
         warehouse: true,
@@ -185,15 +319,28 @@ router.get('/counts', async (req, res) => {
       },
       orderBy: { createdAt: 'desc' },
     });
-    res.json(counts);
+    res.json(counts.map((count) => sanitizeInventoryRecord(count, canViewPrices)));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-router.post('/counts', async (req, res) => {
+router.post('/counts', authenticate, loadUserPermissions, requirePermission('manage_inventory'), async (req, res) => {
   try {
+    const canViewPrices = canViewItemPrices(req as AuthenticatedRequest);
     const { warehouseId, items, notes } = req.body;
+    if (!warehouseId || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'يجب تحديد المستودع وأصناف الجرد' });
+    }
+
+    const itemCosts = await prisma.item.findMany({
+      where: { id: { in: items.map((item: any) => item.itemId) } },
+      select: { id: true, avgCost: true },
+    });
+    if (itemCosts.length !== new Set(items.map((item: any) => item.itemId)).size) {
+      return res.status(400).json({ error: 'بعض أصناف الجرد غير موجودة' });
+    }
+    const costByItemId = new Map(itemCosts.map((item) => [item.id, item.avgCost]));
 
     const countNumber = `CNT-${new Date().getFullYear()}-${String((await prisma.inventoryCount.count()) + 1).padStart(3, '0')}`;
 
@@ -209,7 +356,7 @@ router.post('/counts', async (req, res) => {
             bookQty: parseInt(it.bookQty),
             physicalQty: parseInt(it.physicalQty),
             difference: parseInt(it.physicalQty) - parseInt(it.bookQty),
-            unitCost: parseFloat(it.unitCost) || 0,
+            unitCost: costByItemId.get(it.itemId) || 0,
             notes: it.notes || null,
           })),
         },
@@ -234,8 +381,8 @@ router.post('/counts', async (req, res) => {
             warehouseId,
             type: 'ADJUSTMENT',
             quantity: diff,
-            unitCost: parseFloat(it.unitCost) || 0,
-            totalCost: diff * (parseFloat(it.unitCost) || 0),
+            unitCost: costByItemId.get(it.itemId) || 0,
+            totalCost: diff * (costByItemId.get(it.itemId) || 0),
             referenceType: 'InventoryCount',
             referenceId: inventoryCount.id,
             notes: `تسوية جرد دوري برقم ${countNumber}`,
@@ -246,7 +393,7 @@ router.post('/counts', async (req, res) => {
 
     await logAudit({ action: 'STOCKTAKING', entity: 'InventoryCount', entityId: inventoryCount.id, details: `اعتماد جرد مخزني ${countNumber}` });
 
-    res.status(201).json(inventoryCount);
+    res.status(201).json(sanitizeInventoryRecord(inventoryCount, canViewPrices));
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }

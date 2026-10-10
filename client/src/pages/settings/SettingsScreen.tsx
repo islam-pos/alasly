@@ -6,9 +6,12 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 export const SettingsScreen: React.FC = () => {
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
+  const canManageRoles = hasPermission('manage_settings');
   const [activeTab, setActiveTab] = useState<'company' | 'branches' | 'rbac' | 'audit'>('company');
   const [loading, setLoading] = useState(true);
 
@@ -31,23 +34,53 @@ export const SettingsScreen: React.FC = () => {
 
   const [auditFilterAction, setAuditFilterAction] = useState('');
 
+  const getRolePermissions = (role: any): string[] => {
+    try {
+      const value = JSON.parse(role.permissions || '[]');
+      return Array.isArray(value) ? value : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const handlePricePermissionChange = (roleId: string, enabled: boolean) => {
+    setRoles((currentRoles) => currentRoles.map((role) => {
+      if (role.id !== roleId) return role;
+      const rolePermissions = getRolePermissions(role).filter((permission) => permission !== 'manage_item_prices');
+      if (enabled) rolePermissions.push('manage_item_prices');
+      return { ...role, permissions: JSON.stringify(rolePermissions) };
+    }));
+  };
+
+  const handleSaveRolePermissions = async (role: any) => {
+    try {
+      const updatedRole = await api.updateRolePermissions(role.id, getRolePermissions(role));
+      setRoles((currentRoles) => currentRoles.map((currentRole) =>
+        currentRole.id === role.id ? updatedRole : currentRole,
+      ));
+      showToast('تم حفظ صلاحية الأسعار للدور بنجاح', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'فشل حفظ صلاحيات الدور', 'error');
+    }
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
       const [compRes, brRes, rRes, permRes, logRes] = await Promise.all([
-        api.master.getCompany(),
-        api.master.getBranches(),
-        api.master.getRoles(),
-        api.settings.getPermissions(),
-        api.settings.getAuditLogs({ action: auditFilterAction })
+        api.getCompany(),
+        api.getBranches(),
+        api.getRoles(),
+        api.getPermissionsList(),
+        api.getAuditLogs({ action: auditFilterAction })
       ]);
-      setCompany(compRes.data);
-      setBranches(brRes.data);
-      setRoles(rRes.data);
-      setPermissions(permRes.data);
-      setAuditLogs(logRes.data);
+      setCompany(compRes);
+      setBranches(brRes);
+      setRoles(rRes);
+      setPermissions(permRes);
+      setAuditLogs(logRes);
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'فشل تحميل الإعدادات', 'error');
+      showToast(err.message || 'فشل تحميل الإعدادات', 'error');
     } finally {
       setLoading(false);
     }
@@ -61,7 +94,7 @@ export const SettingsScreen: React.FC = () => {
   const handleSaveCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.master.updateCompany(company);
+      await api.updateCompany(company);
       showToast('تم حفظ بيانات المنشأة والضريبة بنجاح', 'success');
     } catch (err: any) {
       showToast(err.response?.data?.error || 'فشل حفظ البيانات', 'error');
@@ -72,7 +105,7 @@ export const SettingsScreen: React.FC = () => {
   const handleCreateBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.master.createBranch(branchForm);
+      await api.createBranch(branchForm);
       showToast('تمت إضافة الفرع بنجاح', 'success');
       setIsBranchModalOpen(false);
       setBranchForm({ name: '', code: '', phone: '', address: '', city: 'الرياض' });
@@ -315,6 +348,28 @@ export const SettingsScreen: React.FC = () => {
                 <div className="text-xs text-slate-600 flex items-center justify-between border-t pt-2">
                   <span>عدد المستخدمين المربوطين:</span>
                   <span className="font-bold font-mono">{r._count?.users || 0} مستخدم</span>
+                </div>
+                <div className="mt-3 border-t pt-3 space-y-3">
+                  <label className="flex items-start gap-2 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={r.name === 'admin' || getRolePermissions(r).includes('manage_item_prices')}
+                      disabled={!canManageRoles || r.name === 'admin'}
+                      onChange={(event) => handlePricePermissionChange(r.id, event.target.checked)}
+                      className="mt-0.5 accent-blue-600"
+                    />
+                    <span>عرض وتعديل أسعار الشراء والبيع في المخزون</span>
+                  </label>
+                  {canManageRoles && r.name !== 'admin' && (
+                    <button
+                      type="button"
+                      onClick={() => handleSaveRolePermissions(r)}
+                      className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      حفظ صلاحية الأسعار
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

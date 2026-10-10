@@ -14,8 +14,11 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 export const ItemsCatalog: React.FC = () => {
+  const { hasPermission } = useAuth();
+  const canManagePrices = hasPermission('manage_item_prices');
   const [items, setItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
@@ -205,8 +208,12 @@ export const ItemsCatalog: React.FC = () => {
                 <th className="p-3.5">التصنيف</th>
                 <th className="p-3.5">الوحدة</th>
                 <th className="p-3.5">موقع الرف</th>
-                <th className="p-3.5">سعر الشراء</th>
-                <th className="p-3.5">سعر البيع</th>
+                {canManagePrices && (
+                  <>
+                    <th className="p-3.5">سعر الشراء</th>
+                    <th className="p-3.5">سعر البيع</th>
+                  </>
+                )}
                 <th className="p-3.5">المخزون المتاح</th>
                 <th className="p-3.5">حد الطلب</th>
               </tr>
@@ -214,13 +221,13 @@ export const ItemsCatalog: React.FC = () => {
             <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-slate-400">
+                  <td colSpan={canManagePrices ? 9 : 7} className="p-8 text-center text-slate-400">
                     جاري تحميل كتالوج الأصناف...
                   </td>
                 </tr>
               ) : filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center text-slate-400">
+                  <td colSpan={canManagePrices ? 9 : 7} className="p-12 text-center text-slate-400">
                     لا توجد أصناف مطابقة للبحث
                   </td>
                 </tr>
@@ -238,8 +245,12 @@ export const ItemsCatalog: React.FC = () => {
                     <td className="p-3.5 text-slate-600">{item.category?.name}</td>
                     <td className="p-3.5 text-slate-500">{item.unit?.name}</td>
                     <td className="p-3.5 font-mono text-slate-500">{item.defaultLocation || '-'}</td>
-                    <td className="p-3.5 font-bold text-slate-600 font-mono">{item.purchasePrice} ر.س</td>
-                    <td className="p-3.5 font-black text-brand-600 font-mono">{item.sellPrice} ر.س</td>
+                    {canManagePrices && (
+                      <>
+                        <td className="p-3.5 font-bold text-slate-600 font-mono">{item.purchasePrice} ر.س</td>
+                        <td className="p-3.5 font-black text-brand-600 font-mono">{item.sellPrice} ر.س</td>
+                      </>
+                    )}
                     <td className="p-3.5">
                       <span
                         className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${
@@ -364,25 +375,29 @@ export const ItemsCatalog: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">سعر الشراء (ر.س)</label>
-                  <input
-                    type="number"
-                    value={formData.purchasePrice}
-                    onChange={(e) => setFormData({ ...formData, purchasePrice: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono"
-                  />
-                </div>
+                {canManagePrices && (
+                  <>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">سعر الشراء (ر.س)</label>
+                      <input
+                        type="number"
+                        value={formData.purchasePrice}
+                        onChange={(e) => setFormData({ ...formData, purchasePrice: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono"
+                      />
+                    </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">سعر البيع (ر.س)</label>
-                  <input
-                    type="number"
-                    value={formData.sellPrice}
-                    onChange={(e) => setFormData({ ...formData, sellPrice: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono"
-                  />
-                </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">سعر البيع (ر.س)</label>
+                      <input
+                        type="number"
+                        value={formData.sellPrice}
+                        onChange={(e) => setFormData({ ...formData, sellPrice: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono"
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">الحد الأدنى للمخزون (حد إعادة الطلب)</label>

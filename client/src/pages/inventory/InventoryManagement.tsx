@@ -6,9 +6,12 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 export const InventoryManagement: React.FC = () => {
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
+  const canManagePrices = hasPermission('manage_item_prices');
   const [activeTab, setActiveTab] = useState<'balances' | 'transfers' | 'counts'>('balances');
   
   // Data states
@@ -28,6 +31,16 @@ export const InventoryManagement: React.FC = () => {
   // Modals
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isCountModalOpen, setIsCountModalOpen] = useState(false);
+  const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
+  const [selectedPriceItemIds, setSelectedPriceItemIds] = useState<string[]>([]);
+  const [priceForm, setPriceForm] = useState({
+    field: 'sellPrice' as 'purchasePrice' | 'sellPrice',
+    targetType: 'selected' as 'selected' | 'category' | 'item',
+    adjustmentType: 'percentage' as 'percentage' | 'amount',
+    operation: 'increase' as 'increase' | 'decrease',
+    value: '',
+  });
+  const [savingPrices, setSavingPrices] = useState(false);
 
   // Transfer form
   const [transferForm, setTransferForm] = useState({
@@ -47,19 +60,19 @@ export const InventoryManagement: React.FC = () => {
     try {
       setLoading(true);
       const [bRes, wRes, cRes, tRes, cntRes] = await Promise.all([
-        api.inventory.getBalances(),
-        api.master.getWarehouses(),
-        api.master.getCategories(),
-        api.inventory.getTransfers(),
-        api.inventory.getCounts()
+        api.getStockBalances(),
+        api.getWarehouses(),
+        api.getCategories(),
+        api.getTransfers(),
+        api.getCounts()
       ]);
-      setBalances(bRes.data);
-      setWarehouses(wRes.data);
-      setCategories(cRes.data);
-      setTransfers(tRes.data);
-      setCounts(cntRes.data);
+      setBalances(bRes);
+      setWarehouses(wRes);
+      setCategories(cRes);
+      setTransfers(tRes);
+      setCounts(cntRes);
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'فشل في تحميل بيانات المخزون', 'error');
+      showToast(err.message || 'فشل في تحميل بيانات المخزون', 'error');
     } finally {
       setLoading(false);
     }
@@ -91,6 +104,74 @@ export const InventoryManagement: React.FC = () => {
   const totalItemsCount = balances.length;
   const lowStockCount = balances.filter(b => b.isLowStock).length;
   const totalStockValuation = balances.reduce((sum, b) => sum + (b.totalValue || 0), 0);
+  const balanceColumnCount = 5 + (canManagePrices ? 4 : 0);
+
+  const toggleSelectedPriceItem = (itemId: string, selected: boolean) => {
+    setSelectedPriceItemIds((current) => selected
+      ? [...new Set([...current, itemId])]
+      : current.filter((id) => id !== itemId));
+  };
+
+  const toggleAllVisiblePriceItems = (selected: boolean) => {
+    setSelectedPriceItemIds((current) => {
+      const visibleIds = new Set(filteredBalances.map((item) => item.id));
+      const remaining = current.filter((id) => !visibleIds.has(id));
+      return selected ? [...remaining, ...visibleIds] : remaining;
+    });
+  };
+
+  const handleBulkPriceUpdate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const value = Number(priceForm.value);
+    if (!Number.isFinite(value) || value <= 0) {
+      showToast('أدخل نسبة أو مبلغاً أكبر من صفر', 'error');
+      return;
+    }
+
+    let target:
+      | { type: 'category'; categoryId: string }
+      | { type: 'items'; itemIds: string[] }
+      | { type: 'item'; itemId: string };
+    if (priceForm.targetType === 'category') {
+      if (!selectedCategory) {
+        showToast('حدد تصنيفاً أولاً من قائمة التصنيفات', 'error');
+        return;
+      }
+      target = { type: 'category', categoryId: selectedCategory };
+    } else if (priceForm.targetType === 'item') {
+      if (selectedPriceItemIds.length !== 1) {
+        showToast('حدد صنفاً واحداً فقط من الجدول', 'error');
+        return;
+      }
+      target = { type: 'item', itemId: selectedPriceItemIds[0] };
+    } else {
+      if (selectedPriceItemIds.length === 0) {
+        showToast('حدد صنفاً واحداً على الأقل من الجدول', 'error');
+        return;
+      }
+      target = { type: 'items', itemIds: selectedPriceItemIds };
+    }
+
+    try {
+      setSavingPrices(true);
+      const result = await api.updateBulkItemPrices({
+        field: priceForm.field,
+        target,
+        adjustmentType: priceForm.adjustmentType,
+        operation: priceForm.operation,
+        value,
+      });
+      showToast(`تم تحديث الأسعار لـ ${result.updatedCount} صنف`, 'success');
+      setIsPriceModalOpen(false);
+      setSelectedPriceItemIds([]);
+      setPriceForm((current) => ({ ...current, value: '' }));
+      await loadData();
+    } catch (error: any) {
+      showToast(error.message || 'فشل تحديث الأسعار', 'error');
+    } finally {
+      setSavingPrices(false);
+    }
+  };
 
   // Execute Transfer
   const handleExecuteTransfer = async (e: React.FormEvent) => {
@@ -105,7 +186,7 @@ export const InventoryManagement: React.FC = () => {
     }
 
     try {
-      await api.inventory.createTransfer({
+      await api.createTransfer({
         fromWarehouseId: transferForm.fromWarehouseId,
         toWarehouseId: transferForm.toWarehouseId,
         notes: transferForm.notes,
@@ -116,7 +197,7 @@ export const InventoryManagement: React.FC = () => {
       setTransferForm({ fromWarehouseId: '', toWarehouseId: '', itemId: '', quantity: 1, notes: '' });
       loadData();
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'فشل تنفيذ التحويل', 'error');
+      showToast(err.message || 'فشل تنفيذ التحويل', 'error');
     }
   };
 
@@ -149,7 +230,7 @@ export const InventoryManagement: React.FC = () => {
     }
 
     try {
-      await api.inventory.createCount({
+      await api.createCount({
         warehouseId: countWarehouseId,
         notes: countNotes,
         items: countItems.map(it => ({
@@ -164,7 +245,7 @@ export const InventoryManagement: React.FC = () => {
       setCountNotes('');
       loadData();
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'فشل حفظ الجرد', 'error');
+      showToast(err.message || 'فشل حفظ الجرد', 'error');
     }
   };
 
@@ -223,7 +304,7 @@ export const InventoryManagement: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        {canManagePrices && <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-slate-500">إجمالي القيمة التقديرية للمخزون</span>
             <div className="text-2xl font-black text-emerald-600 mt-1">{totalStockValuation.toLocaleString()} ر.س</div>
@@ -232,7 +313,7 @@ export const InventoryManagement: React.FC = () => {
           <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <DollarSign className="w-6 h-6" />
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Tabs */}
@@ -323,33 +404,74 @@ export const InventoryManagement: React.FC = () => {
             </button>
           </div>
 
+          {canManagePrices && (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs text-slate-500">
+                الأصناف المحددة: {selectedPriceItemIds.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsPriceModalOpen(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold"
+              >
+                تحديث أسعار الأصناف
+              </button>
+            </div>
+          )}
+
           {/* Table */}
           <div className="overflow-x-auto border rounded-xl">
             <table className="w-full text-right text-sm">
               <thead className="bg-slate-50 text-slate-700 font-bold border-b text-xs">
                 <tr>
+                  {canManagePrices && (
+                    <th className="py-3 px-3 text-center">
+                      <input
+                        type="checkbox"
+                        aria-label="تحديد كل الأصناف الظاهرة"
+                        checked={filteredBalances.length > 0 && filteredBalances.every((item) => selectedPriceItemIds.includes(item.id))}
+                        onChange={(event) => toggleAllVisiblePriceItems(event.target.checked)}
+                        className="accent-blue-600"
+                      />
+                    </th>
+                  )}
                   <th className="py-3 px-4">رقم القطعة / الصنف</th>
                   <th className="py-3 px-4">التصنيف</th>
                   <th className="py-3 px-4">التوزيع بالمستودعات</th>
                   <th className="py-3 px-4 text-center">الرصيد الكلي</th>
                   <th className="py-3 px-4 text-center">حد الطلب</th>
-                  <th className="py-3 px-4 text-left">متوسط التكلفة</th>
-                  <th className="py-3 px-4 text-left">سعر البيع</th>
-                  <th className="py-3 px-4 text-left">إجمالي القيمة</th>
+                  {canManagePrices && (
+                    <>
+                      <th className="py-3 px-4 text-left">سعر الشراء</th>
+                      <th className="py-3 px-4 text-left">سعر البيع</th>
+                      <th className="py-3 px-4 text-left">إجمالي القيمة</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-8 text-slate-400">جاري تحميل بيانات المخزون...</td>
+                    <td colSpan={balanceColumnCount} className="text-center py-8 text-slate-400">جاري تحميل بيانات المخزون...</td>
                   </tr>
                 ) : filteredBalances.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-8 text-slate-400">لا توجد أصناف تطابق شروط البحث</td>
+                    <td colSpan={balanceColumnCount} className="text-center py-8 text-slate-400">لا توجد أصناف تطابق شروط البحث</td>
                   </tr>
                 ) : (
                   filteredBalances.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition">
+                      {canManagePrices && (
+                        <td className="py-3 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`تحديد ${item.nameAr}`}
+                            checked={selectedPriceItemIds.includes(item.id)}
+                            onChange={(event) => toggleSelectedPriceItem(item.id, event.target.checked)}
+                            className="accent-blue-600"
+                          />
+                        </td>
+                      )}
                       <td className="py-3 px-4">
                         <div className="font-bold text-slate-900">{item.nameAr}</div>
                         <div className="text-xs font-mono text-slate-500">{item.partNumber || item.sku}</div>
@@ -381,21 +503,114 @@ export const InventoryManagement: React.FC = () => {
                       <td className="py-3 px-4 text-center font-mono text-xs text-slate-500">
                         {item.minStock}
                       </td>
-                      <td className="py-3 px-4 text-left font-mono text-xs">
-                        {(item.avgCost || 0).toLocaleString()} ر.س
-                      </td>
-                      <td className="py-3 px-4 text-left font-mono font-bold text-slate-800">
-                        {item.sellingPrice?.toLocaleString()} ر.س
-                      </td>
-                      <td className="py-3 px-4 text-left font-mono font-bold text-emerald-700">
-                        {(item.totalValue || 0).toLocaleString()} ر.س
-                      </td>
+                      {canManagePrices && (
+                        <>
+                          <td className="py-3 px-4 text-left font-mono text-xs">
+                            {(item.purchasePrice || 0).toLocaleString()} ر.س
+                          </td>
+                          <td className="py-3 px-4 text-left font-mono font-bold text-slate-800">
+                            {(item.sellPrice || 0).toLocaleString()} ر.س
+                          </td>
+                          <td className="py-3 px-4 text-left font-mono font-bold text-emerald-700">
+                            {(item.totalValue || 0).toLocaleString()} ر.س
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {isPriceModalOpen && canManagePrices && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <form onSubmit={handleBulkPriceUpdate} className="bg-white rounded-2xl shadow-xl max-w-xl w-full p-6 space-y-4">
+            <h3 className="text-lg font-bold text-slate-900">تحديث أسعار الأصناف</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-xs font-bold text-slate-700">
+                السعر
+                <select
+                  value={priceForm.field}
+                  onChange={(event) => setPriceForm({ ...priceForm, field: event.target.value as 'purchasePrice' | 'sellPrice' })}
+                  className="mt-1 w-full border rounded-xl px-3 py-2 bg-white"
+                >
+                  <option value="sellPrice">سعر البيع</option>
+                  <option value="purchasePrice">سعر الشراء</option>
+                </select>
+              </label>
+              <label className="text-xs font-bold text-slate-700">
+                نطاق الأصناف
+                <select
+                  value={priceForm.targetType}
+                  onChange={(event) => setPriceForm({ ...priceForm, targetType: event.target.value as 'selected' | 'category' | 'item' })}
+                  className="mt-1 w-full border rounded-xl px-3 py-2 bg-white"
+                >
+                  <option value="selected">الأصناف المحددة ({selectedPriceItemIds.length})</option>
+                  <option value="item">صنف واحد محدد</option>
+                  <option value="category">التصنيف المحدد ({categories.find((category) => category.id === selectedCategory)?.nameAr || 'لم يتم اختيار تصنيف'})</option>
+                </select>
+              </label>
+              <label className="text-xs font-bold text-slate-700">
+                نوع التعديل
+                <select
+                  value={priceForm.adjustmentType}
+                  onChange={(event) => setPriceForm({ ...priceForm, adjustmentType: event.target.value as 'percentage' | 'amount' })}
+                  className="mt-1 w-full border rounded-xl px-3 py-2 bg-white"
+                >
+                  <option value="percentage">نسبة مئوية</option>
+                  <option value="amount">مبلغ ثابت (ر.س)</option>
+                </select>
+              </label>
+              <label className="text-xs font-bold text-slate-700">
+                طريقة التعديل
+                <select
+                  value={priceForm.operation}
+                  onChange={(event) => setPriceForm({ ...priceForm, operation: event.target.value as 'increase' | 'decrease' })}
+                  className="mt-1 w-full border rounded-xl px-3 py-2 bg-white"
+                >
+                  <option value="increase">زيادة</option>
+                  <option value="decrease">تخفيض</option>
+                </select>
+              </label>
+            </div>
+            <label className="block text-xs font-bold text-slate-700">
+              {priceForm.adjustmentType === 'percentage' ? 'النسبة المئوية' : 'المبلغ'}
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+                value={priceForm.value}
+                onChange={(event) => setPriceForm({ ...priceForm, value: event.target.value })}
+                className="mt-1 w-full border rounded-xl px-3 py-2 font-mono"
+              />
+            </label>
+            {priceForm.targetType === 'category' && !selectedCategory && (
+              <p className="text-xs text-amber-700">اختر التصنيف المطلوب من قائمة التصنيفات قبل الحفظ.</p>
+            )}
+            {(priceForm.targetType === 'item' && selectedPriceItemIds.length !== 1) && (
+              <p className="text-xs text-amber-700">حدد صنفاً واحداً فقط من الجدول.</p>
+            )}
+            <div className="flex justify-end gap-2 border-t pt-4">
+              <button
+                type="button"
+                onClick={() => setIsPriceModalOpen(false)}
+                className="px-4 py-2 border rounded-xl text-sm font-semibold"
+              >
+                إلغاء
+              </button>
+              <button
+                type="submit"
+                disabled={savingPrices}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold"
+              >
+                {savingPrices ? 'جارٍ التحديث...' : 'تطبيق التحديث'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
