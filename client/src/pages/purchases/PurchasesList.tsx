@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 import { useSearchParams } from 'react-router-dom';
 import {
   ShoppingCart,
   Search,
+  Barcode,
+  Camera,
   Plus,
   Building2,
   Calendar,
@@ -31,6 +34,9 @@ export const PurchasesList: React.FC = () => {
   const [shortageModalOpen, setShortageModalOpen] = useState(false);
   const [shortageQuantities, setShortageQuantities] = useState<Record<string, number>>({});
   const [shortageSubmitting, setShortageSubmitting] = useState(false);
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
+  const [cameraError, setCameraError] = useState('');
 
   // New Invoice Form
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
@@ -42,6 +48,9 @@ export const PurchasesList: React.FC = () => {
     { itemId: '', quantity: 10, unitPrice: 0 },
   ]);
   const [submitting, setSubmitting] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
+  const barcodeReadRef = useRef(false);
 
   const [searchParams] = useSearchParams();
   const { success, error } = useToast();
@@ -100,6 +109,85 @@ export const PurchasesList: React.FC = () => {
         return { ...row, [field]: val };
       })
     );
+  };
+
+  const handleBarcodeValue = async (value: string) => {
+    const code = value.trim();
+    if (!code) return;
+
+    try {
+      const item = await api.lookupItemByBarcode(code);
+      setInvoiceItems((current) => {
+        const existingRow = current.find((row) => row.itemId === item.id);
+        if (existingRow) {
+          return current.map((row) =>
+            row.itemId === item.id ? { ...row, quantity: (Number(row.quantity) || 0) + 1 } : row,
+          );
+        }
+
+        const emptyRowIndex = current.findIndex((row) => !row.itemId);
+        const newRow = { itemId: item.id, quantity: 1, unitPrice: item.purchasePrice || 0 };
+        if (emptyRowIndex === -1) return [...current, newRow];
+        return current.map((row, index) => index === emptyRowIndex ? newRow : row);
+      });
+      setBarcodeInput('');
+      success(`تمت إضافة ${item.nameAr} إلى الفاتورة`);
+    } catch (err: any) {
+      error(err.message || 'لم يتم العثور على صنف بهذا الباركود أو الكود');
+    }
+  };
+
+  useEffect(() => {
+    if (!cameraScannerOpen || !videoRef.current) return;
+
+    let cancelled = false;
+    barcodeReadRef.current = false;
+    setCameraError('');
+    const reader = new BrowserMultiFormatReader();
+
+    reader.decodeFromConstraints(
+      { video: { facingMode: { ideal: 'environment' } } },
+      videoRef.current,
+      (result, _scanError, controls) => {
+        if (cancelled || !result || barcodeReadRef.current) return;
+        barcodeReadRef.current = true;
+        controls.stop();
+        scannerControlsRef.current = null;
+        setCameraScannerOpen(false);
+        void handleBarcodeValue(result.getText());
+      },
+    ).then((controls) => {
+      if (cancelled) {
+        controls.stop();
+      } else {
+        scannerControlsRef.current = controls;
+      }
+    }).catch((scanError: unknown) => {
+      if (!cancelled) {
+        setCameraError(
+          scanError instanceof Error
+            ? scanError.message
+            : 'تعذر تشغيل الكاميرا. تحقق من السماح باستخدامها ومن اتصال آمن (HTTPS).',
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      scannerControlsRef.current?.stop();
+      scannerControlsRef.current = null;
+    };
+  }, [cameraScannerOpen]);
+
+  const closeCameraScanner = () => {
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
+    setCameraScannerOpen(false);
+  };
+
+  const closeInvoiceModal = () => {
+    closeCameraScanner();
+    setModalOpen(false);
   };
 
   const subtotal = invoiceItems.reduce(
@@ -467,7 +555,7 @@ export const PurchasesList: React.FC = () => {
                 <ShoppingCart className="w-5 h-5 text-brand-600" />
                 <span>تسجيل فاتورة مشتريات واستلام بضاعة</span>
               </h3>
-              <button onClick={() => setModalOpen(false)} className="text-slate-400">
+              <button type="button" onClick={closeInvoiceModal} className="text-slate-400">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -520,7 +608,45 @@ export const PurchasesList: React.FC = () => {
 
               {/* Items Rows */}
               <div className="space-y-2">
-                <div className="font-bold text-slate-800">الأصناف المشتراة والكميات:</div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-bold text-slate-800">الأصناف المشتراة والكميات:</div>
+                  <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                    <div className="relative min-w-48 flex-1 sm:flex-none">
+                      <input
+                        type="text"
+                        value={barcodeInput}
+                        onChange={(event) => setBarcodeInput(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            void handleBarcodeValue(barcodeInput);
+                          }
+                        }}
+                        aria-label="إدخال باركود الصنف"
+                        placeholder="امسح الباركود ثم اضغط Enter"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-3 pr-9 font-mono text-xs outline-none focus:border-brand-500"
+                      />
+                      <Barcode className="absolute right-3 top-2 h-4 w-4 text-slate-400" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleBarcodeValue(barcodeInput)}
+                      disabled={!barcodeInput.trim()}
+                      className="flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                    >
+                      <Barcode className="h-4 w-4" />
+                      إضافة بالكود
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCameraScannerOpen(true)}
+                      className="flex items-center gap-1 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
+                    >
+                      <Camera className="h-4 w-4" />
+                      مسح بالكاميرا
+                    </button>
+                  </div>
+                </div>
                 {invoiceItems.map((row, idx) => (
                   <div key={idx} className="flex items-center gap-2">
                     <select
@@ -643,6 +769,42 @@ export const PurchasesList: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {cameraScannerOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b p-4">
+              <div>
+                <h2 className="font-bold text-slate-900">قراءة باركود صنف المشتريات</h2>
+                <p className="mt-1 text-xs text-slate-500">وجّه الكاميرا نحو الباركود حتى تتم إضافته إلى الفاتورة</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeCameraScanner}
+                aria-label="إغلاق قارئ الكاميرا"
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-3 p-4">
+              <video
+                ref={videoRef}
+                className="aspect-video w-full rounded-xl bg-black object-cover"
+                muted
+                playsInline
+              />
+              {cameraError && (
+                <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+                  {cameraError}
+                </p>
+              )}
+              <p className="text-xs text-slate-500">
+                يلزم السماح بالوصول للكاميرا، ويجب فتح النظام عبر HTTPS أو localhost.
+              </p>
+            </div>
           </div>
         </div>
       )}
