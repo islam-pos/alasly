@@ -80,6 +80,8 @@ const migrate = async () => {
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "PurchaseRequest_publicTokenHash_key" ON "PurchaseRequest"("publicTokenHash")`;
   await ensureColumn('CompanySetting', 'printSettings', "TEXT NOT NULL DEFAULT '{}'");
   await ensureColumn('User', 'permissionOverrides', 'TEXT');
+  await ensureColumn('SalesInvoice', 'quotationId', 'TEXT');
+  await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "SalesInvoice_quotationId_key" ON "SalesInvoice"("quotationId")`;
   await ensureColumn('Employee', 'nationalId', 'TEXT');
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "Employee_nationalId_key" ON "Employee"("nationalId")`;
   await ensureColumn('NotificationIntegration', 'whatsappPhone', 'TEXT');

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Barcode, Printer, X } from 'lucide-react';
+import { Barcode, Printer, Search, X } from 'lucide-react';
 import type { BarcodeLabelItem } from '../../utils/barcodePrint';
 
 interface BarcodePrintDialogProps {
@@ -10,17 +10,30 @@ interface BarcodePrintDialogProps {
 
 export const BarcodePrintDialog: React.FC<BarcodePrintDialogProps> = ({ items, onClose, onPrint }) => {
   const [quantities, setQuantities] = useState(() => items.map(() => '1'));
+  const [searchQuery, setSearchQuery] = useState('');
   const [validationError, setValidationError] = useState('');
+  const visibleItems = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => {
+      const query = searchQuery.trim().toLocaleLowerCase();
+      return !query || [item.nameAr, item.sku, item.barcode || '']
+        .some((value) => value.toLocaleLowerCase().includes(query));
+    });
+  const printableIndexes = searchQuery.trim()
+    ? visibleItems.map(({ index }) => index)
+    : items.map((_, index) => index);
   const totalLabels = useMemo(
-    () => quantities.reduce((total, value) => total + (Number(value) || 0), 0),
-    [quantities],
+    () => printableIndexes.reduce((total, index) => total + (Number(quantities[index]) || 0), 0),
+    [quantities, printableIndexes],
   );
   const visibleError = validationError
     || (totalLabels > 1000 ? 'إجمالي الطباعة لا يمكن أن يتجاوز 1000 ملصق في المرة الواحدة' : '');
 
   const handlePrint = () => {
     const parsedQuantities = quantities.map((value) => Number(value));
-    if (parsedQuantities.some((quantity) => !Number.isInteger(quantity) || quantity < 0 || quantity > 1000)) {
+    if (printableIndexes.some((index) =>
+      !Number.isInteger(parsedQuantities[index]) || parsedQuantities[index] < 0 || parsedQuantities[index] > 1000,
+    )) {
       setValidationError('أدخل عددًا صحيحًا من 0 إلى 1000 لكل صنف');
       return;
     }
@@ -33,8 +46,8 @@ export const BarcodePrintDialog: React.FC<BarcodePrintDialogProps> = ({ items, o
       return;
     }
 
-    const labels = items.flatMap((item, index) =>
-      Array.from({ length: parsedQuantities[index] }, () => item),
+    const labels = printableIndexes.flatMap((index) =>
+      Array.from({ length: parsedQuantities[index] }, () => items[index]),
     );
     if (onPrint(labels)) onClose();
   };
@@ -53,14 +66,28 @@ export const BarcodePrintDialog: React.FC<BarcodePrintDialogProps> = ({ items, o
               <Barcode className="h-5 w-5 text-blue-700" />
               تحديد عدد الملصقات لكل صنف
             </h2>
-            <p className="mt-1 text-xs text-slate-500">يمكنك وضع صفر للأصناف التي لا تريد طباعتها.</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {searchQuery.trim() ? 'مع تفعيل البحث ستتم طباعة الأصناف المطابقة فقط.' : 'يمكنك وضع صفر للأصناف التي لا تريد طباعتها.'}
+            </p>
           </div>
           <button type="button" onClick={onClose} aria-label="إغلاق" className="rounded-lg p-1 text-slate-500 hover:bg-slate-100">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="my-4 overflow-y-auto rounded-xl border border-slate-200">
+        <label className="relative mt-4 block">
+          <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="ابحث باسم الصنف أو الكود أو الباركود..."
+            aria-label="البحث عن صنف لطباعة الباركود"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-3 pr-10 text-sm outline-none focus:border-blue-500 focus:bg-white"
+          />
+        </label>
+
+        <div className="my-3 overflow-y-auto rounded-xl border border-slate-200">
           <table className="w-full text-right text-sm">
             <thead className="sticky top-0 bg-slate-50 text-xs text-slate-600">
               <tr>
@@ -70,10 +97,10 @@ export const BarcodePrintDialog: React.FC<BarcodePrintDialogProps> = ({ items, o
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {items.map((item, index) => (
+              {visibleItems.map(({ item, index }) => (
                 <tr key={`${item.sku}-${index}`}>
                   <td className="px-3 py-2.5 font-semibold text-slate-800">{item.nameAr}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-slate-500">{item.sku}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-slate-500">{item.barcode || item.sku}</td>
                   <td className="px-3 py-2.5 text-center">
                     <input
                       type="number"
@@ -94,6 +121,9 @@ export const BarcodePrintDialog: React.FC<BarcodePrintDialogProps> = ({ items, o
                   </td>
                 </tr>
               ))}
+              {visibleItems.length === 0 && (
+                <tr><td colSpan={3} className="p-6 text-center text-sm text-slate-500">لا توجد أصناف تطابق البحث</td></tr>
+              )}
             </tbody>
           </table>
         </div>

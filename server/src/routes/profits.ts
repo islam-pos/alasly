@@ -24,6 +24,7 @@ router.get('/summary', async (req, res) => {
     let invoiceWhere: any = {
       date: { gte: startDate },
       status: { not: 'CANCELLED' },
+      invoiceType: { not: 'QUOTATION' },
     };
     if (branchId) invoiceWhere.branchId = String(branchId);
 

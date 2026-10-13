@@ -16,6 +16,7 @@ router.get('/stats', async (req, res) => {
       where: {
         date: { gte: startOfToday },
         status: { not: 'CANCELLED' },
+        invoiceType: { not: 'QUOTATION' },
       },
     });
 
@@ -25,6 +26,7 @@ router.get('/stats', async (req, res) => {
       where: {
         date: { gte: startOfMonth },
         status: { not: 'CANCELLED' },
+        invoiceType: { not: 'QUOTATION' },
       },
     });
 
@@ -125,6 +127,7 @@ router.get('/charts', async (req, res) => {
         where: {
           date: { gte: start, lte: end },
           status: { not: 'CANCELLED' },
+          invoiceType: { not: 'QUOTATION' },
         },
       });
 
@@ -145,7 +148,10 @@ router.get('/charts', async (req, res) => {
     const topItemsData = await prisma.salesInvoiceItem.groupBy({
       by: ['itemId'],
       _sum: { quantity: true, total: true },
-      where: { itemId: { not: null } },
+      where: {
+        itemId: { not: null },
+        invoice: { status: { not: 'CANCELLED' }, invoiceType: { not: 'QUOTATION' } },
+      },
       orderBy: { _sum: { quantity: 'desc' } },
       take: 5,
     });
@@ -260,7 +266,11 @@ router.get('/alerts', async (req, res) => {
 
     // 3. Overdue unpaid sales invoices
     const unpaidInvoices = await prisma.salesInvoice.findMany({
-      where: { remainingAmount: { gt: 0 }, status: { not: 'CANCELLED' } },
+      where: {
+        remainingAmount: { gt: 0 },
+        status: { not: 'CANCELLED' },
+        invoiceType: { not: 'QUOTATION' },
+      },
       include: { customer: true },
       take: 5,
     });

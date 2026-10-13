@@ -76,7 +76,10 @@ router.get('/suggestions', async (req, res) => {
     units.forEach((row) => add(`وحدة: ${row.name}`, [row.name, row.symbol]));
     warehouses.forEach((row) => add(`مخزن: ${row.name}`, [row.code, row.name, row.location]));
     jobCards.forEach((row) => add(`أمر إصلاح: ${row.orderNumber}`, [row.orderNumber, row.customerComplaint, row.intakeNotes, row.notes]));
-    salesInvoices.forEach((row) => add(`فاتورة مبيعات: ${row.invoiceNumber}`, [row.invoiceNumber, row.notes, row.status]));
+    salesInvoices.forEach((row) => add(
+      `${row.invoiceType === 'QUOTATION' ? 'عرض سعر' : 'فاتورة مبيعات'}: ${row.invoiceNumber}`,
+      [row.invoiceNumber, row.notes, row.status],
+    ));
     purchaseInvoices.forEach((row) => add(`فاتورة مشتريات: ${row.invoiceNumber}`, [row.invoiceNumber, row.supplierInvoiceNumber, row.notes, row.status]));
     cashTransactions.forEach((row) => add(`سند: ${row.partyName || row.referenceId || row.id}`, [row.partyName, row.description, row.referenceId, row.referenceType]));
 

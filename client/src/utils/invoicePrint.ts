@@ -28,6 +28,8 @@ export const printSalesInvoice = (
   const fields = settings.invoiceFields;
   const currency = company?.currencySymbol || 'ج.م';
   const invoiceItems = Array.isArray(invoice.items) ? invoice.items : [];
+  const isQuotation = invoice.invoiceType === 'QUOTATION';
+  const documentLabel = isQuotation ? 'عرض سعر' : 'فاتورة';
 
   const columns = [
     { key: 'itemCode', title: 'الكود', render: (item: any) => item.item?.sku || item.item?.barcode || '-' },
@@ -57,7 +59,7 @@ export const printSalesInvoice = (
     fields.vehicleDetails && invoice.vehicle
       ? `المركبة: ${[invoice.vehicle.make, invoice.vehicle.model, invoice.vehicle.plateNumber].filter(Boolean).join(' - ')}`
       : '',
-    fields.paymentMethod && `طريقة الدفع: ${paymentMethodName(invoice.paymentMethod)}`,
+    !isQuotation && fields.paymentMethod && `طريقة الدفع: ${paymentMethodName(invoice.paymentMethod)}`,
   ].filter(Boolean).map((detail) => `<div>${escapeHtml(detail)}</div>`).join('');
 
   const totals = [
@@ -79,7 +81,7 @@ export const printSalesInvoice = (
     <html lang="ar" dir="rtl">
       <head>
         <meta charset="utf-8">
-        <title>فاتورة ${escapeHtml(invoice.invoiceNumber)}</title>
+        <title>${documentLabel} ${escapeHtml(invoice.invoiceNumber)}</title>
         <style>
           @page { size: ${paperSize}; margin: ${thermal ? '4mm' : '12mm'}; }
           * { box-sizing: border-box; }
@@ -103,7 +105,7 @@ export const printSalesInvoice = (
           ${settings.showCompanyName && company?.name ? `<h1>${escapeHtml(company.name)}</h1>` : ''}
           ${company?.invoiceHeader ? `<div>${escapeHtml(company.invoiceHeader)}</div>` : ''}
           ${companyDetails}
-          <div class="meta"><strong>فاتورة رقم: ${escapeHtml(invoice.invoiceNumber)}</strong>
+          <div class="meta"><strong>${documentLabel} رقم: ${escapeHtml(invoice.invoiceNumber)}</strong>
             ${fields.invoiceDate ? `<span>التاريخ: ${escapeHtml(new Date(invoice.date || invoice.createdAt || Date.now()).toLocaleString('ar-EG'))}</span>` : ''}
           </div>
         </header>

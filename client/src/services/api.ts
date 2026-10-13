@@ -287,6 +287,20 @@ const apiClient = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
+  createSalesQuotation: (data: any) =>
+    fetch(`${BASE_URL}/sales/quotations`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  convertSalesQuotation: (quotationId: string, payment?: { paymentMethod: string; cashPaid: number; cardPaid: number }) =>
+    fetch(`${BASE_URL}/sales/invoices/${encodeURIComponent(quotationId)}/convert-quotation`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payment || {}),
+    }).then((res) => handleResponse<any>(res)),
+
   createSalesReturn: (data: any) =>
     fetch(`${BASE_URL}/sales/returns`, {
       method: 'POST',

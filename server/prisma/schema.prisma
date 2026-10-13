@@ -596,7 +596,10 @@ model SalesInvoice {
   warehouse       Warehouse?         @relation(fields: [warehouseId], references: [id])
   branchId        String?
   branch          Branch?            @relation(fields: [branchId], references: [id])
-  invoiceType     String             @default("POS") // POS, MAINTENANCE, PARTS
+  invoiceType     String             @default("POS") // POS, MAINTENANCE, PARTS, QUOTATION
+  quotationId      String?            @unique
+  quotation        SalesInvoice?      @relation("SalesQuotationConversion", fields: [quotationId], references: [id])
+  convertedInvoice SalesInvoice?      @relation("SalesQuotationConversion")
   date            DateTime           @default(now())
   subtotal        Float
   discount        Float              @default(0)
@@ -607,7 +610,7 @@ model SalesInvoice {
   paymentMethod   String             @default("CASH") // CASH, CARD, CREDIT, SPLIT
   cashPaid        Float              @default(0)
   cardPaid        Float              @default(0)
-  status          String             @default("PAID") // DRAFT, POSTED, PAID, PARTIALLY_PAID, CANCELLED, RETURNED
+  status          String             @default("PAID") // DRAFT, POSTED, PAID, PARTIALLY_PAID, CANCELLED, RETURNED, CONVERTED
   notes           String?
   createdById     String?
   createdAt       DateTime           @default(now())

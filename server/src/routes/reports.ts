@@ -7,7 +7,10 @@ const router = Router();
 router.get('/sales', async (req, res) => {
   try {
     const { fromDate, toDate, customerId, paymentMethod, type } = req.query;
-    let whereClause: any = { status: { not: 'CANCELLED' } };
+    let whereClause: any = {
+      status: { not: 'CANCELLED' },
+      invoiceType: { not: 'QUOTATION' },
+    };
 
     if (fromDate || toDate) {
       whereClause.date = {};

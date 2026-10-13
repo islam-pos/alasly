@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
-type InvoiceSeries = 'POS' | 'MINV' | 'PINV';
+type InvoiceSeries = 'POS' | 'MINV' | 'PINV' | 'QUO';
 
 let invoiceTransactionQueue: Promise<void> = Promise.resolve();
 
