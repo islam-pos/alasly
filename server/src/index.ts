@@ -79,10 +79,16 @@ app.use('/api/search', searchRouter);
 app.use('/api/settings', settingsRouter);
 
 const clientDistPath = path.resolve(__dirname, '../../client/dist');
+const isStaticAssetRequest = (reqPath: string) => {
+  if (reqPath.startsWith('/api/')) return true;
+  if (reqPath === '/sw.js' || reqPath === '/registerSW.js' || reqPath === '/manifest.webmanifest') return true;
+  return ['.js', '.css', '.map', '.png', '.jpg', '.jpeg', '.svg', '.ico', '.webmanifest', '.woff', '.woff2', '.ttf', '.otf', '.json'].some((ext) => reqPath.endsWith(ext));
+};
+
 if (existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
   app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api/')) return next();
+    if (isStaticAssetRequest(req.path)) return next();
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 }
