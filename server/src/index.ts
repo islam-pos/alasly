@@ -5,6 +5,7 @@ import path from 'path';
 import { existsSync } from 'fs';
 
 import authRouter from './routes/auth';
+import accountingRouter from './routes/accounting';
 import dashboardRouter from './routes/dashboard';
 import masterDataRouter from './routes/masterData';
 import itemsRouter from './routes/items';
@@ -64,6 +65,7 @@ app.use('/api/auth', authRouter);
 app.use('/api', authenticate);
 app.use('/api', authorizeApiPermission);
 app.use('/api', withRequestContext);
+app.use('/api/accounting', accountingRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/master', masterDataRouter);
 app.use('/api/items', itemsRouter);

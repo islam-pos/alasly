@@ -468,6 +468,42 @@ const apiClient = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
+  // Accounting
+  getAccountingAccounts: () =>
+    fetch(`${BASE_URL}/accounting/accounts`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  createAccountingAccount: (data: { code: string; nameAr: string; nameEn?: string; type: string }) =>
+    fetch(`${BASE_URL}/accounting/accounts`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  getAccountingJournals: () =>
+    fetch(`${BASE_URL}/accounting/journals`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  getAccountingEntries: () =>
+    fetch(`${BASE_URL}/accounting/entries`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  getAccountingTrialBalance: () =>
+    fetch(`${BASE_URL}/accounting/trial-balance`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  getAccountingLedger: (accountId: string) =>
+    fetch(`${BASE_URL}/accounting/ledger/${encodeURIComponent(accountId)}`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  createAccountingEntry: (data: any) =>
+    fetch(`${BASE_URL}/accounting/entries`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  reverseAccountingEntry: (entryId: string) =>
+    fetch(`${BASE_URL}/accounting/entries/${encodeURIComponent(entryId)}/reverse`, {
+      method: 'POST',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<any>(res)),
+
   // HR
   getHrSettings: () =>
     fetch(`${BASE_URL}/hr/settings`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
@@ -668,6 +704,16 @@ export const api = Object.assign(apiClient, {
     closeCashShift: apiClient.closeCashShift,
     getBanks: apiClient.getBanks,
     getCashboxes: apiClient.getCashboxes,
+  },
+  accounting: {
+    getAccounts: apiClient.getAccountingAccounts,
+    createAccount: apiClient.createAccountingAccount,
+    getJournals: apiClient.getAccountingJournals,
+    getEntries: apiClient.getAccountingEntries,
+    getTrialBalance: apiClient.getAccountingTrialBalance,
+    getLedger: apiClient.getAccountingLedger,
+    createEntry: apiClient.createAccountingEntry,
+    reverseEntry: apiClient.reverseAccountingEntry,
   },
   hr: {
     getHrSettings: apiClient.getHrSettings,

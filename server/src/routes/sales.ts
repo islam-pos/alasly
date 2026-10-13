@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { sendInvoicePdf } from '../services/whatsapp';
 import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
+import { postJournalEntry } from '../services/accounting';
 
 const router = Router();
 
@@ -110,13 +111,22 @@ router.post('/pos', async (req, res) => {
     if (paymentMethod === 'CASH') {
       paid = grandTotal;
       cash = grandTotal;
+      card = 0;
     } else if (paymentMethod === 'CARD') {
       paid = grandTotal;
       card = grandTotal;
+      cash = 0;
     } else if (paymentMethod === 'SPLIT') {
+      if (cash < 0 || card < 0 || cash + card > grandTotal + 0.01) {
+        return res.status(400).json({ error: 'مبالغ الدفع النقدي والبطاقة تتجاوز إجمالي الفاتورة أو تحتوي على قيمة غير صالحة' });
+      }
       paid = cash + card;
     } else if (paymentMethod === 'CREDIT') {
       paid = 0;
+      cash = 0;
+      card = 0;
+    } else {
+      return res.status(400).json({ error: 'طريقة الدفع غير صالحة' });
     }
 
     const remainingAmount = Math.max(0, grandTotal - paid);
@@ -169,6 +179,7 @@ router.post('/pos', async (req, res) => {
       });
 
       // 2. Deduct stock & create transactions
+      let costOfGoods = 0;
       for (const it of items) {
         const qty = parseInt(it.quantity);
         const itemObj = await tx.item.findUnique({ where: { id: it.itemId } });
@@ -196,7 +207,34 @@ router.post('/pos', async (req, res) => {
             notes: `بيع بموجب فاتورة كاشير ${invoiceNumber}`,
           },
         });
+        costOfGoods += qty * (itemObj?.avgCost || 0);
       }
+
+      const accountingLines = [
+        ...(cash > 0 ? [{ accountCode: '1000', debit: cash, label: 'تحصيل نقدي' }] : []),
+        ...(card > 0 ? [{ accountCode: '1010', debit: card, label: 'تحصيل بطاقة' }] : []),
+        ...(remainingAmount > 0 ? [{
+          accountCode: '1100',
+          debit: remainingAmount,
+          label: 'ذمم العميل',
+          partnerType: 'CUSTOMER',
+          partnerId: customerId || undefined,
+        }] : []),
+        ...((grandTotal - taxAmount) > 0 ? [{ accountCode: '4000', credit: grandTotal - taxAmount, label: 'إيراد بيع قطع غيار' }] : []),
+        ...(taxAmount > 0 ? [{ accountCode: '2100', credit: taxAmount, label: 'ضريبة قيمة مضافة - مخرجات' }] : []),
+        ...(costOfGoods > 0 ? [
+          { accountCode: '5000', debit: costOfGoods, label: 'تكلفة البضاعة المباعة' },
+          { accountCode: '1200', credit: costOfGoods, label: 'تخفيض المخزون المباع' },
+        ] : []),
+      ];
+      await postJournalEntry(tx, {
+        journalCode: 'SAL',
+        memo: `فاتورة بيع ${invoiceNumber}`,
+        referenceType: 'SalesInvoice',
+        referenceId: inv.id,
+        branchId: branchId || null,
+        lines: accountingLines,
+      });
 
       // 3. Update customer balance if credit sale
       if (customerId && remainingAmount > 0) {

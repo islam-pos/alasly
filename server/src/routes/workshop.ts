@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
+import { postJournalEntry } from '../services/accounting';
 
 const router = Router();
 
@@ -654,6 +655,38 @@ router.post('/job-cards/:id/invoice', async (req, res) => {
           });
         }
       }
+
+      const discountRatio = subtotal > 0 ? taxable / subtotal : 0;
+      const partsCost = jobCard.parts.reduce(
+        (sum, part) => sum + part.costPrice * (part.usedQty || part.requestedQty),
+        0,
+      );
+      const accountingLines = [
+        ...(cash > 0 ? [{ accountCode: '1000', debit: cash, label: 'تحصيل نقدي' }] : []),
+        ...(card > 0 ? [{ accountCode: '1010', debit: card, label: 'تحصيل بالبطاقة' }] : []),
+        ...(remainingAmount > 0 ? [{
+          accountCode: '1100',
+          debit: remainingAmount,
+          label: 'ذمم العميل',
+          partnerType: 'CUSTOMER',
+          partnerId: jobCard.customerId,
+        }] : []),
+        ...(partsTotal * discountRatio > 0 ? [{ accountCode: '4000', credit: partsTotal * discountRatio, label: 'إيرادات قطع الغيار' }] : []),
+        ...(laborTotal * discountRatio > 0 ? [{ accountCode: '4100', credit: laborTotal * discountRatio, label: 'إيرادات خدمات الصيانة' }] : []),
+        ...(taxAmount > 0 ? [{ accountCode: '2100', credit: taxAmount, label: 'ضريبة قيمة مضافة - مخرجات' }] : []),
+        ...(partsCost > 0 ? [
+          { accountCode: '5000', debit: partsCost, label: 'تكلفة قطع الغيار المستخدمة' },
+          { accountCode: '1200', credit: partsCost, label: 'تخفيض مخزون قطع الغيار' },
+        ] : []),
+      ];
+      await postJournalEntry(tx, {
+        journalCode: 'SAL',
+        memo: `فاتورة صيانة ${invoice.invoiceNumber}`,
+        referenceType: 'SalesInvoice',
+        referenceId: inv.id,
+        branchId: jobCard.branchId || null,
+        lines: accountingLines,
+      });
 
       return inv;
     });

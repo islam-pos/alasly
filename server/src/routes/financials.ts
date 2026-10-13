@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
+import { postJournalEntry } from '../services/accounting';
 
 const router = Router();
 
@@ -97,6 +98,22 @@ router.post('/expenses', async (req, res) => {
         });
       }
 
+      await postJournalEntry(tx, {
+        journalCode: paymentMethod === 'BANK' ? 'BNK' : 'CSH',
+        memo: `مصروف ${expenseNumber}`,
+        referenceType: 'Expense',
+        referenceId: exp.id,
+        lines: [
+          ...(parseFloat(amount) > 0 ? [{ accountCode: '6000', debit: parseFloat(amount), label: description || 'مصروف تشغيلي' }] : []),
+          ...(parseFloat(taxAmount || 0) > 0 ? [{ accountCode: '1300', debit: parseFloat(taxAmount || 0), label: 'ضريبة قيمة مضافة - مدخلات' }] : []),
+          ...(totalAmount > 0 ? [{
+            accountCode: paymentMethod === 'CASH' ? '1000' : paymentMethod === 'BANK' ? '1020' : '2990',
+            credit: totalAmount,
+            label: `سداد مصروف - ${paymentMethod}`,
+          }] : []),
+        ],
+      });
+
       return exp;
     });
 
@@ -154,6 +171,21 @@ router.post('/revenues', async (req, res) => {
           data: { currentBalance: { increment: amountVal } },
         });
       }
+
+      await postJournalEntry(tx, {
+        journalCode: paymentMethod === 'BANK' ? 'BNK' : 'CSH',
+        memo: `إيراد ${revenueNumber}`,
+        referenceType: 'Revenue',
+        referenceId: rev.id,
+        lines: [
+          ...(amountVal > 0 ? [{
+            accountCode: paymentMethod === 'CASH' ? '1000' : paymentMethod === 'BANK' ? '1020' : paymentMethod === 'CARD' ? '1010' : '2990',
+            debit: amountVal,
+            label: `تحصيل إيراد - ${paymentMethod}`,
+          }] : []),
+          ...(amountVal > 0 ? [{ accountCode: '4900', credit: amountVal, label: description || source || 'إيراد آخر' }] : []),
+        ],
+      });
 
       return rev;
     });
@@ -238,6 +270,26 @@ router.post('/cash/vouchers', async (req, res) => {
           referenceType: referenceType || (customerId ? 'CUSTOMER_PAYMENT' : 'SUPPLIER_PAYMENT'),
           referenceId,
         },
+      });
+
+      await postJournalEntry(tx, {
+        journalCode: 'CSH',
+        memo: `${type === 'RECEIPT' ? 'سند قبض' : 'سند صرف'} ${txRecord.id}`,
+        referenceType: 'CashTransaction',
+        referenceId: txRecord.id,
+        lines: type === 'RECEIPT'
+          ? [
+            { accountCode: '1000', debit: amountVal, label: 'إيداع بالصندوق' },
+            customerId
+              ? { accountCode: '1100', credit: amountVal, label: 'تحصيل من العميل', partnerType: 'CUSTOMER', partnerId: customerId }
+              : { accountCode: '2990', credit: amountVal, label: 'متحصلات أخرى' },
+          ]
+          : [
+            supplierId
+              ? { accountCode: '2000', debit: amountVal, label: 'سداد للمورد', partnerType: 'SUPPLIER', partnerId: supplierId }
+              : { accountCode: '2990', debit: amountVal, label: 'مدفوعات أخرى' },
+            { accountCode: '1000', credit: amountVal, label: 'صرف من الصندوق' },
+          ],
       });
 
       return txRecord;
@@ -337,7 +389,7 @@ router.post('/banks/transactions', async (req, res) => {
         });
       }
 
-      return await tx.bankTransaction.create({
+      const bankTransaction = await tx.bankTransaction.create({
         data: {
           bankId,
           type,
@@ -346,6 +398,23 @@ router.post('/banks/transactions', async (req, res) => {
           description,
         },
       });
+
+      const cashAccountSide = type === 'DEPOSIT' || type === 'CARD_SETTLEMENT'
+        ? { accountCode: '1020', debit: amountVal, label: 'إيداع بالبنك' }
+        : { accountCode: '1020', credit: amountVal, label: 'سحب من البنك' };
+      const counterpartSide = type === 'CARD_SETTLEMENT'
+        ? { accountCode: '1010', credit: amountVal, label: 'تسوية متحصلات البطاقات' }
+        : type === 'DEPOSIT'
+          ? { accountCode: '2990', credit: amountVal, label: 'إيداع بنكي غير مصنف' }
+          : { accountCode: '2990', debit: amountVal, label: 'سحب بنكي غير مصنف' };
+      await postJournalEntry(tx, {
+        journalCode: 'BNK',
+        memo: description || `حركة بنكية ${type}`,
+        referenceType: 'BankTransaction',
+        referenceId: bankTransaction.id,
+        lines: [cashAccountSide, counterpartSide],
+      });
+      return bankTransaction;
     });
 
     res.status(201).json(transaction);

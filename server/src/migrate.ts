@@ -11,6 +11,53 @@ const ensureColumn = async (table: string, column: string, definition: string) =
 
 const migrate = async () => {
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "NumberSequence" ("key" TEXT NOT NULL PRIMARY KEY, "lastValue" INTEGER NOT NULL DEFAULT 0)`;
+  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "Account" ("id" TEXT NOT NULL PRIMARY KEY, "code" TEXT NOT NULL, "nameAr" TEXT NOT NULL, "nameEn" TEXT, "type" TEXT NOT NULL, "active" BOOLEAN NOT NULL DEFAULT true, "isSystem" BOOLEAN NOT NULL DEFAULT false, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`;
+  await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "Account_code_key" ON "Account"("code")`;
+  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "AccountingJournal" ("id" TEXT NOT NULL PRIMARY KEY, "code" TEXT NOT NULL, "nameAr" TEXT NOT NULL, "type" TEXT NOT NULL, "active" BOOLEAN NOT NULL DEFAULT true, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`;
+  await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "AccountingJournal_code_key" ON "AccountingJournal"("code")`;
+  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "JournalEntry" ("id" TEXT NOT NULL PRIMARY KEY, "number" TEXT NOT NULL, "journalId" TEXT NOT NULL, "date" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "memo" TEXT NOT NULL, "referenceType" TEXT, "referenceId" TEXT, "status" TEXT NOT NULL DEFAULT 'POSTED', "branchId" TEXT, "createdById" TEXT, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "JournalEntry_journalId_fkey" FOREIGN KEY ("journalId") REFERENCES "AccountingJournal"("id") ON DELETE RESTRICT ON UPDATE CASCADE)`;
+  await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "JournalEntry_number_key" ON "JournalEntry"("number")`;
+  await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "JournalEntry_referenceType_referenceId_key" ON "JournalEntry"("referenceType", "referenceId")`;
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "JournalEntry_date_idx" ON "JournalEntry"("date")`;
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "JournalEntry_branchId_date_idx" ON "JournalEntry"("branchId", "date")`;
+  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "JournalEntryLine" ("id" TEXT NOT NULL PRIMARY KEY, "entryId" TEXT NOT NULL, "accountId" TEXT NOT NULL, "label" TEXT, "debit" REAL NOT NULL DEFAULT 0, "credit" REAL NOT NULL DEFAULT 0, "partnerType" TEXT, "partnerId" TEXT, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "JournalEntryLine_entryId_fkey" FOREIGN KEY ("entryId") REFERENCES "JournalEntry"("id") ON DELETE CASCADE ON UPDATE CASCADE, CONSTRAINT "JournalEntryLine_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE RESTRICT ON UPDATE CASCADE)`;
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "JournalEntryLine_accountId_createdAt_idx" ON "JournalEntryLine"("accountId", "createdAt")`;
+  const defaultAccounts = [
+    ['acc-1000', '1000', 'الصندوق النقدي', 'Cash on Hand', 'ASSET'],
+    ['acc-1010', '1010', 'متحصلات البطاقات', 'Card Clearing', 'ASSET'],
+    ['acc-1020', '1020', 'الحسابات البنكية', 'Bank Accounts', 'ASSET'],
+    ['acc-1100', '1100', 'العملاء المدينون', 'Accounts Receivable', 'ASSET'],
+    ['acc-1200', '1200', 'المخزون', 'Inventory', 'ASSET'],
+    ['acc-1300', '1300', 'ضريبة القيمة المضافة - مدخلات', 'Input VAT', 'ASSET'],
+    ['acc-2000', '2000', 'الموردون الدائنون', 'Accounts Payable', 'LIABILITY'],
+    ['acc-2100', '2100', 'ضريبة القيمة المضافة - مخرجات', 'Output VAT', 'LIABILITY'],
+    ['acc-2990', '2990', 'حساب تسوية مؤقت', 'Suspense', 'LIABILITY'],
+    ['acc-3000', '3000', 'رأس المال والأرصدة الافتتاحية', 'Equity and Opening Balances', 'EQUITY'],
+    ['acc-4000', '4000', 'إيرادات بيع قطع الغيار', 'Parts Sales', 'INCOME'],
+    ['acc-4100', '4100', 'إيرادات خدمات الصيانة', 'Maintenance Revenue', 'INCOME'],
+    ['acc-4900', '4900', 'إيرادات أخرى', 'Other Income', 'INCOME'],
+    ['acc-5000', '5000', 'تكلفة البضاعة المباعة', 'Cost of Goods Sold', 'EXPENSE'],
+    ['acc-6000', '6000', 'مصروفات تشغيلية', 'Operating Expenses', 'EXPENSE'],
+  ] as const;
+  for (const [id, code, nameAr, nameEn, type] of defaultAccounts) {
+    await prisma.$executeRaw`
+      INSERT OR IGNORE INTO "Account" ("id", "code", "nameAr", "nameEn", "type", "isSystem", "createdAt", "updatedAt")
+      VALUES (${id}, ${code}, ${nameAr}, ${nameEn}, ${type}, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `;
+  }
+  const defaultJournals = [
+    ['journal-general', 'GEN', 'القيود العامة', 'GENERAL'],
+    ['journal-sales', 'SAL', 'المبيعات', 'SALES'],
+    ['journal-purchases', 'PUR', 'المشتريات', 'PURCHASES'],
+    ['journal-cash', 'CSH', 'الخزينة', 'CASH'],
+    ['journal-bank', 'BNK', 'البنوك', 'BANK'],
+  ] as const;
+  for (const [id, code, nameAr, type] of defaultJournals) {
+    await prisma.$executeRaw`
+      INSERT OR IGNORE INTO "AccountingJournal" ("id", "code", "nameAr", "type")
+      VALUES (${id}, ${code}, ${nameAr}, ${type})
+    `;
+  }
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "NotificationIntegration" ("id" INTEGER NOT NULL PRIMARY KEY, "whatsapp" TEXT, "whatsappPhone" TEXT, "telegram" TEXT, "options" TEXT NOT NULL DEFAULT '{}', "shiftEndTime" TEXT NOT NULL DEFAULT '23:00', "timeZone" TEXT NOT NULL DEFAULT 'Africa/Cairo', "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`;
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "WhatsappAuthData" ("key" TEXT NOT NULL PRIMARY KEY, "encryptedValue" TEXT NOT NULL)`;
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "TelegramAuthSession" ("id" INTEGER NOT NULL PRIMARY KEY, "encryptedSession" TEXT)`;

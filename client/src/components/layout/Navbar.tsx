@@ -116,6 +116,7 @@ export const Navbar: React.FC = () => {
       title: 'المصروفات',
       icon: Wallet,
       items: [
+        { label: 'المحاسبة العامة والقيود اليومية', to: '/accounting', desc: 'دليل الحسابات، الأستاذ العام وميزان المراجعة' },
         { label: 'سندات المصروفات', to: '/financials?tab=expenses', desc: 'إيجار، كهرباء، أدوات ورشة...' },
         { label: 'سندات الإيرادات المتنوعة', to: '/financials?tab=revenues', desc: 'إيراد خردة، استشارات فحص' },
         { label: 'تصنيفات وبنود المصروفات', to: '/financials?tab=categories', desc: 'هيكلة بنود التكاليف' },
@@ -210,6 +211,7 @@ export const Navbar: React.FC = () => {
           if (tab === 'cash' || tab === 'shifts') return hasPermission('manage_cashbox');
           return hasPermission('manage_expenses');
         }
+        if (path === '/accounting') return hasPermission('manage_accounting');
         if (path === '/reports') return hasPermission('view_reports');
         if (path === '/profits') return hasPermission('view_profits');
         if (path === '/settings') {

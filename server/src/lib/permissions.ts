@@ -15,6 +15,7 @@ export const PERMISSIONS = [
   { key: 'manage_payroll', name: 'مسير الرواتب والعمولات', group: 'الموارد البشرية' },
   { key: 'manage_cashbox', name: 'سندات الخزينة وإغلاق الورديات', group: 'المالية' },
   { key: 'manage_banks', name: 'إدارة الحسابات والعمليات البنكية', group: 'المالية' },
+  { key: 'manage_accounting', name: 'إدارة المحاسبة والقيود اليومية', group: 'المالية' },
   { key: 'view_reports', name: 'الاطلاع على التقارير وتصديرها', group: 'التقارير' },
   { key: 'view_profits', name: 'عرض قائمة الأرباح والخسائر', group: 'الأرباح' },
   { key: 'manage_settings', name: 'إدارة إعدادات النظام والضريبة', group: 'الإعدادات' },

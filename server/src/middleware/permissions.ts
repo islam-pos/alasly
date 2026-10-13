@@ -38,6 +38,7 @@ const getRequiredPermissions = (path: string, method: string): string[] | null =
   if (path.startsWith('/financials/banks')) return ['manage_banks'];
   if (path.startsWith('/financials/cash') || path.startsWith('/financials/shifts') || path.startsWith('/financials/cashboxes')) return ['manage_cashbox'];
   if (path.startsWith('/financials/expenses') || path.startsWith('/financials/revenues') || path.startsWith('/financials/expense-categories')) return ['manage_expenses'];
+  if (path.startsWith('/accounting')) return ['manage_accounting'];
   if (path.startsWith('/settings/audit-logs')) return ['view_audit_logs'];
   if (path.startsWith('/settings')) return ['manage_settings'];
   return null;

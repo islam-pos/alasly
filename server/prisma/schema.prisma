@@ -40,6 +40,65 @@ model NumberSequence {
   lastValue Int    @default(0)
 }
 
+model Account {
+  id          String             @id @default(uuid())
+  code        String             @unique
+  nameAr      String
+  nameEn      String?
+  type        String
+  active      Boolean            @default(true)
+  isSystem    Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  journalLines JournalEntryLine[]
+}
+
+model AccountingJournal {
+  id        String         @id @default(uuid())
+  code      String         @unique
+  nameAr    String
+  type      String
+  active    Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  entries   JournalEntry[]
+}
+
+model JournalEntry {
+  id            String             @id @default(uuid())
+  number        String             @unique
+  journalId     String
+  journal       AccountingJournal  @relation(fields: [journalId], references: [id])
+  date          DateTime           @default(now())
+  memo          String
+  referenceType String?
+  referenceId   String?
+  status        String             @default("POSTED")
+  branchId      String?
+  createdById   String?
+  createdAt     DateTime           @default(now())
+  lines         JournalEntryLine[]
+
+  @@unique([referenceType, referenceId])
+  @@index([date])
+  @@index([branchId, date])
+}
+
+model JournalEntryLine {
+  id          String      @id @default(uuid())
+  entryId     String
+  entry       JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account     @relation(fields: [accountId], references: [id])
+  label       String?
+  debit       Float       @default(0)
+  credit      Float       @default(0)
+  partnerType String?
+  partnerId   String?
+  createdAt   DateTime    @default(now())
+
+  @@index([accountId, createdAt])
+}
+
 model NotificationIntegration {
   id           Int      @id @default(1)
   whatsapp     String?

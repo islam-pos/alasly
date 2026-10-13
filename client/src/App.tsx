@@ -22,6 +22,7 @@ import { JobCardDetail } from './pages/workshop/JobCardDetail';
 import { JobCardsList } from './pages/workshop/JobCardsList';
 import { VehicleProfile } from './pages/vehicles/VehicleProfile';
 import { SmartSearchSuggestions } from './components/layout/SmartSearchSuggestions';
+import { AccountingScreen } from './pages/accounting/AccountingScreen';
 
 const LoadingScreen: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50" role="status">
@@ -75,6 +76,7 @@ const AppRoutes: React.FC = () => {
         <Route path="suppliers" element={<PermissionGate permission={['manage_purchases', 'manage_expenses']}><Suppliers /></PermissionGate>} />
         <Route path="employees" element={<PermissionGate permission={['manage_employees', 'manage_payroll']}><EmployeesScreen /></PermissionGate>} />
         <Route path="financials" element={<PermissionGate permission={['manage_expenses', 'manage_cashbox', 'manage_banks']}><FinancialsScreen /></PermissionGate>} />
+        <Route path="accounting" element={<PermissionGate permission="manage_accounting"><AccountingScreen /></PermissionGate>} />
         <Route path="warehouses" element={<PermissionGate permission="manage_inventory"><InventoryManagement /></PermissionGate>} />
         <Route path="pos" element={<PermissionGate permission="pos_access"><PosScreen /></PermissionGate>} />
         <Route path="sales" element={<PermissionGate permission="manage_sales"><SalesList /></PermissionGate>} />

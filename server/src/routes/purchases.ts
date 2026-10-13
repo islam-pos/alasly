@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { sendInvoicePdf, sendShortageRequest } from '../services/whatsapp';
 import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
+import { postJournalEntry } from '../services/accounting';
 
 const router = Router();
 
@@ -199,6 +200,32 @@ router.post('/invoices', async (req, res) => {
           },
         });
       }
+
+      const paymentMethod = data.paymentMethod || 'CREDIT';
+      const accountingLines = [
+        ...((subtotal - discount) > 0 ? [{ accountCode: '1200', debit: subtotal - discount, label: 'إضافة مشتريات إلى المخزون' }] : []),
+        ...(taxAmount > 0 ? [{ accountCode: '1300', debit: taxAmount, label: 'ضريبة قيمة مضافة - مدخلات' }] : []),
+        ...(remainingAmount > 0 ? [{
+          accountCode: '2000',
+          credit: remainingAmount,
+          label: 'ذمم المورد',
+          partnerType: 'SUPPLIER',
+          partnerId: data.supplierId,
+        }] : []),
+        ...(paidAmount > 0 ? [{
+          accountCode: paymentMethod === 'CASH' ? '1000' : paymentMethod === 'CARD' ? '1010' : paymentMethod === 'BANK' ? '1020' : '2990',
+          credit: paidAmount,
+          label: `سداد مشتريات - ${paymentMethod}`,
+        }] : []),
+      ];
+      await postJournalEntry(tx, {
+        journalCode: 'PUR',
+        memo: `فاتورة مشتريات ${invoiceNumber}`,
+        referenceType: 'PurchaseInvoice',
+        referenceId: createdInvoice.id,
+        branchId: data.branchId || null,
+        lines: accountingLines,
+      });
 
       return createdInvoice;
     });
