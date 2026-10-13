@@ -73,11 +73,11 @@ export const InventoryManagement: React.FC = () => {
         api.getTransfers(),
         api.getCounts()
       ]);
-      setBalances(bRes);
-      setWarehouses(wRes);
-      setCategories(cRes);
-      setTransfers(tRes);
-      setCounts(cntRes);
+      setBalances(bRes.data);
+      setWarehouses(wRes.data);
+      setCategories(cRes.data);
+      setTransfers(tRes.data);
+      setCounts(cntRes.data);
     } catch (err: any) {
       showToast(err.message || 'فشل في تحميل بيانات المخزون', 'error');
     } finally {
