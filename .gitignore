@@ -18,3 +18,11 @@ coverage/
 npm-debug.log*
 .DS_Store
 Thumbs.db
+client/release/
+client/android/.gradle/
+client/android/local.properties
+client/android/**/build/
+client/ios/App/Pods/
+client/ios/App/build/
+client/ios/DerivedData/
+client/tsconfig.tsbuildinfo

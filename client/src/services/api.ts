@@ -8,7 +8,7 @@ import type {
   NotificationTelegramQrStatus,
 } from '../types/notifications';
 
-const BASE_URL = '/api';
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
 class ApiError extends Error {
   response: { data: { error: string } };
