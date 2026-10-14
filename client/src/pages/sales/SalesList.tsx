@@ -248,8 +248,7 @@ export const SalesList: React.FC = () => {
     0,
   );
   const quotationTaxable = Math.max(0, quotationSubtotal - quotationDiscount);
-  const quotationTax = quotationTaxable * 0.15;
-  const quotationTotal = quotationTaxable + quotationTax;
+  const quotationTotal = quotationTaxable;
   const matchingQuotationProducts = quotationSearch.trim()
     ? quotationProducts.filter((product) => [
       product.nameAr,
@@ -548,7 +547,6 @@ export const SalesList: React.FC = () => {
               </div>
               <div className="space-y-1 rounded-xl bg-slate-50 p-3 text-sm">
                 <div className="flex justify-between"><span>المجموع قبل الخصم</span><strong>{quotationSubtotal.toLocaleString()} ج.م</strong></div>
-                <div className="flex justify-between"><span>الضريبة (15%)</span><strong>{quotationTax.toFixed(2)} ج.م</strong></div>
                 <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-black text-brand-700"><span>الإجمالي</span><strong>{quotationTotal.toFixed(2)} ج.م</strong></div>
               </div>
             </div>
@@ -568,10 +566,10 @@ export const SalesList: React.FC = () => {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
                 <h3 className="font-bold text-slate-900 text-base">
-                  {selectedInvoice.invoiceType === 'QUOTATION' ? 'عرض سعر' : 'فاتورة ضريبية'}: {selectedInvoice.invoiceNumber}
+                  {selectedInvoice.invoiceType === 'QUOTATION' ? 'عرض سعر' : 'فاتورة'}: {selectedInvoice.invoiceNumber}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  التاريخ: {new Date(selectedInvoice.date).toLocaleString('ar-SA')}
+                  التاريخ: {new Date(selectedInvoice.date).toLocaleString('ar-EG')}
                 </p>
               </div>
               <button onClick={() => setSelectedInvoice(null)} className="text-slate-400">
@@ -602,7 +600,6 @@ export const SalesList: React.FC = () => {
                     <th className="p-2">البيان / الصنف</th>
                     <th className="p-2">الكمية</th>
                     <th className="p-2">السعر</th>
-                    <th className="p-2">الضريبة</th>
                     <th className="p-2">الإجمالي</th>
                   </tr>
                 </thead>
@@ -614,7 +611,6 @@ export const SalesList: React.FC = () => {
                       </td>
                       <td className="p-2 font-mono">{it.quantity}</td>
                       <td className="p-2 font-mono">{it.unitPrice} ج.م</td>
-                      <td className="p-2 font-mono">{it.taxAmount.toFixed(2)} ج.م</td>
                       <td className="p-2 font-bold font-mono">{it.total.toFixed(2)} ج.م</td>
                     </tr>
                   ))}
@@ -624,7 +620,6 @@ export const SalesList: React.FC = () => {
 
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 text-left font-bold">
               <div>المجموع الفرعي: {selectedInvoice.subtotal.toLocaleString()} ج.م</div>
-              <div>الضريبة (15%): {selectedInvoice.taxAmount.toFixed(2)} ج.م</div>
               <div className="text-brand-700 text-sm font-black pt-1 border-t border-slate-200">
                 الإجمالي الكلي: {selectedInvoice.grandTotal.toFixed(2)} ج.م
               </div>

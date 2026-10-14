@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { AuthenticatedRequest, authenticate, loadUserPermissions, requirePermission } from '../middleware/auth';
 import { isPermissionKey } from '../lib/permissions';
+import { parseOdometerReading } from '../services/vehicleValidation';
 
 const router = Router();
 
@@ -49,13 +50,6 @@ router.put('/company', async (req, res) => {
       data.commercialRegister = input.crNumber;
     }
 
-    const taxRate = input.taxRate ?? input.vatRate;
-    if (typeof taxRate === 'number' && Number.isFinite(taxRate)) {
-      data.taxRate = taxRate;
-    } else if (taxRate !== undefined) {
-      return res.status(400).json({ error: 'نسبة الضريبة يجب أن تكون رقمًا صالحًا' });
-    }
-
     if (typeof input.printSettings === 'string') {
       data.printSettings = input.printSettings;
     } else if (input.printSettings && typeof input.printSettings === 'object') {
@@ -73,7 +67,7 @@ router.put('/company', async (req, res) => {
         data,
       });
     }
-    await logAudit({ action: 'UPDATE', entity: 'CompanySetting', entityId: company.id, details: 'تحديث بيانات المنشأة والضريبة' });
+    await logAudit({ action: 'UPDATE', entity: 'CompanySetting', entityId: company.id, details: 'تحديث بيانات المنشأة' });
     res.json(company);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -414,8 +408,13 @@ router.get('/vehicles/:id', async (req, res) => {
 
 router.post('/vehicles', async (req, res) => {
   try {
+    const data = { ...req.body };
+    const odometer = parseOdometerReading(data.currentOdometer);
+    if (odometer === null) delete data.currentOdometer;
+    else data.currentOdometer = odometer;
+
     const vehicle = await prisma.vehicle.create({
-      data: req.body,
+      data,
       include: { customer: true },
     });
     res.status(201).json(vehicle);
@@ -426,11 +425,110 @@ router.post('/vehicles', async (req, res) => {
 
 router.put('/vehicles/:id', async (req, res) => {
   try {
+    const currentVehicle = await prisma.vehicle.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, currentOdometer: true },
+    });
+    if (!currentVehicle) return res.status(404).json({ error: 'السيارة غير موجودة' });
+
+    const data = { ...req.body };
+    const odometer = parseOdometerReading(data.currentOdometer);
+    if (odometer === null) delete data.currentOdometer;
+    else if (odometer < currentVehicle.currentOdometer) {
+      return res.status(400).json({ error: 'قراءة العداد لا يمكن أن تقل عن آخر قراءة مسجلة' });
+    } else data.currentOdometer = odometer;
+
     const vehicle = await prisma.vehicle.update({
       where: { id: req.params.id },
-      data: req.body,
+      data,
     });
     res.json(vehicle);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/vehicles/:id/reminders', async (req, res) => {
+  try {
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: req.params.id },
+      select: { id: true },
+    });
+    if (!vehicle) return res.status(404).json({ error: 'السيارة غير موجودة' });
+
+    const reminders = await prisma.maintenanceReminder.findMany({
+      where: { vehicleId: vehicle.id },
+      orderBy: [{ status: 'asc' }, { dueDate: 'asc' }, { dueOdometer: 'asc' }],
+    });
+    res.json(reminders);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/vehicles/:id/reminders', async (req, res) => {
+  try {
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, currentOdometer: true },
+    });
+    if (!vehicle) return res.status(404).json({ error: 'السيارة غير موجودة' });
+
+    const serviceName = typeof req.body.serviceName === 'string' ? req.body.serviceName.trim() : '';
+    if (!serviceName) return res.status(400).json({ error: 'اسم الصيانة مطلوب' });
+
+    const dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
+    if (dueDate && Number.isNaN(dueDate.getTime())) {
+      return res.status(400).json({ error: 'تاريخ التذكير غير صالح' });
+    }
+
+    const dueOdometer = parseOdometerReading(req.body.dueOdometer);
+    if (!dueDate && dueOdometer === null) {
+      return res.status(400).json({ error: 'حدد تاريخ الاستحقاق أو قراءة العداد' });
+    }
+    if (dueOdometer !== null && dueOdometer < vehicle.currentOdometer) {
+      return res.status(400).json({ error: 'قراءة الاستحقاق أقل من العداد الحالي للسيارة' });
+    }
+
+    const reminder = await prisma.maintenanceReminder.create({
+      data: {
+        vehicleId: vehicle.id,
+        serviceName,
+        dueDate,
+        dueOdometer,
+        notes: typeof req.body.notes === 'string' ? req.body.notes.trim() || null : null,
+      },
+    });
+    await logAudit({
+      action: 'CREATE',
+      entity: 'MaintenanceReminder',
+      entityId: reminder.id,
+      details: `إنشاء تذكير صيانة للسيارة ${vehicle.id}`,
+    });
+    res.status(201).json(reminder);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.patch('/vehicles/:id/reminders/:reminderId', async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['PENDING', 'COMPLETED', 'CANCELLED'].includes(status)) {
+      return res.status(400).json({ error: 'حالة التذكير غير صالحة' });
+    }
+
+    const result = await prisma.maintenanceReminder.updateMany({
+      where: { id: req.params.reminderId, vehicleId: req.params.id },
+      data: {
+        status,
+        ...(status === 'PENDING' ? { sentAt: null, lastAttemptAt: null } : {}),
+      },
+    });
+    if (!result.count) return res.status(404).json({ error: 'تذكير الصيانة غير موجود' });
+
+    const reminder = await prisma.maintenanceReminder.findUnique({ where: { id: req.params.reminderId } });
+    res.json(reminder);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }

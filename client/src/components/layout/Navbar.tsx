@@ -94,9 +94,10 @@ export const Navbar: React.FC = () => {
       items: [
         { label: 'شاشة كاشير قطع الغيار (POS)', to: '/pos', desc: 'نقاط البيع السريعة والباركود' },
         { label: 'فتح أمر إصلاح (Job Card)', to: '/workshop/job-cards', desc: 'استقبال سيارة وتحديد المشكلة' },
-        { label: 'فحص وتسعير مبدئي (Estimate)', to: '/workshop/job-cards', desc: 'عرض السعر وموافقة العميل' },
+        { label: 'تقديرات الورشة', to: '/workshop/job-cards', desc: 'تسعير الإصلاح وموافقة العميل' },
         { label: 'فاتورة الصيانة النهائية', to: '/sales?type=MAINTENANCE', desc: 'القطع المستهلكة وأجور اليد' },
         { label: 'فواتير المبيعات العامة', to: '/sales', desc: 'سجل فواتير البيع المعتمدة' },
+        { label: 'عروض الأسعار العامة', to: '/sales?type=QUOTATION', desc: 'إنشاء العروض وتحويلها إلى فواتير' },
         { label: 'مرتجع المبيعات', to: '/sales?tab=returns', desc: 'إرجاع واسترداد القطع' },
       ],
     },
@@ -178,7 +179,7 @@ export const Navbar: React.FC = () => {
       title: 'الإعدادات',
       icon: Settings,
       items: [
-        { label: 'إعدادات المنشأة والضريبة', to: '/settings?tab=company', desc: 'الرقم الضريبي وتصميم الفاتورة' },
+        { label: 'إعدادات المنشأة', to: '/settings?tab=company', desc: 'بيانات المركز وتصميم المستندات' },
         { label: 'الصلاحيات ومصفوفة الأدوار (RBAC)', to: '/settings?tab=roles', desc: 'صلاحيات المستخدمين والوظائف' },
         { label: 'سجل العمليات والرقابة (Audit Log)', to: '/settings?tab=audit', desc: 'تتبع كافة التعديلات والمستندات' },
       ],
@@ -271,7 +272,7 @@ export const Navbar: React.FC = () => {
           {/* Branch Selector */}
           <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
             <Building2 className="w-3.5 h-3.5 text-brand-600" />
-            <span>الفرع الرئيسي - القاهرة</span>
+            <span>{user?.branch?.name || 'الفرع غير محدد'}</span>
           </div>
 
           {/* User & Role Badge */}

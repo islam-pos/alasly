@@ -368,6 +368,8 @@ export const JobCardsList: React.FC = () => {
                   <label className="block font-bold text-slate-700 mb-1">قراءة العداد الحالية (كم)</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={odometer}
                     onChange={(e) => setOdometer(parseInt(e.target.value) || 0)}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold"

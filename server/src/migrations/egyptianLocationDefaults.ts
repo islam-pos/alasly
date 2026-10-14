@@ -1,6 +1,13 @@
 import { prisma } from '../lib/prisma';
 
 export const migrateEgyptianLocationDefaults = async () => {
+  await prisma.companySetting.updateMany({
+    where: {
+      termsAndConditions: 'تطبق الشروط والأحكام. الفاتورة الضريبية الصادرة معتمدة من هيئة الزكاة والضريبة والجمارك.',
+    },
+    data: { termsAndConditions: 'تطبق الشروط والأحكام.' },
+  });
+
   const company = await prisma.companySetting.updateMany({
     where: {
       country: 'المملكة العربية السعودية',

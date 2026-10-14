@@ -3,14 +3,17 @@ import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
 import { postJournalEntry } from '../services/accounting';
+import { AuthenticatedRequest } from '../middleware/auth';
+import { branchWhere } from '../services/branchScope';
+import { parseOdometerReading } from '../services/vehicleValidation';
 
 const router = Router();
 
 // --- List Job Cards with filters ---
-router.get('/job-cards', async (req, res) => {
+router.get('/job-cards', async (req: AuthenticatedRequest, res) => {
   try {
     const { status, customerId, vehicleId, technicianId, q } = req.query;
-    let whereClause: any = {};
+    let whereClause: any = branchWhere(req);
 
     if (status) {
       whereClause.status = String(status);
@@ -126,6 +129,20 @@ router.post('/job-cards', async (req, res) => {
       return res.status(400).json({ error: 'العميل والسيارة وشكوى العميل حقول إلزامية' });
     }
 
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      select: { id: true, customerId: true, currentOdometer: true },
+    });
+    if (!vehicle) return res.status(404).json({ error: 'السيارة غير موجودة' });
+    if (vehicle.customerId !== customerId) {
+      return res.status(400).json({ error: 'السيارة غير مسجلة على العميل المحدد' });
+    }
+
+    const odometer = parseOdometerReading(currentOdometer) ?? vehicle.currentOdometer;
+    if (odometer < vehicle.currentOdometer) {
+      return res.status(400).json({ error: 'قراءة العداد لا يمكن أن تقل عن آخر قراءة مسجلة' });
+    }
+
     const count = await prisma.repairOrder.count();
     const orderNumber = `JC-${new Date().getFullYear()}-${String(count + 1).padStart(3, '0')}`;
 
@@ -134,7 +151,7 @@ router.post('/job-cards', async (req, res) => {
         orderNumber,
         customerId,
         vehicleId,
-        currentOdometer: parseInt(currentOdometer) || 0,
+        currentOdometer: odometer,
         fuelLevel,
         technicianId: technicianId || null,
         serviceAdvisorId: serviceAdvisorId || null,
@@ -148,11 +165,11 @@ router.post('/job-cards', async (req, res) => {
     });
 
     // Update vehicle's current odometer and last service date
-    if (currentOdometer) {
+    if (odometer !== vehicle.currentOdometer) {
       await prisma.vehicle.update({
         where: { id: vehicleId },
         data: {
-          currentOdometer: parseInt(currentOdometer),
+          currentOdometer: odometer,
           lastServiceDate: new Date(),
         },
       });
@@ -176,6 +193,14 @@ router.patch('/job-cards/:id/status', async (req, res) => {
   try {
     const { status, notes } = req.body;
 
+    const validStatuses = new Set([
+      'NEW', 'PENDING_INSPECTION', 'PENDING_APPROVAL', 'APPROVED', 'IN_PROGRESS',
+      'WAITING_PARTS', 'COMPLETED', 'READY_FOR_DELIVERY', 'CLOSED', 'CANCELLED',
+    ]);
+    if (!validStatuses.has(status)) {
+      return res.status(400).json({ error: 'حالة أمر الإصلاح غير صالحة' });
+    }
+
     const currentOrder = await prisma.repairOrder.findUnique({
       where: { id: req.params.id },
       include: { estimates: true },
@@ -183,10 +208,14 @@ router.patch('/job-cards/:id/status', async (req, res) => {
 
     if (!currentOrder) return res.status(404).json({ error: 'أمر الإصلاح غير موجود' });
 
+    if (status === 'IN_PROGRESS' && !currentOrder.technicianId) {
+      return res.status(400).json({ error: 'يجب تعيين فني قبل بدء الإصلاح' });
+    }
+
     // Business Rule Section 19: Cannot approve job card without customer approval on estimate!
     if (status === 'APPROVED') {
       const hasApprovedEstimate = currentOrder.estimates.some((e) => e.isApprovedByCustomer);
-      if (!hasApprovedEstimate && currentOrder.estimates.length > 0) {
+      if (!hasApprovedEstimate) {
         return res.status(400).json({
           error: 'لا يمكن اعتماد أمر الإصلاح ونقله للعمل إلا بعد تسجيل موافقة العميل على عرض السعر (Estimate)!',
         });
@@ -294,8 +323,8 @@ router.post('/job-cards/:id/estimate', async (req, res) => {
     const disc = parseFloat(discount) || 0;
     const subtotal = subtotalParts + subtotalLabor;
     const taxable = Math.max(0, subtotal - disc);
-    const taxAmount = (taxable * 15) / 100;
-    const grandTotal = taxable + taxAmount;
+    const taxAmount = 0;
+    const grandTotal = taxable;
 
     const estimate = await prisma.repairEstimate.create({
       data: {
@@ -518,8 +547,8 @@ router.post('/job-cards/:id/invoice', async (req, res) => {
     const disc = parseFloat(discount) || jobCard.discount || 0;
     const subtotal = partsTotal + laborTotal;
     const taxable = Math.max(0, subtotal - disc);
-    const taxAmount = (taxable * 15) / 100;
-    const grandTotal = taxable + taxAmount;
+    const taxAmount = 0;
+    const grandTotal = taxable;
 
     let paid = 0;
     let cash = parseFloat(cashPaid) || 0;
@@ -568,9 +597,9 @@ router.post('/job-cards/:id/invoice', async (req, res) => {
                 unitPrice: p.unitPrice,
                 costPrice: p.costPrice,
                 discount: 0,
-                taxRate: 15.0,
-                taxAmount: ((p.unitPrice * (p.usedQty || p.requestedQty)) * 15) / 100,
-                total: (p.unitPrice * (p.usedQty || p.requestedQty)) * 1.15,
+                taxRate: 0,
+                taxAmount: 0,
+                total: p.unitPrice * (p.usedQty || p.requestedQty),
                 itemType: 'PART',
               })),
               ...jobCard.labors.map((l) => ({
@@ -579,9 +608,9 @@ router.post('/job-cards/:id/invoice', async (req, res) => {
                 unitPrice: l.total,
                 costPrice: 0,
                 discount: 0,
-                taxRate: 15.0,
-                taxAmount: (l.total * 15) / 100,
-                total: l.total * 1.15,
+                taxRate: 0,
+                taxAmount: 0,
+                total: l.total,
                 itemType: 'LABOR',
                 technicianId: l.technicianId,
               })),

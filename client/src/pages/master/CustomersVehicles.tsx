@@ -646,6 +646,8 @@ export const CustomersVehicles: React.FC = () => {
                   <label className="block font-bold text-slate-700 mb-1">العداد الحالي (كم)</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={vehicleForm.currentOdometer}
                     onChange={(e) =>
                       setVehicleForm({ ...vehicleForm, currentOdometer: parseInt(e.target.value) || 0 })

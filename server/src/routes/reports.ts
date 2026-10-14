@@ -14,8 +14,12 @@ router.get('/sales', async (req, res) => {
 
     if (fromDate || toDate) {
       whereClause.date = {};
-      if (fromDate) whereClause.date.gte = new Date(String(fromDate));
-      if (toDate) whereClause.date.lte = new Date(String(toDate));
+      if (fromDate) whereClause.date.gte = new Date(`${String(fromDate)}T00:00:00.000Z`);
+      if (toDate) {
+        const endExclusive = new Date(`${String(toDate)}T00:00:00.000Z`);
+        endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+        whereClause.date.lt = endExclusive;
+      }
     }
     if (customerId) whereClause.customerId = String(customerId);
     if (paymentMethod) whereClause.paymentMethod = String(paymentMethod);
@@ -32,7 +36,6 @@ router.get('/sales', async (req, res) => {
     });
 
     const totalSales = invoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
-    const totalTax = invoices.reduce((sum, inv) => sum + inv.taxAmount, 0);
     const totalDiscount = invoices.reduce((sum, inv) => sum + inv.discount, 0);
     const totalPaid = invoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
     const totalRemaining = invoices.reduce((sum, inv) => sum + inv.remainingAmount, 0);
@@ -42,7 +45,6 @@ router.get('/sales', async (req, res) => {
       summary: {
         count: invoices.length,
         totalSales,
-        totalTax,
         totalDiscount,
         totalPaid,
         totalRemaining,

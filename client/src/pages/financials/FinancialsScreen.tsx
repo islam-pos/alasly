@@ -45,7 +45,6 @@ export const FinancialsScreen: React.FC = () => {
     categoryId: '',
     beneficiary: '',
     amount: '',
-    taxAmount: '0',
     paymentMethod: 'CASH',
     cashboxId: '',
     bankId: '',
@@ -160,13 +159,12 @@ export const FinancialsScreen: React.FC = () => {
       await api.financials.createExpense({
         ...expenseForm,
         amount: parseFloat(expenseForm.amount),
-        taxAmount: parseFloat(expenseForm.taxAmount || '0'),
         cashboxId: expenseForm.paymentMethod === 'CASH' ? (expenseForm.cashboxId || cashboxes[0]?.id) : null,
         bankId: expenseForm.paymentMethod === 'BANK' ? (expenseForm.bankId || banks[0]?.id) : null,
       });
       showToast('تم تسجيل سند المصروف بنجاح', 'success');
       setIsExpenseModalOpen(false);
-      setExpenseForm({ categoryId: '', beneficiary: '', amount: '', taxAmount: '0', paymentMethod: 'CASH', cashboxId: '', bankId: '', description: '' });
+      setExpenseForm({ categoryId: '', beneficiary: '', amount: '', paymentMethod: 'CASH', cashboxId: '', bankId: '', description: '' });
       loadData();
     } catch (err: any) {
       showToast(err.response?.data?.error || 'فشل حفظ المصروف', 'error');
@@ -389,16 +387,15 @@ export const FinancialsScreen: React.FC = () => {
                   <th className="py-3 px-4">التصنيف</th>
                   <th className="py-3 px-4">المستفيد</th>
                   <th className="py-3 px-4">طريقة الدفع</th>
-                  <th className="py-3 px-4 text-left">المبلغ الأساسي</th>
-                  <th className="py-3 px-4 text-left">الضريبة</th>
-                  <th className="py-3 px-4 text-left">الإجمالي الصافي</th>
+                  <th className="py-3 px-4 text-left">المبلغ</th>
+                  <th className="py-3 px-4 text-left">الإجمالي</th>
                   <th className="py-3 px-4 text-center">إجراءات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {expenses.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center py-8 text-slate-400">لا توجد مصروفات مسجلة</td>
+                    <td colSpan={8} className="text-center py-8 text-slate-400">لا توجد مصروفات مسجلة</td>
                   </tr>
                 ) : (
                   expenses.map(exp => (
@@ -415,7 +412,6 @@ export const FinancialsScreen: React.FC = () => {
                         {exp.paymentMethod === 'CASH' ? `نقداً (${exp.cashbox?.name || 'الخزينة'})` : `بنك (${exp.bank?.name || 'الحساب'})`}
                       </td>
                       <td className="py-3 px-4 text-left font-mono">{exp.amount.toLocaleString()} ج.م</td>
-                      <td className="py-3 px-4 text-left font-mono text-xs text-slate-500">{(exp.taxAmount || 0).toLocaleString()} ج.م</td>
                       <td className="py-3 px-4 text-left font-mono font-bold text-rose-600">{exp.totalAmount.toLocaleString()} ج.م</td>
                       <td className="py-3 px-4 text-center">
                         <button
@@ -730,29 +726,15 @@ export const FinancialsScreen: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">المبلغ قبل الضريبة:</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">المبلغ:</label>
                   <input
                     type="number"
                     step="0.01"
                     required
                     value={expenseForm.amount}
-                    onChange={(e) => {
-                      const amt = parseFloat(e.target.value) || 0;
-                      setExpenseForm({ ...expenseForm, amount: e.target.value, taxAmount: (amt * 0.15).toFixed(2) });
-                    }}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
                     placeholder="0.00"
                     className="w-full border rounded-xl px-3 py-2 text-sm outline-none font-mono font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">الضريبة (15%):</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={expenseForm.taxAmount}
-                    onChange={(e) => setExpenseForm({ ...expenseForm, taxAmount: e.target.value })}
-                    placeholder="0.00"
-                    className="w-full border rounded-xl px-3 py-2 text-sm outline-none font-mono"
                   />
                 </div>
               </div>

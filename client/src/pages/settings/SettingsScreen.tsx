@@ -30,11 +30,9 @@ const invoicePrintFieldLabels: { key: keyof PrintSettings['invoiceFields']; labe
   { key: 'itemCode', label: 'كود الصنف' },
   { key: 'quantity', label: 'الكمية' },
   { key: 'unitPrice', label: 'سعر الوحدة' },
-  { key: 'lineTax', label: 'ضريبة كل بند' },
   { key: 'lineTotal', label: 'إجمالي كل بند' },
   { key: 'subtotal', label: 'المجموع الفرعي' },
   { key: 'discount', label: 'الخصم' },
-  { key: 'taxTotal', label: 'إجمالي الضريبة' },
   { key: 'grandTotal', label: 'الإجمالي النهائي' },
   { key: 'footer', label: 'تذييل الفاتورة' },
 ];
@@ -200,7 +198,6 @@ export const SettingsScreen: React.FC = () => {
         website: company.website,
         currency: 'EGP',
         currencySymbol: 'ج.م',
-        taxRate: company.taxRate,
         city: company.city,
         country: company.country,
         address: company.address,
@@ -218,7 +215,7 @@ export const SettingsScreen: React.FC = () => {
       localStorage.setItem('alasly-print-settings', JSON.stringify(printSettings));
       localStorage.setItem('alasly-print-company', JSON.stringify(savedCompany));
       window.dispatchEvent(new Event('alasly-company-updated'));
-      showToast('تم حفظ بيانات المنشأة والضريبة بنجاح', 'success');
+      showToast('تم حفظ بيانات المنشأة بنجاح', 'success');
     } catch (err: any) {
       showToast(err.response?.data?.error || 'فشل حفظ البيانات', 'error');
     }
@@ -369,7 +366,7 @@ export const SettingsScreen: React.FC = () => {
           }`}
         >
           <Building className="w-4 h-4" />
-          بيانات المركز والضريبة
+          بيانات المركز
         </button>}
         {canManageSettings && <button
           onClick={() => setActiveTab('branches')}
@@ -462,7 +459,6 @@ export const SettingsScreen: React.FC = () => {
                   onChange={(e) => setCompany({ ...company, taxNumber: e.target.value })}
                   className="w-full border rounded-xl px-3 py-2 text-sm outline-none font-mono font-bold text-blue-800"
                 />
-                <span className="text-[11px] text-slate-400">مطلوب للاعتماد مع فواتير الزكاة والضريبة والجمارك</span>
               </div>
 
               <div>
@@ -498,18 +494,6 @@ export const SettingsScreen: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">نسبة ضريبة القيمة المضافة الافتراضية:</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={company.taxRate ?? 15}
-                    onChange={(e) => setCompany({ ...company, taxRate: parseFloat(e.target.value) || 15 })}
-                    className="w-full border rounded-xl px-3 py-2 text-sm outline-none font-mono font-bold"
-                  />
-                  <span className="font-bold text-slate-600">%</span>
-                </div>
-              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

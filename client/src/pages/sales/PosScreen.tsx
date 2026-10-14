@@ -21,9 +21,24 @@ import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { printSalesInvoice } from '../../utils/invoicePrint';
 
+const matchesVehicleFitment = (fitment: string | null | undefined, vehicle: any) => {
+  if (!fitment || !vehicle) return false;
+  const normalize = (value: string) => value.trim().toLocaleLowerCase();
+
+  return fitment.split(/\r?\n/).some((line) => {
+    const [make, model, fromYear, toYear] = line.split('|').map(normalize);
+    if (make !== normalize(vehicle.make) || model !== normalize(vehicle.model)) return false;
+    const firstYear = fromYear ? Number(fromYear) : null;
+    const lastYear = toYear ? Number(toYear) : null;
+    if ((firstYear !== null && !Number.isInteger(firstYear)) || (lastYear !== null && !Number.isInteger(lastYear))) return false;
+    return (firstYear === null || vehicle.year >= firstYear) && (lastYear === null || vehicle.year <= lastYear);
+  });
+};
+
 export const PosScreen: React.FC = () => {
   const [items, setItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -32,6 +47,8 @@ export const PosScreen: React.FC = () => {
   const [cart, setCart] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
+  const [compatibleOnly, setCompatibleOnly] = useState(false);
   const [discount, setDiscount] = useState<number>(0);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'CREDIT' | 'SPLIT'>('CASH');
@@ -53,16 +70,18 @@ export const PosScreen: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [itemsRes, catRes, cusRes, companyRes] = await Promise.all([
+      const [itemsRes, catRes, cusRes, companyRes, vehiclesRes] = await Promise.all([
         api.getItems(),
         api.getCategories(),
         api.getCustomers(),
         api.master.getCompany(),
+        api.getVehicles(),
       ]);
       setItems(itemsRes.data);
       setCategories(catRes.data);
       setCustomers(cusRes.data);
       setCompany(companyRes.data);
+      setVehicles(vehiclesRes.data);
     } catch (err) {
       console.error(err);
     }
@@ -194,13 +213,13 @@ export const PosScreen: React.FC = () => {
     setCart([]);
     setDiscount(0);
     setSelectedCustomerId('');
+    setSelectedVehicleId('');
   };
 
   // Calculation
   const subtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const taxable = Math.max(0, subtotal - discount);
-  const taxAmount = (taxable * 15) / 100;
-  const grandTotal = taxable + taxAmount;
+  const grandTotal = taxable;
 
   // Open payment modal
   const openPaymentModal = () => {
@@ -271,8 +290,12 @@ export const PosScreen: React.FC = () => {
       item.nameAr.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.barcode && item.barcode.includes(searchQuery));
-    return matchesCat && matchesQuery;
+    const vehicle = vehicles.find((entry) => entry.id === selectedVehicleId);
+    const matchesFitment = !compatibleOnly || matchesVehicleFitment(item.fitment, vehicle);
+    return matchesCat && matchesQuery && matchesFitment;
   });
+
+  const customerVehicles = vehicles.filter((vehicle) => vehicle.customerId === selectedCustomerId);
 
   return (
     <div className="h-[calc(100vh-7.5rem)] flex flex-col lg:flex-row gap-4">
@@ -437,6 +460,28 @@ export const PosScreen: React.FC = () => {
             </select>
             <User className="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
           </div>
+          {selectedCustomerId && (
+            <select
+              value={selectedVehicleId}
+              onChange={(event) => setSelectedVehicleId(event.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+            >
+              <option value="">اختر سيارة العميل</option>
+              {customerVehicles.map((vehicle) => (
+                <option key={vehicle.id} value={vehicle.id}>{vehicle.make} {vehicle.model} • {vehicle.year} • {vehicle.plateNumber}</option>
+              ))}
+            </select>
+          )}
+          <label className={`flex items-center gap-2 text-xs font-semibold ${selectedVehicleId ? 'text-slate-700' : 'text-slate-400'}`}>
+            <input
+              type="checkbox"
+              checked={compatibleOnly}
+              disabled={!selectedVehicleId}
+              onChange={(event) => setCompatibleOnly(event.target.checked)}
+              className="h-4 w-4 accent-emerald-700"
+            />
+            عرض القطع المسجلة كتوافق لهذه السيارة فقط
+          </label>
         </div>
 
         {/* Cart Items List */}
@@ -511,8 +556,8 @@ export const PosScreen: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-600">
-            <span>ضريبة القيمة المضافة (15%):</span>
-            <span className="font-bold">{taxAmount.toFixed(2)} ج.م</span>
+            <span>الإجمالي بعد الخصم:</span>
+            <span className="font-bold">{grandTotal.toFixed(2)} ج.م</span>
           </div>
 
           <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-base font-black text-slate-900">
@@ -709,7 +754,7 @@ export const PosScreen: React.FC = () => {
                 <span className="font-bold">{completedInvoice.customer?.name || 'عميل نقدي'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">الإجمالي شامل الضريبة:</span>
+                <span className="text-slate-500">الإجمالي المستحق:</span>
                 <span className="font-bold text-emerald-600">{completedInvoice.grandTotal} ج.م</span>
               </div>
               <div className="flex justify-between">

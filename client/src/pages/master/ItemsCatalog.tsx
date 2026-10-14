@@ -35,6 +35,7 @@ const itemExportColumns = [
   ['الوحدة', (item: any) => item.unit?.name],
   ['الشركة المصنعة', (item: any) => item.manufacturer],
   ['بلد المنشأ', (item: any) => item.countryOfOrigin],
+  ['توافق المركبات', (item: any) => item.fitment],
   ['موقع التخزين', (item: any) => item.defaultLocation],
   ['المخزن الافتتاحي', () => ''],
   ['رصيد افتتاحي', () => ''],
@@ -58,6 +59,7 @@ export const ItemsCatalog: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [barcodePrintItems, setBarcodePrintItems] = useState<BarcodeLabelItem[] | null>(null);
   const [importing, setImporting] = useState(false);
   const [importReport, setImportReport] = useState<{
@@ -74,6 +76,9 @@ export const ItemsCatalog: React.FC = () => {
     sku: '',
     barcode: '',
     partNumber: '',
+    manufacturer: '',
+    countryOfOrigin: '',
+    fitment: '',
     categoryId: '',
     unitId: '',
     defaultLocation: '',
@@ -122,15 +127,67 @@ export const ItemsCatalog: React.FC = () => {
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.nameAr || !formData.categoryId || !formData.unitId) {
+    if (!formData.nameAr.trim() || !formData.categoryId || !formData.unitId) {
       error('يرجى ملء اسم الصنف، التصنيف والوحدة');
+      return;
+    }
+    if (editingItemId && !formData.sku.trim()) {
+      error('كود SKU مطلوب عند تعديل الصنف');
+      return;
+    }
+
+    const minStock = Number(formData.minStock);
+    const maxStock = Number(formData.maxStock);
+    const initialStock = Number(formData.initialStock);
+    if (
+      !Number.isInteger(minStock) || minStock < 0 ||
+      !Number.isInteger(maxStock) || maxStock < minStock ||
+      (canManagePrices && [formData.purchasePrice, formData.sellPrice, formData.specialSellPrice]
+        .some((price) => !Number.isFinite(Number(price)) || Number(price) < 0)) ||
+      (!editingItemId && (!Number.isInteger(initialStock) || initialStock < 0))
+    ) {
+      error('تحقق من حدود المخزون؛ يجب أن يكون الحد الأقصى أكبر من أو يساوي الحد الأدنى والكميات أعداداً صحيحة غير سالبة');
+      return;
+    }
+    if (!editingItemId && initialStock > 0 && !formData.initialWarehouseId) {
+      error('حدد المخزن الذي سيُسجل فيه الرصيد الافتتاحي');
       return;
     }
 
     setSubmitting(true);
     try {
-      await api.createItem(formData);
-      success('تمت إضافة الصنف بنجاح!');
+      const itemData = {
+        nameAr: formData.nameAr.trim(),
+        nameEn: formData.nameEn.trim() || null,
+        sku: formData.sku.trim(),
+        barcode: formData.barcode.trim() || null,
+        partNumber: formData.partNumber.trim() || null,
+        manufacturer: formData.manufacturer.trim() || null,
+        countryOfOrigin: formData.countryOfOrigin.trim() || null,
+        fitment: formData.fitment.trim() || null,
+        categoryId: formData.categoryId,
+        unitId: formData.unitId,
+        defaultLocation: formData.defaultLocation.trim() || null,
+        minStock,
+        maxStock,
+        ...(canManagePrices ? {
+          purchasePrice: Number(formData.purchasePrice),
+          sellPrice: Number(formData.sellPrice),
+          specialSellPrice: Number(formData.specialSellPrice),
+        } : {}),
+      };
+      if (editingItemId) {
+        await api.updateItem(editingItemId, itemData);
+        success('تم تحديث بيانات الصنف بنجاح');
+      } else {
+        await api.createItem({
+          ...itemData,
+          initialWarehouseId: formData.initialWarehouseId,
+          initialStock,
+        });
+        success('تمت إضافة الصنف بنجاح!');
+      }
+      setEditingItemId(null);
       setModalOpen(false);
       setFormData({
         nameAr: '',
@@ -138,6 +195,9 @@ export const ItemsCatalog: React.FC = () => {
         sku: '',
         barcode: '',
         partNumber: '',
+        manufacturer: '',
+        countryOfOrigin: '',
+        fitment: '',
         categoryId: categories[0]?.id || '',
         unitId: units[0]?.id || '',
         defaultLocation: '',
@@ -149,12 +209,62 @@ export const ItemsCatalog: React.FC = () => {
         initialWarehouseId: warehouses[0]?.id || '',
         initialStock: 0,
       });
-      loadData();
+      await loadData();
     } catch (err: any) {
-      error(err.message || 'فشل حفظ الصنف');
+      error(err.response?.data?.error || err.message || 'فشل حفظ الصنف');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleEditItem = (item: any) => {
+    setEditingItemId(item.id);
+    setFormData({
+      nameAr: item.nameAr || '',
+      nameEn: item.nameEn || '',
+      sku: item.sku || '',
+      barcode: item.barcode || '',
+      partNumber: item.partNumber || '',
+      manufacturer: item.manufacturer || '',
+      countryOfOrigin: item.countryOfOrigin || '',
+      fitment: item.fitment || '',
+      categoryId: item.categoryId,
+      unitId: item.unitId,
+      defaultLocation: item.defaultLocation || '',
+      minStock: item.minStock ?? 5,
+      maxStock: item.maxStock ?? 100,
+      purchasePrice: item.purchasePrice ?? 0,
+      sellPrice: item.sellPrice ?? 0,
+      specialSellPrice: item.specialSellPrice ?? 0,
+      initialWarehouseId: '',
+      initialStock: 0,
+    });
+    setModalOpen(true);
+  };
+
+  const handleNewItem = () => {
+    setEditingItemId(null);
+    setFormData({
+      nameAr: '',
+      nameEn: '',
+      sku: '',
+      barcode: '',
+      partNumber: '',
+      manufacturer: '',
+      countryOfOrigin: '',
+      fitment: '',
+      categoryId: categories[0]?.id || '',
+      unitId: units[0]?.id || '',
+      defaultLocation: '',
+      minStock: 5,
+      maxStock: 50,
+      purchasePrice: 0,
+      sellPrice: 0,
+      specialSellPrice: 0,
+      initialWarehouseId: warehouses[0]?.id || '',
+      initialStock: 0,
+    });
+    setModalOpen(true);
   };
 
   const filteredItems = items.filter((it) => {
@@ -332,7 +442,7 @@ export const ItemsCatalog: React.FC = () => {
             <span>نموذج Excel</span>
           </button>
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={handleNewItem}
             className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20"
           >
             <Plus className="w-4 h-4" />
@@ -404,18 +514,19 @@ export const ItemsCatalog: React.FC = () => {
                 <th className="p-3.5">المخزون المتاح</th>
                 <th className="p-3.5">حد الطلب</th>
                 <th className="p-3.5">الباركود</th>
+                <th className="p-3.5">إجراءات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={canManagePrices ? 10 : 8} className="p-8 text-center text-slate-400">
+                  <td colSpan={canManagePrices ? 11 : 9} className="p-8 text-center text-slate-400">
                     جاري تحميل كتالوج الأصناف...
                   </td>
                 </tr>
               ) : filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={canManagePrices ? 10 : 8} className="p-12 text-center text-slate-400">
+                  <td colSpan={canManagePrices ? 11 : 9} className="p-12 text-center text-slate-400">
                     لا توجد أصناف مطابقة للبحث
                   </td>
                 </tr>
@@ -464,6 +575,17 @@ export const ItemsCatalog: React.FC = () => {
                         <span>طباعة</span>
                       </button>
                     </td>
+                    <td className="p-3.5">
+                      <button
+                        type="button"
+                        onClick={() => handleEditItem(item)}
+                        aria-label={`تعديل بيانات ${item.nameAr}`}
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-brand-700 hover:bg-brand-50"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                        <span>تعديل</span>
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -472,16 +594,16 @@ export const ItemsCatalog: React.FC = () => {
         </div>
       </div>
 
-      {/* Add Item Modal */}
+      {/* Add/Edit Item Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 overflow-y-auto max-h-[90vh] space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
                 <Package className="w-5 h-5 text-brand-600" />
-                <span>تعريف كارت صنف جديد (قطع غيار)</span>
+                <span>{editingItemId ? 'تعديل كارت الصنف' : 'تعريف كارت صنف جديد (قطع غيار)'}</span>
               </h3>
-              <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
+              <button onClick={() => { setModalOpen(false); setEditingItemId(null); }} className="text-slate-400 hover:text-slate-600 p-1">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -501,8 +623,19 @@ export const ItemsCatalog: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block font-bold text-slate-700 mb-1">الاسم بالإنجليزية</label>
+                  <input
+                    type="text"
+                    value={formData.nameEn}
+                    onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl"
+                  />
+                </div>
+
+                <div>
                   <label className="block font-bold text-slate-700 mb-1">التصنيف *</label>
                   <select
+                    required
                     value={formData.categoryId}
                     onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
@@ -518,6 +651,7 @@ export const ItemsCatalog: React.FC = () => {
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">الوحدة *</label>
                   <select
+                    required
                     value={formData.unitId}
                     onChange={(e) => setFormData({ ...formData, unitId: e.target.value })}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
@@ -534,6 +668,7 @@ export const ItemsCatalog: React.FC = () => {
                   <label className="block font-bold text-slate-700 mb-1">كود الصنف SKU (اختياري)</label>
                   <input
                     type="text"
+                    required={Boolean(editingItemId)}
                     value={formData.sku}
                     onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                     placeholder="توليد تلقائي إن ترك فارغاً"
@@ -564,6 +699,38 @@ export const ItemsCatalog: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block font-bold text-slate-700 mb-1">الشركة المصنعة</label>
+                  <input
+                    type="text"
+                    value={formData.manufacturer}
+                    onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">بلد المنشأ</label>
+                  <input
+                    type="text"
+                    value={formData.countryOfOrigin}
+                    onChange={(e) => setFormData({ ...formData, countryOfOrigin: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">السيارات المتوافقة</label>
+                  <textarea
+                    rows={3}
+                    maxLength={2000}
+                    value={formData.fitment}
+                    onChange={(e) => setFormData({ ...formData, fitment: e.target.value })}
+                    placeholder={'كل سيارة في سطر: الماركة | الموديل | من سنة | إلى سنة\nتويوتا | كامري | 2018 | 2024'}
+                    className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-sm"
+                  />
+                </div>
+
+                <div>
                   <label className="block font-bold text-slate-700 mb-1">موقع التخزين / الرف</label>
                   <input
                     type="text"
@@ -580,6 +747,9 @@ export const ItemsCatalog: React.FC = () => {
                       <label className="block font-bold text-slate-700 mb-1">سعر الشراء (ج.م)</label>
                       <input
                         type="number"
+                        required
+                        min="0"
+                        step="0.01"
                         value={formData.purchasePrice}
                         onChange={(e) => setFormData({ ...formData, purchasePrice: e.target.value })}
                         className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono"
@@ -590,8 +760,21 @@ export const ItemsCatalog: React.FC = () => {
                       <label className="block font-bold text-slate-700 mb-1">سعر البيع (ج.م)</label>
                       <input
                         type="number"
+                        min="0"
+                        step="0.01"
                         value={formData.sellPrice}
                         onChange={(e) => setFormData({ ...formData, sellPrice: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">السعر الخاص (ج.م)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.specialSellPrice}
+                        onChange={(e) => setFormData({ ...formData, specialSellPrice: e.target.value })}
                         className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono"
                       />
                     </div>
@@ -602,6 +785,8 @@ export const ItemsCatalog: React.FC = () => {
                   <label className="block font-bold text-slate-700 mb-1">الحد الأدنى للمخزون (حد إعادة الطلب)</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={formData.minStock}
                     onChange={(e) => setFormData({ ...formData, minStock: e.target.value })}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
@@ -609,15 +794,46 @@ export const ItemsCatalog: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block font-bold text-slate-700 mb-1">الحد الأقصى للمخزون</label>
+                  <input
+                    type="number"
+                    required
+                    min={formData.minStock || 0}
+                    step="1"
+                    value={formData.maxStock}
+                    onChange={(e) => setFormData({ ...formData, maxStock: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
+                  />
+                </div>
+
+                {!editingItemId && (
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">مخزن الرصيد الافتتاحي</label>
+                    <select
+                      value={formData.initialWarehouseId}
+                      onChange={(e) => setFormData({ ...formData, initialWarehouseId: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+                    >
+                      <option value="">اختر المخزن</option>
+                      {warehouses.map((warehouse) => (
+                        <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {!editingItemId && <div>
                   <label className="block font-bold text-slate-700 mb-1">رصيد افتتاحي (اختياري)</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={formData.initialStock}
                     onChange={(e) => setFormData({ ...formData, initialStock: e.target.value })}
                     placeholder="0"
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
                   />
-                </div>
+                </div>}
               </div>
 
               <div className="flex gap-2 pt-3">
@@ -627,11 +843,11 @@ export const ItemsCatalog: React.FC = () => {
                   className="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md shadow-brand-500/20"
                 >
                   <Check className="w-4 h-4" />
-                  <span>{submitting ? 'جاري الحفظ...' : 'حفظ كارت الصنف في المخزن'}</span>
+                  <span>{submitting ? 'جاري الحفظ...' : editingItemId ? 'حفظ التعديلات' : 'حفظ كارت الصنف في المخزن'}</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setModalOpen(false)}
+                  onClick={() => { setModalOpen(false); setEditingItemId(null); }}
                   className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs"
                 >
                   إلغاء

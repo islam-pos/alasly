@@ -4,6 +4,8 @@ import { logAudit } from '../middleware/audit';
 import { sendInvoicePdf, sendShortageRequest } from '../services/whatsapp';
 import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
 import { postJournalEntry } from '../services/accounting';
+import { AuthenticatedRequest } from '../middleware/auth';
+import { branchWhere } from '../services/branchScope';
 
 const router = Router();
 
@@ -68,9 +70,10 @@ router.post('/requests', async (req, res) => {
 });
 
 // --- Purchase Invoices ---
-router.get('/invoices', async (req, res) => {
+router.get('/invoices', async (req: AuthenticatedRequest, res) => {
   try {
     const invoices = await prisma.purchaseInvoice.findMany({
+      where: branchWhere(req),
       include: {
         supplier: true,
         warehouse: true,
@@ -90,8 +93,8 @@ router.post('/invoices', async (req, res) => {
     const subtotal = items.reduce((sum: number, it: any) => sum + (parseFloat(it.unitPrice) * parseInt(it.quantity)), 0);
     const discount = parseFloat(data.discount) || 0;
     const taxableAmount = Math.max(0, subtotal - discount);
-    const taxAmount = (taxableAmount * 15) / 100;
-    const grandTotal = taxableAmount + taxAmount;
+    const taxAmount = 0;
+    const grandTotal = taxableAmount;
     const paidAmount = parseFloat(data.paidAmount) || 0;
     const remainingAmount = Math.max(0, grandTotal - paidAmount);
 
@@ -117,14 +120,13 @@ router.post('/invoices', async (req, res) => {
           items: {
             create: items.map((it: any) => {
               const itemTotal = parseFloat(it.unitPrice) * parseInt(it.quantity);
-              const itemTax = (itemTotal * 15) / 100;
               return {
                 itemId: it.itemId,
                 quantity: parseInt(it.quantity),
                 unitPrice: parseFloat(it.unitPrice),
-                taxRate: 15.0,
-                taxAmount: itemTax,
-                total: itemTotal + itemTax,
+                taxRate: 0,
+                taxAmount: 0,
+                total: itemTotal,
               };
             }),
           },

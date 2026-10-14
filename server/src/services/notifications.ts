@@ -341,6 +341,61 @@ export const sendShiftSummary = async (date: string) => {
   }
 };
 
+const sendDueMaintenanceReminders = async () => {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const retryAfter = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const whatsapp = await getWhatsappQrStatus();
+  if (!whatsapp.connected) return;
+
+  const reminders = await prisma.maintenanceReminder.findMany({
+    where: {
+      status: 'PENDING',
+      OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lt: retryAfter } }],
+    },
+    include: { vehicle: { include: { customer: true } } },
+    orderBy: { createdAt: 'asc' },
+    take: 500,
+  });
+
+  for (const reminder of reminders) {
+    const dueByDate = reminder.dueDate !== null && reminder.dueDate <= cutoff;
+    const dueByOdometer = reminder.dueOdometer !== null
+      && reminder.vehicle.currentOdometer >= reminder.dueOdometer - 500;
+    const customer = reminder.vehicle.customer;
+    if ((!dueByDate && !dueByOdometer) || !customer.whatsappOptIn || !customer.whatsappNumber) continue;
+
+    const eventKey = `maintenance-reminder:${reminder.id}`;
+    const claimed = await prisma.$executeRaw`
+      INSERT INTO "NotificationDelivery" ("id", "channel", "eventKey", "sentAt")
+      VALUES (${randomUUID()}, 'whatsapp', ${eventKey}, CURRENT_TIMESTAMP)
+      ON CONFLICT("channel", "eventKey") DO NOTHING
+    `;
+    if (!claimed) continue;
+
+    await prisma.maintenanceReminder.update({
+      where: { id: reminder.id },
+      data: { lastAttemptAt: now },
+    });
+    try {
+      const due = reminder.dueDate
+        ? `التاريخ المقترح: ${reminder.dueDate.toLocaleDateString('ar-EG')}`
+        : `العداد المستهدف: ${reminder.dueOdometer?.toLocaleString('ar-EG')} كم`;
+      await sendWhatsappQrMessage(
+        customer.whatsappNumber,
+        `تذكير صيانة من مركز المحترف: حان موعد ${reminder.serviceName} لسيارتك ${reminder.vehicle.make} ${reminder.vehicle.model}. ${due}`,
+      );
+      await prisma.maintenanceReminder.update({
+        where: { id: reminder.id },
+        data: { status: 'SENT', sentAt: now },
+      });
+    } catch (error) {
+      await prisma.notificationDelivery.delete({ where: { channel_eventKey: { channel: 'whatsapp', eventKey } } });
+      console.error(`Maintenance reminder delivery failed (${reminder.id}):`, error);
+    }
+  }
+};
+
 let schedulerStarted = false;
 export const startNotificationScheduler = () => {
   if (schedulerStarted) return;
@@ -353,6 +408,7 @@ export const startNotificationScheduler = () => {
     try {
       const state = await getIntegrationState();
       schedulerErrorLogged = false;
+      await sendDueMaintenanceReminders();
       if (!state.options.shiftSummary) return;
       const parts = new Intl.DateTimeFormat('en-CA', {
         timeZone: state.timeZone,

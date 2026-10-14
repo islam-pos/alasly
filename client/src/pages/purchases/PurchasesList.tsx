@@ -194,8 +194,7 @@ export const PurchasesList: React.FC = () => {
     (sum, it) => sum + (parseFloat(it.unitPrice) || 0) * (parseInt(it.quantity) || 0),
     0
   );
-  const taxAmount = (subtotal * 15) / 100;
-  const grandTotal = subtotal + taxAmount;
+  const grandTotal = subtotal;
 
   const handleSaveInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -385,7 +384,7 @@ export const PurchasesList: React.FC = () => {
                 <th className="p-3.5">المورد</th>
                 <th className="p-3.5">فاتورة المورد</th>
                 <th className="p-3.5">المستودع المستلم</th>
-                <th className="p-3.5">الإجمالي شامل الضريبة</th>
+                <th className="p-3.5">الإجمالي</th>
                 <th className="p-3.5">المدفوع</th>
                 <th className="p-3.5">المتبقي</th>
                 <th className="p-3.5">طريقة الدفع</th>
@@ -711,8 +710,6 @@ export const PurchasesList: React.FC = () => {
                   <span className="font-bold">{subtotal.toLocaleString()} ج.م</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>ضريبة القيمة المضافة (15%):</span>
-                  <span className="font-bold">{taxAmount.toFixed(2)} ج.م</span>
                 </div>
                 <div className="flex justify-between text-brand-700 font-black text-sm pt-2 border-t border-slate-200">
                   <span>الإجمالي النهائي:</span>

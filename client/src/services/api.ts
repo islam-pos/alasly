@@ -163,6 +163,23 @@ const apiClient = {
   getVehicleProfile: (id: string) =>
     fetch(`${BASE_URL}/master/vehicles/${id}`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
+  getMaintenanceReminders: (vehicleId: string) =>
+    fetch(`${BASE_URL}/master/vehicles/${encodeURIComponent(vehicleId)}/reminders`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  createMaintenanceReminder: (vehicleId: string, data: { serviceName: string; dueDate?: string; dueOdometer?: number; notes?: string }) =>
+    fetch(`${BASE_URL}/master/vehicles/${encodeURIComponent(vehicleId)}/reminders`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  updateMaintenanceReminder: (vehicleId: string, reminderId: string, status: 'PENDING' | 'COMPLETED' | 'CANCELLED') =>
+    fetch(`${BASE_URL}/master/vehicles/${encodeURIComponent(vehicleId)}/reminders/${encodeURIComponent(reminderId)}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({ status }),
+    }).then((res) => handleResponse<any>(res)),
+
   createVehicle: (data: any) =>
     fetch(`${BASE_URL}/master/vehicles`, {
       method: 'POST',

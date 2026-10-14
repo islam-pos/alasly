@@ -1,5 +1,5 @@
 import React from 'react';
-import { Printer, X, CheckCircle, Car, Calendar, Phone, MapPin } from 'lucide-react';
+import { Printer, X, Car, Calendar, Phone, MapPin } from 'lucide-react';
 
 interface PrintModalProps {
   title: string;
@@ -50,7 +50,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({ title, isOpen, onClose, 
   );
 };
 
-// 1. Tax Invoice Template (ZATCA style)
+// 1. Sales invoice template
 export const TaxInvoicePrint: React.FC<{ invoice: any; company?: any }> = ({ invoice, company }) => {
   const comp = company || {
     name: 'مركز المحترف لصيانة السيارات وقطع الغيار',
@@ -76,11 +76,11 @@ export const TaxInvoicePrint: React.FC<{ invoice: any; company?: any }> = ({ inv
         </div>
         <div className="text-left">
           <span className="inline-block bg-slate-900 text-white text-xs font-bold px-3 py-1 rounded uppercase tracking-wider mb-2">
-            فاتورة ضريبية مبسطة
+            فاتورة مبيعات
           </span>
           <div className="text-sm font-bold text-slate-800">رقم الفاتورة: {invoice.invoiceNumber}</div>
-          <div className="text-xs text-slate-500 mt-1">التاريخ: {new Date(invoice.createdAt).toLocaleDateString('ar-SA')}</div>
-          <div className="text-xs text-slate-500">طريقة الدفع: {invoice.paymentMethod === 'CASH' ? 'نقدي' : invoice.paymentMethod === 'CARD' ? 'بطاقة مدى/ائتمان' : 'تحويل بنكي / آجل'}</div>
+          <div className="text-xs text-slate-500 mt-1">التاريخ: {new Date(invoice.createdAt).toLocaleDateString('ar-EG')}</div>
+          <div className="text-xs text-slate-500">طريقة الدفع: {invoice.paymentMethod === 'CASH' ? 'نقدي' : invoice.paymentMethod === 'CARD' ? 'بطاقة' : 'تحويل بنكي / آجل'}</div>
         </div>
       </div>
 
@@ -110,7 +110,7 @@ export const TaxInvoicePrint: React.FC<{ invoice: any; company?: any }> = ({ inv
             <th className="py-2 px-3">البيان / الصنف / الخدمة</th>
             <th className="py-2 px-3 text-center">الكمية</th>
             <th className="py-2 px-3 text-left">سعر الوحدة</th>
-            <th className="py-2 px-3 text-left">الإجمالي قبل الضريبة</th>
+            <th className="py-2 px-3 text-left">الإجمالي</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200">
@@ -156,25 +156,9 @@ export const TaxInvoicePrint: React.FC<{ invoice: any; company?: any }> = ({ inv
 
       {/* Totals Breakdown */}
       <div className="flex justify-between items-end border-t pt-4">
-        {/* ZATCA QR Code Placeholder */}
-        <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-          <div className="w-20 h-20 bg-slate-900 text-white flex flex-col items-center justify-center p-1 rounded font-mono text-[9px] text-center leading-tight">
-            <span>[ QR CODE ]</span>
-            <span>فاتورة ضريبية</span>
-            <span>معتمدة</span>
-          </div>
-          <div className="text-[11px] text-slate-500 space-y-0.5">
-            <p className="font-semibold text-slate-700">ختم الفاتورة الإلكترونية</p>
-            <p>الامتثال لهيئة الزكاة والضريبة والجمارك</p>
-            <p className="text-emerald-700 font-bold flex items-center gap-1">
-              <CheckCircle className="w-3 h-3" /> تم التحقق بنجاح
-            </p>
-          </div>
-        </div>
-
         <div className="w-64 space-y-1.5 text-xs">
           <div className="flex justify-between text-slate-600">
-            <span>المجموع الفرعي الخاضع للضريبة:</span>
+            <span>المجموع الفرعي:</span>
             <span className="font-mono font-semibold">{(invoice.subtotal || 0).toLocaleString()} ج.م</span>
           </div>
           {Number(invoice.discountAmount) > 0 && (
@@ -183,10 +167,6 @@ export const TaxInvoicePrint: React.FC<{ invoice: any; company?: any }> = ({ inv
               <span className="font-mono font-semibold">-{(invoice.discountAmount || 0).toLocaleString()} ج.م</span>
             </div>
           )}
-          <div className="flex justify-between text-slate-600">
-            <span>ضريبة القيمة المضافة (15%):</span>
-            <span className="font-mono font-semibold">{(invoice.taxAmount || 0).toLocaleString()} ج.م</span>
-          </div>
           <div className="flex justify-between text-sm font-black border-t border-slate-300 pt-2 text-slate-900">
             <span>المبلغ الصافي المستحق:</span>
             <span className="font-mono text-blue-700 text-base">{(invoice.totalAmount || 0).toLocaleString()} ج.م</span>

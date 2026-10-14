@@ -26,11 +26,9 @@ export interface PrintSettings {
     itemCode: boolean;
     quantity: boolean;
     unitPrice: boolean;
-    lineTax: boolean;
     lineTotal: boolean;
     subtotal: boolean;
     discount: boolean;
-    taxTotal: boolean;
     grandTotal: boolean;
     footer: boolean;
   };
@@ -56,11 +54,9 @@ export const defaultPrintSettings: PrintSettings = {
     itemCode: true,
     quantity: true,
     unitPrice: true,
-    lineTax: true,
     lineTotal: true,
     subtotal: true,
     discount: true,
-    taxTotal: true,
     grandTotal: true,
     footer: true,
   },

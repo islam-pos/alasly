@@ -58,11 +58,13 @@ export const authorizeApiPermission = async (
       where: { id: req.user.id },
       select: {
         active: true,
+        branchId: true,
         permissionOverrides: true,
         role: { select: { name: true, permissions: true } },
       },
     });
     if (!user?.active) return res.status(401).json({ error: 'المستخدم غير موجود أو الحساب معطل' });
+    req.user.branchId = user.branchId || undefined;
     if (user.role.name === 'admin') return next();
 
     const permissionSource = user.permissionOverrides ?? user.role.permissions;

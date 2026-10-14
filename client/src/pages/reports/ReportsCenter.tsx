@@ -8,14 +8,24 @@ import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { exportToExcel, exportToPdf, formatExportDate } from '../../utils/exports';
 
+const toDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const ReportsCenter: React.FC = () => {
   const { showToast } = useToast();
   const [activeReport, setActiveReport] = useState<'sales' | 'inventory' | 'workshop'>('sales');
   const [loading, setLoading] = useState(false);
 
   // Filter states
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const [fromDate, setFromDate] = useState(() => {
+    const now = new Date();
+    return toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1));
+  });
+  const [toDate, setToDate] = useState(() => toDateInputValue(new Date()));
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
 
   // Report Data states
@@ -63,8 +73,8 @@ export const ReportsCenter: React.FC = () => {
     if (activeReport === 'sales') {
       return {
         title: 'تقرير المبيعات والفواتير',
-        headers: ['رقم الفاتورة', 'التاريخ', 'العميل', 'النوع', 'المجموع', 'الضريبة', 'الخصم', 'الصافي', 'المدفوع', 'المتبقي'],
-        rows: salesReport.invoices.map((inv: any) => [inv.invoiceNumber, formatExportDate(inv.date), inv.customer?.name || 'نقدي', inv.invoiceType, inv.subtotal, inv.taxAmount, inv.discount, inv.grandTotal, inv.paidAmount, inv.remainingAmount]),
+        headers: ['رقم الفاتورة', 'التاريخ', 'العميل', 'النوع', 'قبل الخصم', 'الخصم', 'الصافي', 'المدفوع', 'المتبقي'],
+        rows: salesReport.invoices.map((inv: any) => [inv.invoiceNumber, formatExportDate(inv.date), inv.customer?.name || 'نقدي', inv.invoiceType, inv.subtotal, inv.discount, inv.grandTotal, inv.paidAmount, inv.remainingAmount]),
       };
     }
     if (activeReport === 'inventory') {
@@ -208,18 +218,14 @@ export const ReportsCenter: React.FC = () => {
       {activeReport === 'sales' && (
         <div className="space-y-6">
           {/* Summary KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="bg-white p-4 rounded-xl border border-slate-200">
               <span className="text-xs text-slate-500 font-semibold">عدد الفواتير الصادرة</span>
               <div className="text-2xl font-black text-slate-900 mt-1">{salesReport.summary?.count || 0} فاتورة</div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
-              <span className="text-xs text-slate-500 font-semibold">إجمالي المبيعات (شامل الضريبة)</span>
+              <span className="text-xs text-slate-500 font-semibold">إجمالي المبيعات</span>
               <div className="text-2xl font-black text-blue-700 mt-1">{(salesReport.summary?.totalSales || 0).toLocaleString()} ج.م</div>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200">
-              <span className="text-xs text-slate-500 font-semibold">ضريبة القيمة المضافة المحصلة</span>
-              <div className="text-2xl font-black text-slate-800 mt-1">{(salesReport.summary?.totalTax || 0).toLocaleString()} ج.م</div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
               <span className="text-xs text-slate-500 font-semibold">إجمالي المبالغ المحصلة</span>
@@ -236,9 +242,9 @@ export const ReportsCenter: React.FC = () => {
                   <th className="py-3 px-4">التاريخ</th>
                   <th className="py-3 px-4">العميل</th>
                   <th className="py-3 px-4">نوع الفاتورة</th>
-                  <th className="py-3 px-4 text-left">المجموع قبل الضريبة</th>
-                  <th className="py-3 px-4 text-left">الضريبة 15%</th>
-                  <th className="py-3 px-4 text-left font-bold text-slate-900">المبلغ الإجمالي</th>
+                  <th className="py-3 px-4 text-left">قبل الخصم</th>
+                  <th className="py-3 px-4 text-left">الخصم</th>
+                  <th className="py-3 px-4 text-left font-bold text-slate-900">الصافي</th>
                   <th className="py-3 px-4 text-center">طريقة الدفع</th>
                 </tr>
               </thead>
@@ -246,7 +252,7 @@ export const ReportsCenter: React.FC = () => {
                 {salesReport.invoices?.map((inv: any) => (
                   <tr key={inv.id} className="hover:bg-slate-50/80">
                     <td className="py-3 px-4 font-mono font-bold text-blue-600">{inv.invoiceNumber}</td>
-                    <td className="py-3 px-4 text-xs text-slate-500">{new Date(inv.date).toLocaleDateString('ar-SA')}</td>
+                    <td className="py-3 px-4 text-xs text-slate-500">{new Date(inv.date).toLocaleDateString('ar-EG')}</td>
                     <td className="py-3 px-4 font-semibold text-slate-800">{inv.customer?.name || 'عميل نقدي'}</td>
                     <td className="py-3 px-4 text-xs">
                       <span className="bg-slate-100 px-2 py-0.5 rounded font-semibold text-slate-700">
@@ -254,7 +260,7 @@ export const ReportsCenter: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-left font-mono">{inv.subtotal?.toLocaleString()} ج.م</td>
-                    <td className="py-3 px-4 text-left font-mono text-slate-500">{inv.taxAmount?.toLocaleString()} ج.م</td>
+                    <td className="py-3 px-4 text-left font-mono text-slate-500">{inv.discount?.toLocaleString()} ج.م</td>
                     <td className="py-3 px-4 text-left font-mono font-black text-slate-900">{inv.grandTotal?.toLocaleString()} ج.م</td>
                     <td className="py-3 px-4 text-center">
                       <span className="text-xs px-2 py-0.5 rounded font-bold bg-slate-100 text-slate-700">

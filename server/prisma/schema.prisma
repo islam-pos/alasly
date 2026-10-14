@@ -23,7 +23,7 @@ model CompanySetting {
   website            String   @default("www.autocare-center.com")
   currency           String   @default("EGP")
   currencySymbol     String   @default("ج.م")
-  taxRate            Float    @default(15.0)
+  taxRate            Float    @default(0)
   invoiceHeader      String?  @default("أهلاً بكم في مركز المحترف لخدمات وصيانة السيارات")
   invoiceFooter      String?  @default("الضمان يشمل قطع الغيار الأصلية لمدة شهر من تاريخ الفاتورة")
   termsAndConditions String?
@@ -358,6 +358,25 @@ model Vehicle {
   updatedAt       DateTime      @updatedAt
   repairOrders    RepairOrder[]
   salesInvoices   SalesInvoice[]
+  maintenanceReminders MaintenanceReminder[]
+}
+
+model MaintenanceReminder {
+  id             String   @id @default(uuid())
+  vehicleId      String
+  vehicle        Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  serviceName    String
+  dueDate        DateTime?
+  dueOdometer    Int?
+  status         String   @default("PENDING") // PENDING, SENT, COMPLETED, CANCELLED
+  notes          String?
+  sentAt         DateTime?
+  lastAttemptAt  DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, dueDate])
+  @@index([vehicleId, status])
 }
 
 model ItemCategory {
@@ -426,6 +445,7 @@ model Item {
   manufacturer         String?
   countryOfOrigin      String?
   partNumber           String?
+  fitment              String?
   minStock             Int                   @default(5)
   maxStock             Int                   @default(100)
   defaultLocation      String?
@@ -433,7 +453,7 @@ model Item {
   avgCost              Float                 @default(0)
   sellPrice            Float                 @default(0)
   specialSellPrice     Float                 @default(0)
-  taxRate              Float                 @default(15.0)
+  taxRate              Float                 @default(0)
   imageUrl             String?
   active               Boolean               @default(true)
   createdAt            DateTime              @default(now())
@@ -546,7 +566,7 @@ model PurchaseInvoiceItem {
   quantity   Int
   unitPrice  Float
   discount   Float           @default(0)
-  taxRate    Float           @default(15.0)
+  taxRate    Float           @default(0)
   taxAmount  Float           @default(0)
   total      Float
   createdAt  DateTime        @default(now())
@@ -629,7 +649,7 @@ model SalesInvoiceItem {
   unitPrice    Float
   costPrice    Float        @default(0)
   discount     Float        @default(0)
-  taxRate      Float        @default(15.0)
+  taxRate      Float        @default(0)
   taxAmount    Float        @default(0)
   total        Float
   itemType     String       @default("PART") // PART, LABOR

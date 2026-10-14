@@ -650,10 +650,6 @@ export const JobCardDetail: React.FC = () => {
                         <span className="text-slate-400">إجمالي اليد: </span>
                         <span>{est.subtotalLabor} ج.م</span>
                       </div>
-                      <div>
-                        <span className="text-slate-400">الضريبة (15%): </span>
-                        <span>{est.taxAmount.toFixed(2)} ج.م</span>
-                      </div>
                       <div className="text-brand-700 text-sm">
                         <span>الإجمالي الكلي: </span>
                         <span>{est.grandTotal.toFixed(2)} ج.م</span>
@@ -1078,7 +1074,7 @@ export const JobCardDetail: React.FC = () => {
                 <span className="font-bold">{jobCard.totalLabor} ج.م</span>
               </div>
               <div className="flex justify-between text-brand-700 font-black text-sm pt-2 border-t border-slate-200">
-                <span>الإجمالي شامل الضريبة (15%):</span>
+                <span>الإجمالي المستحق:</span>
                 <span>{jobCard.grandTotal} ج.م</span>
               </div>
             </div>

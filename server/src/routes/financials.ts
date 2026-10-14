@@ -40,11 +40,11 @@ router.get('/expenses', async (req, res) => {
 
 router.post('/expenses', async (req, res) => {
   try {
-    const { categoryId, beneficiary, amount, taxAmount = 0, paymentMethod = 'CASH', cashboxId, bankId, description } = req.body;
+    const { categoryId, beneficiary, amount, paymentMethod = 'CASH', cashboxId, bankId, description } = req.body;
 
     const count = await prisma.expense.count();
     const expenseNumber = `EXP-${new Date().getFullYear()}-${String(count + 1).padStart(3, '0')}`;
-    const totalAmount = parseFloat(amount) + parseFloat(taxAmount || 0);
+    const totalAmount = parseFloat(amount);
 
     const expense = await prisma.$transaction(async (tx) => {
       const exp = await tx.expense.create({
@@ -53,7 +53,7 @@ router.post('/expenses', async (req, res) => {
           categoryId,
           beneficiary,
           amount: parseFloat(amount),
-          taxAmount: parseFloat(taxAmount || 0),
+          taxAmount: 0,
           totalAmount,
           paymentMethod,
           cashboxId: paymentMethod === 'CASH' ? cashboxId : null,
@@ -105,7 +105,6 @@ router.post('/expenses', async (req, res) => {
         referenceId: exp.id,
         lines: [
           ...(parseFloat(amount) > 0 ? [{ accountCode: '6000', debit: parseFloat(amount), label: description || 'مصروف تشغيلي' }] : []),
-          ...(parseFloat(taxAmount || 0) > 0 ? [{ accountCode: '1300', debit: parseFloat(taxAmount || 0), label: 'ضريبة قيمة مضافة - مدخلات' }] : []),
           ...(totalAmount > 0 ? [{
             accountCode: paymentMethod === 'CASH' ? '1000' : paymentMethod === 'BANK' ? '1020' : '2990',
             credit: totalAmount,

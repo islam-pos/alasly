@@ -5,14 +5,15 @@ import { logAudit } from '../middleware/audit';
 import { sendInvoicePdf } from '../services/whatsapp';
 import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
 import { postJournalEntry } from '../services/accounting';
+import { branchWhere } from '../services/branchScope';
 
 const router = Router();
 
 // --- List Sales Invoices ---
-router.get('/invoices', async (req, res) => {
+router.get('/invoices', async (req: AuthenticatedRequest, res) => {
   try {
     const { type, customerId } = req.query;
-    let whereClause: any = {};
+    let whereClause: any = branchWhere(req);
     if (type) whereClause.invoiceType = String(type);
     if (customerId) whereClause.customerId = String(customerId);
 
@@ -35,10 +36,10 @@ router.get('/invoices', async (req, res) => {
 });
 
 // --- Single Invoice ---
-router.get('/invoices/:id', async (req, res) => {
+router.get('/invoices/:id', async (req: AuthenticatedRequest, res) => {
   try {
-    const invoice = await prisma.salesInvoice.findUnique({
-      where: { id: req.params.id },
+    const invoice = await prisma.salesInvoice.findFirst({
+      where: { id: req.params.id, ...branchWhere(req) },
       include: {
         customer: true,
         vehicle: true,
@@ -104,8 +105,8 @@ router.post('/pos', async (req, res) => {
     const subtotal = items.reduce((sum: number, it: any) => sum + (parseFloat(it.unitPrice) * parseInt(it.quantity)), 0);
     const disc = parseFloat(discount) || 0;
     const taxable = Math.max(0, subtotal - disc);
-    const taxAmount = (taxable * 15) / 100;
-    const grandTotal = taxable + taxAmount;
+    const taxAmount = 0;
+    const grandTotal = taxable;
 
     let paid = 0;
     let cash = parseFloat(cashPaid) || 0;
@@ -161,7 +162,6 @@ router.post('/pos', async (req, res) => {
               items.map(async (it: any) => {
                 const itemObj = await tx.item.findUnique({ where: { id: it.itemId } });
                 const itemTotal = parseFloat(it.unitPrice) * parseInt(it.quantity);
-                const itemTax = (itemTotal * 15) / 100;
                 return {
                   itemId: it.itemId,
                   description: itemObj?.nameAr || null,
@@ -169,9 +169,9 @@ router.post('/pos', async (req, res) => {
                   unitPrice: parseFloat(it.unitPrice),
                   costPrice: itemObj?.avgCost || 0,
                   discount: parseFloat(it.discount) || 0,
-                  taxRate: 15.0,
-                  taxAmount: itemTax,
-                  total: itemTotal + itemTax,
+                  taxRate: 0,
+                  taxAmount: 0,
+                  total: itemTotal,
                   itemType: 'PART',
                 };
               })
@@ -332,8 +332,8 @@ router.post('/quotations', async (req: AuthenticatedRequest, res) => {
 
     const subtotal = items.reduce((sum: number, item: any) => sum + Number(item.unitPrice) * Number(item.quantity), 0);
     const taxable = Math.max(0, subtotal - Number(discount));
-    const taxAmount = (taxable * 15) / 100;
-    const grandTotal = taxable + taxAmount;
+    const taxAmount = 0;
+    const grandTotal = taxable;
     if (grandTotal <= 0) return res.status(400).json({ error: 'إجمالي عرض السعر يجب أن يكون أكبر من صفر' });
 
     const quotation = await withInvoiceTransaction(prisma, async (tx) => {
@@ -360,7 +360,6 @@ router.post('/quotations', async (req: AuthenticatedRequest, res) => {
               const product = await tx.item.findUnique({ where: { id: item.itemId } });
               if (!product || !product.active) throw new Error(`الصنف ${item.itemId} غير موجود أو غير نشط`);
               const lineSubtotal = Number(item.unitPrice) * Number(item.quantity);
-              const lineTax = lineSubtotal * 0.15;
               return {
                 itemId: product.id,
                 description: product.nameAr,
@@ -368,9 +367,9 @@ router.post('/quotations', async (req: AuthenticatedRequest, res) => {
                 unitPrice: Number(item.unitPrice),
                 costPrice: product.avgCost,
                 discount: 0,
-                taxRate: 15,
-                taxAmount: lineTax,
-                total: lineSubtotal + lineTax,
+                taxRate: 0,
+                taxAmount: 0,
+                total: lineSubtotal,
                 itemType: 'PART',
               };
             })),
@@ -610,8 +609,8 @@ router.post('/returns', async (req, res) => {
     const returnNumber = `RET-${new Date().getFullYear()}-${String(count + 1).padStart(3, '0')}`;
 
     const subtotal = items.reduce((sum: number, it: any) => sum + (parseFloat(it.unitPrice) * parseInt(it.quantity)), 0);
-    const taxAmount = (subtotal * 15) / 100;
-    const totalAmount = subtotal + taxAmount;
+    const taxAmount = 0;
+    const totalAmount = subtotal;
 
     const returnRecord = await prisma.$transaction(async (tx) => {
       // 1. Create return

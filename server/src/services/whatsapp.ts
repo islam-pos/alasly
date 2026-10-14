@@ -58,7 +58,6 @@ const createInvoicePdf = async (
   doc.moveDown();
   writeLine(`المجموع الفرعي: ${invoice.subtotal}`);
   if (invoice.discount) writeLine(`الخصم: ${invoice.discount}`);
-  writeLine(`الضريبة: ${invoice.taxAmount}`);
   writeLine(`الإجمالي: ${invoice.grandTotal} ${company?.currencySymbol || ''}`, { fontSize: 14 });
   if (company?.invoiceFooter) {
     doc.moveDown();

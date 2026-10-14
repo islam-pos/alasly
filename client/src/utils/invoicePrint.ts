@@ -35,7 +35,6 @@ export const printSalesInvoice = (
     { key: 'itemCode', title: 'الكود', render: (item: any) => item.item?.sku || item.item?.barcode || '-' },
     { key: 'quantity', title: 'الكمية', render: (item: any) => item.quantity ?? 1 },
     { key: 'unitPrice', title: 'سعر الوحدة', render: (item: any) => formatMoney(item.unitPrice, currency) },
-    { key: 'lineTax', title: 'الضريبة', render: (item: any) => formatMoney(item.taxAmount, currency) },
     { key: 'lineTotal', title: 'الإجمالي', render: (item: any) => formatMoney(item.total ?? item.subtotal, currency) },
   ].filter((column) => fields[column.key as keyof typeof fields]);
 
@@ -67,7 +66,6 @@ export const printSalesInvoice = (
     fields.discount && Number(invoice.discountAmount) > 0
       ? `<div><span>الخصم</span><strong>-${formatMoney(invoice.discountAmount, currency)}</strong></div>`
       : '',
-    fields.taxTotal && `<div><span>الضريبة</span><strong>${formatMoney(invoice.taxAmount, currency)}</strong></div>`,
     fields.grandTotal && `<div class="grand-total"><span>الإجمالي النهائي</span><strong>${formatMoney(invoice.grandTotal ?? invoice.totalAmount, currency)}</strong></div>`,
   ].filter(Boolean).join('');
 

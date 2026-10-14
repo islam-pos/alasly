@@ -73,10 +73,10 @@ async function main() {
       website: 'www.autocare-center.com',
       currency: 'EGP',
       currencySymbol: 'ج.م',
-      taxRate: 15.0,
+      taxRate: 0,
       invoiceHeader: 'أهلاً بكم في مركز المحترف لخدمات وصيانة السيارات المتكاملة',
       invoiceFooter: 'ضمان قطع الغيار 30 يوماً واليد العاملة 14 يوماً من تاريخ الفاتورة',
-      termsAndConditions: 'تطبق الشروط والأحكام. الفاتورة الضريبية الصادرة معتمدة من هيئة الزكاة والضريبة والجمارك.',
+      termsAndConditions: 'تطبق الشروط والأحكام.',
     },
   });
 
@@ -522,7 +522,7 @@ async function main() {
         avgCost: it.cost,
         sellPrice: it.price,
         specialSellPrice: Math.round(it.price * 0.9),
-        taxRate: 15.0,
+        taxRate: 0,
         defaultLocation: it.loc,
         minStock: it.minStock,
         maxStock: it.minStock * 5,

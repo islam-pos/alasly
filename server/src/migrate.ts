@@ -64,7 +64,11 @@ const migrate = async () => {
   await prisma.$executeRaw`UPDATE "NotificationIntegration" SET "telegram" = NULL WHERE "telegram" IS NOT NULL`;
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "NotificationDelivery" ("id" TEXT NOT NULL PRIMARY KEY, "channel" TEXT NOT NULL, "eventKey" TEXT NOT NULL, "sentAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`;
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "NotificationDelivery_channel_eventKey_key" ON "NotificationDelivery"("channel", "eventKey")`;
+  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "MaintenanceReminder" ("id" TEXT NOT NULL PRIMARY KEY, "vehicleId" TEXT NOT NULL, "serviceName" TEXT NOT NULL, "dueDate" DATETIME, "dueOdometer" INTEGER, "status" TEXT NOT NULL DEFAULT 'PENDING', "notes" TEXT, "sentAt" DATETIME, "lastAttemptAt" DATETIME, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "MaintenanceReminder_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES "Vehicle"("id") ON DELETE CASCADE ON UPDATE CASCADE)`;
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "MaintenanceReminder_status_dueDate_idx" ON "MaintenanceReminder"("status", "dueDate")`;
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "MaintenanceReminder_vehicleId_status_idx" ON "MaintenanceReminder"("vehicleId", "status")`;
   await ensureColumn('CompanySetting', 'nameEn', 'TEXT');
+  await prisma.$executeRaw`UPDATE "CompanySetting" SET "taxRate" = 0 WHERE "taxRate" <> 0`;
   await prisma.$executeRaw`UPDATE "CompanySetting" SET "currency" = 'EGP', "currencySymbol" = 'ج.م'`;
   await ensureColumn('CompanySetting', 'supportTitle', "TEXT NOT NULL DEFAULT 'الدعم الفني والخدمات'");
   await ensureColumn('CompanySetting', 'supportDescription', "TEXT NOT NULL DEFAULT 'مركز صيانة متكامل 24/7 مع نظام فحص إلكتروني دقيق.'");
@@ -83,6 +87,8 @@ const migrate = async () => {
   await ensureColumn('SalesInvoice', 'quotationId', 'TEXT');
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "SalesInvoice_quotationId_key" ON "SalesInvoice"("quotationId")`;
   await ensureColumn('Employee', 'nationalId', 'TEXT');
+  await ensureColumn('Item', 'fitment', 'TEXT');
+  await prisma.$executeRaw`UPDATE "Item" SET "taxRate" = 0 WHERE "taxRate" <> 0`;
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "Employee_nationalId_key" ON "Employee"("nationalId")`;
   await ensureColumn('NotificationIntegration', 'whatsappPhone', 'TEXT');
   await ensureColumn('Supplier', 'customerId', 'TEXT REFERENCES "Customer"("id") ON DELETE SET NULL ON UPDATE CASCADE');
