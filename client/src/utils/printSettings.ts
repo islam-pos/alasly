@@ -1,5 +1,13 @@
-export type PaperSize = 'A4' | 'A5' | 'THERMAL_80' | 'THERMAL_58';
-export type PrinterType = 'STANDARD' | 'THERMAL';
+export const labelPaperSizes = [
+  { value: 'LABEL_40X30', label: 'ملصق 40 × 30 مم', width: 40, height: 30 },
+  { value: 'LABEL_50X30', label: 'ملصق 50 × 30 مم', width: 50, height: 30 },
+  { value: 'LABEL_60X40', label: 'ملصق 60 × 40 مم', width: 60, height: 40 },
+  { value: 'LABEL_100X50', label: 'ملصق 100 × 50 مم', width: 100, height: 50 },
+] as const;
+
+type LabelPaperSize = (typeof labelPaperSizes)[number]['value'];
+export type PaperSize = 'A4' | 'A5' | 'THERMAL_80' | 'THERMAL_58' | LabelPaperSize;
+export type PrinterType = 'STANDARD' | 'THERMAL' | 'LABEL';
 
 export interface OutputPrintSettings {
   paperSize: PaperSize;
@@ -71,10 +79,13 @@ export const parsePrintSettings = (value: unknown): PrintSettings => {
     parsed = {};
   }
 
-  const paperSize = ['A4', 'A5', 'THERMAL_80', 'THERMAL_58'].includes(String(parsed.paperSize))
+  const validPaperSizes = ['A4', 'A5', 'THERMAL_80', 'THERMAL_58', ...labelPaperSizes.map(({ value }) => value)];
+  const paperSize = validPaperSizes.includes(String(parsed.paperSize))
     ? parsed.paperSize as PaperSize
     : defaultPrintSettings.paperSize;
-  const printerType = parsed.printerType === 'THERMAL' ? 'THERMAL' : 'STANDARD';
+  const parsePrinterType = (value: unknown, fallback: PrinterType): PrinterType =>
+    value === 'THERMAL' || value === 'LABEL' || value === 'STANDARD' ? value : fallback;
+  const printerType = parsePrinterType(parsed.printerType, defaultPrintSettings.printerType);
   const hasLegacyOutputSettings = Object.prototype.hasOwnProperty.call(parsed, 'paperSize')
     || Object.prototype.hasOwnProperty.call(parsed, 'printerType');
   const parseOutputSettings = (
@@ -85,12 +96,10 @@ export const parsePrintSettings = (value: unknown): PrintSettings => {
       ? output as Partial<OutputPrintSettings>
       : {};
     return {
-      paperSize: ['A4', 'A5', 'THERMAL_80', 'THERMAL_58'].includes(String(candidateOutput.paperSize))
+      paperSize: validPaperSizes.includes(String(candidateOutput.paperSize))
         ? candidateOutput.paperSize as PaperSize
         : fallback.paperSize,
-      printerType: candidateOutput.printerType === 'THERMAL' ? 'THERMAL' : candidateOutput.printerType === 'STANDARD'
-        ? 'STANDARD'
-        : fallback.printerType,
+      printerType: parsePrinterType(candidateOutput.printerType, fallback.printerType),
     };
   };
   const legacyOutput: OutputPrintSettings = { paperSize, printerType };
@@ -126,6 +135,9 @@ export const parsePrintSettings = (value: unknown): PrintSettings => {
 };
 
 export const getPaperSizeCss = (paperSize: PaperSize) => {
+  const labelSize = labelPaperSizes.find(({ value }) => value === paperSize);
+  if (labelSize) return `${labelSize.width}mm ${labelSize.height}mm`;
+
   switch (paperSize) {
     case 'A5': return 'A5 portrait';
     case 'THERMAL_80': return '80mm 297mm';

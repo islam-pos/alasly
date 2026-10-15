@@ -11,6 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { NotificationIntegrations } from './NotificationIntegrations';
 import {
   defaultPrintSettings,
+  labelPaperSizes,
   parsePrintSettings,
   type OutputPrintSettings,
   type PrintSettings,
@@ -318,9 +319,18 @@ export const SettingsScreen: React.FC = () => {
     value: OutputPrintSettings[keyof OutputPrintSettings],
   ) => {
     const current = parsePrintSettings(company.printSettings);
+    const nextSettings = { ...current[output], [key]: value };
+    if (output === 'barcode' && key === 'printerType' && value === 'LABEL'
+      && !labelPaperSizes.some(({ value: size }) => size === nextSettings.paperSize)) {
+      nextSettings.paperSize = 'LABEL_50X30';
+    }
+    if (output === 'barcode' && key === 'paperSize'
+      && labelPaperSizes.some(({ value: size }) => size === value)) {
+      nextSettings.printerType = 'LABEL';
+    }
     setCompany({
       ...company,
-      printSettings: { ...current, [output]: { ...current[output], [key]: value } },
+      printSettings: { ...current, [output]: nextSettings },
     });
   };
 
@@ -596,7 +606,7 @@ export const SettingsScreen: React.FC = () => {
                 <Printer className="h-5 w-5 text-blue-700" />
                 <div>
                   <h3 className="font-bold text-slate-900">إعدادات الطباعة المستقلة</h3>
-                  <p className="text-xs text-slate-500">اضبط الباركود والمستندات بشكل مستقل. اختيار الطابعة الفعلية متاح من نافذة الطباعة بالمتصفح.</p>
+                  <p className="text-xs text-slate-500">اضبط الباركود والمستندات بشكل مستقل. ثبّت تعريف الطابعة في النظام، ثم اخترها من نافذة الطباعة بالمتصفح واضبط مقياس الطباعة على 100%.</p>
                 </div>
               </div>
 
@@ -616,6 +626,7 @@ export const SettingsScreen: React.FC = () => {
                   >
                     <option value="STANDARD">عادية (ليزر / نفث حبر)</option>
                     <option value="THERMAL">حرارية</option>
+                    {key === 'barcode' && <option value="LABEL">باركود وملصقات</option>}
                   </select>
                 </label>
 
@@ -630,6 +641,9 @@ export const SettingsScreen: React.FC = () => {
                     <option value="A5">A5</option>
                     <option value="THERMAL_80">حراري 80 مم</option>
                     <option value="THERMAL_58">حراري 58 مم</option>
+                    {key === 'barcode' && labelPaperSizes.map(({ value, label }) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
                   </select>
                 </label>
               </div>

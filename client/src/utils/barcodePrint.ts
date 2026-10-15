@@ -1,5 +1,5 @@
 import JsBarcode from 'jsbarcode';
-import { getPaperSizeCss, parsePrintSettings } from './printSettings';
+import { getPaperSizeCss, labelPaperSizes, parsePrintSettings } from './printSettings';
 
 export interface BarcodeLabelItem {
   nameAr: string;
@@ -46,11 +46,18 @@ export const printBarcodeLabels = (
     return `<article class="label">${settings.showCompanyName && cachedCompanyName ? `<b class="company">${escapeHtml(cachedCompanyName)}</b>` : ''}<strong>${escapeHtml(item.nameAr)}</strong>${svg.outerHTML}<small>SKU: ${escapeHtml(item.sku)}</small></article>`;
   }).join('');
   const barcodeSettings = settings.barcode;
-  const isThermal = barcodeSettings.printerType === 'THERMAL';
   const isThermalPaper = barcodeSettings.paperSize.startsWith('THERMAL');
+  const labelSize = labelPaperSizes.find(({ value }) => value === barcodeSettings.paperSize);
+  const isLabelPaper = Boolean(labelSize);
+  const isThermalPrinter = barcodeSettings.printerType !== 'STANDARD';
   const pageSize = isThermalPaper
     ? barcodeSettings.paperSize === 'THERMAL_58' ? '58mm 33mm' : '80mm 38mm'
     : getPaperSizeCss(barcodeSettings.paperSize);
+  const pageMargin = isLabelPaper ? '0' : isThermalPaper || isThermalPrinter ? '3mm' : '10mm';
+  const labelHeight = labelSize?.height || (barcodeSettings.paperSize === 'THERMAL_58' ? 25 : 30);
+  const barcodeHeight = isLabelPaper
+    ? Math.max(10, Math.min(24, labelHeight * 0.48))
+    : isThermalPaper ? 12 : 15;
 
   const printWindow = window.open('', '_blank');
   if (!printWindow) return 'blocked';
@@ -62,17 +69,17 @@ export const printBarcodeLabels = (
         <meta charset="utf-8">
         <title>ملصقات باركود الأصناف</title>
         <style>
-          @page { size: ${pageSize}; margin: ${isThermal ? '3mm' : '10mm'}; }
+          @page { size: ${pageSize}; margin: ${pageMargin}; }
           * { box-sizing: border-box; }
           body { margin: 0; color: #111827; font-family: Arial, sans-serif; }
           main { display: block; }
-          .label { height: ${barcodeSettings.paperSize === 'THERMAL_58' ? '25mm' : '30mm'}; padding: 2mm; border: 1px dashed #9ca3af; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; break-inside: avoid; break-after: page; page-break-after: always; }
+          .label { width: 100%; height: ${labelHeight}mm; padding: ${isLabelPaper ? '1mm' : '2mm'}; border: 1px dashed #9ca3af; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; break-inside: avoid; break-after: page; page-break-after: always; }
           .label:last-child { break-after: auto; page-break-after: auto; }
           .company { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 7pt; }
           .label strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9pt; }
-          .label svg { display: block; max-width: 100%; height: ${barcodeSettings.paperSize.startsWith('THERMAL') ? '12mm' : '15mm'}; }
+          .label svg { display: block; max-width: 100%; height: ${barcodeHeight}mm; }
           .label small { font-size: 7pt; direction: ltr; }
-          @media screen { body { padding: 10mm; } .label { background: #fff; } }
+          @media screen { body { padding: ${isLabelPaper || isThermalPaper ? '0' : '10mm'}; } .label { background: #fff; } }
           @media print { .label { border-color: #d1d5db; } }
         </style>
       </head>
