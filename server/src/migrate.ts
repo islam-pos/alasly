@@ -83,6 +83,8 @@ const migrate = async () => {
   await ensureColumn('PurchaseRequest', 'supplierResponse', 'TEXT');
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "PurchaseRequest_publicTokenHash_key" ON "PurchaseRequest"("publicTokenHash")`;
   await ensureColumn('CompanySetting', 'printSettings', "TEXT NOT NULL DEFAULT '{}'");
+  await prisma.$executeRaw`UPDATE "CompanySetting" SET "currency" = 'EGP', "currencySymbol" = 'ج.م'`;
+  await prisma.$executeRaw`UPDATE "Bank" SET "currency" = 'EGP'`;
   await ensureColumn('User', 'permissionOverrides', 'TEXT');
   await ensureColumn('SalesInvoice', 'quotationId', 'TEXT');
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "SalesInvoice_quotationId_key" ON "SalesInvoice"("quotationId")`;
@@ -98,6 +100,22 @@ const migrate = async () => {
   await ensureColumn('Attendance', 'workMinutes', 'INTEGER');
   await ensureColumn('Payroll', 'standardMonthlyHours', 'REAL');
   await ensureColumn('Payroll', 'attendedMinutes', 'INTEGER');
+  await ensureColumn('RepairOrder', 'deliveryOdometer', 'INTEGER');
+  await ensureColumn('RepairOrder', 'deliveredAt', 'DATETIME');
+  await ensureColumn('RepairOrder', 'handoverCustomerName', 'TEXT');
+  await ensureColumn('RepairOrder', 'handoverSignatureData', 'TEXT');
+  await ensureColumn('RepairOrder', 'handoverChecklist', 'TEXT');
+  await ensureColumn('RepairOrder', 'warrantyMonths', 'INTEGER NOT NULL DEFAULT 1');
+  await ensureColumn('RepairOrder', 'warrantyTerms', 'TEXT');
+  await ensureColumn('RepairEstimate', 'approvalTokenHash', 'TEXT');
+  await ensureColumn('RepairEstimate', 'approvalTokenExpiresAt', 'DATETIME');
+  await ensureColumn('RepairLabor', 'trackedMinutes', 'INTEGER NOT NULL DEFAULT 0');
+  await ensureColumn('RepairLabor', 'timerStartedAt', 'DATETIME');
+  await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "RepairEstimate_approvalTokenHash_key" ON "RepairEstimate"("approvalTokenHash")`;
+  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "RepairAttachment" ("id" TEXT NOT NULL PRIMARY KEY, "repairOrderId" TEXT NOT NULL, "storageName" TEXT NOT NULL UNIQUE, "fileName" TEXT NOT NULL, "mimeType" TEXT NOT NULL, "byteSize" INTEGER NOT NULL, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY ("repairOrderId") REFERENCES "RepairOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE)`;
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "RepairAttachment_repairOrderId_createdAt_idx" ON "RepairAttachment"("repairOrderId", "createdAt")`;
+  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "InvoicePayment" ("id" TEXT NOT NULL PRIMARY KEY, "invoiceId" TEXT NOT NULL, "amount" REAL NOT NULL, "paymentMethod" TEXT NOT NULL, "cashboxId" TEXT, "notes" TEXT, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY ("invoiceId") REFERENCES "SalesInvoice"("id") ON DELETE CASCADE ON UPDATE CASCADE, FOREIGN KEY ("cashboxId") REFERENCES "Cashbox"("id") ON DELETE SET NULL ON UPDATE CASCADE)`;
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "InvoicePayment_invoiceId_createdAt_idx" ON "InvoicePayment"("invoiceId", "createdAt")`;
   const payrollDuplicates = await prisma.$queryRaw<{ duplicateCount: number }[]>`
     SELECT COUNT(*) AS duplicateCount FROM (
       SELECT "employeeId", "year", "month" FROM "Payroll"

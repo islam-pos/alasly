@@ -35,7 +35,12 @@ const hideUnauthorizedPrices = (item: any, req: AuthenticatedRequest) => {
 
 const parseImportedNumber = (value: unknown, fallback: number) => {
   if (value === null || value === undefined || value === '') return fallback;
-  const normalized = String(value).replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/,/g, '').trim();
+  const digits = '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹';
+  const normalized = String(value)
+    .replace(/[٠-٩۰-۹]/g, (digit) => String(digits.indexOf(digit) % 10))
+    .replace(/[٬,]/g, '')
+    .replace(/٫/g, '.')
+    .trim();
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : NaN;
 };

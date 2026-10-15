@@ -754,7 +754,7 @@ export const PosScreen: React.FC = () => {
                 <span className="font-bold">{completedInvoice.customer?.name || 'عميل نقدي'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">الإجمالي المستحق:</span>
+                <span className="text-slate-500">الإجمالي شامل الضريبة:</span>
                 <span className="font-bold text-emerald-600">{completedInvoice.grandTotal} ج.م</span>
               </div>
               <div className="flex justify-between">

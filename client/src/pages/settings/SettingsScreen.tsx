@@ -544,8 +544,8 @@ export const SettingsScreen: React.FC = () => {
                 <input value={company.logoUrl || ''} onChange={(e) => setCompany({ ...company, logoUrl: e.target.value })} className="w-full rounded-xl border px-3 py-2 text-sm font-normal" dir="ltr" />
               </label>
               <label className="text-xs font-bold text-slate-700">
-                <span className="mb-1 block">رمز العملة</span>
-                <input value="ج.م" readOnly className="w-full rounded-xl border bg-slate-100 px-3 py-2 text-sm font-normal" />
+                <span className="mb-1 block">العملة الرسمية</span>
+                <input value="جنيه مصري (ج.م)" readOnly className="w-full rounded-xl border bg-slate-100 px-3 py-2 text-sm font-normal" />
               </label>
               <label className="text-xs font-bold text-slate-700">
                 <span className="mb-1 block">رمز العملة الدولي</span>

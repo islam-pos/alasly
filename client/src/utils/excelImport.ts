@@ -73,7 +73,10 @@ const readXlsxRows = (buffer: ArrayBuffer) => {
   const worksheetPath = (target.startsWith('/') ? target.slice(1) : `xl/${target}`)
     .split('/')
     .reduce<string[]>((segments, part) => {
-      if (part === '..') segments.pop();
+      if (part === '..') {
+        if (!segments.length) throw new Error('مسار ورقة Excel غير صالح');
+        segments.pop();
+      }
       else if (part !== '.' && part) segments.push(part);
       return segments;
     }, [])
@@ -104,16 +107,33 @@ const readXlsxRows = (buffer: ArrayBuffer) => {
 
 const readSpreadsheetXmlRows = (text: string) => {
   const document = parseXml(text);
-  return [...document.getElementsByTagName('Worksheet')[0]?.getElementsByTagName('Row') || []]
-    .slice(0, MAX_ROWS + 1)
-    .map((row) =>
-      [...row.getElementsByTagName('Cell')].map((cell) => {
-        const value = cell.getElementsByTagName('Data')[0]?.textContent || '';
-        const type = cell.getElementsByTagName('Data')[0]?.getAttribute('ss:Type')
-          || cell.getElementsByTagName('Data')[0]?.getAttribute('Type');
-        return type === 'Number' && value ? value : value;
-      }),
-    );
+  const worksheet = [...document.getElementsByTagName('*')]
+    .find((element) => element.localName === 'Worksheet');
+  const sourceRows = [...(worksheet ? worksheet.getElementsByTagName('*') : [])]
+    .filter((element) => element.localName === 'Row')
+    .slice(0, MAX_ROWS + 1);
+  const rows: string[][] = [];
+  let nextRow = 0;
+  for (const row of sourceRows) {
+    const explicitRowIndex = Number(row.getAttribute('ss:Index') || row.getAttribute('Index'));
+    const rowIndex = explicitRowIndex > 0 ? explicitRowIndex - 1 : nextRow;
+    if (rowIndex > MAX_ROWS) throw new Error(`الحد الأقصى للاستيراد هو ${MAX_ROWS} صنف في المرة الواحدة`);
+    const values: string[] = [];
+    let nextColumn = 0;
+    for (const cell of [...row.getElementsByTagName('*')].filter((element) => element.localName === 'Cell')) {
+      const explicitCellIndex = Number(cell.getAttribute('ss:Index') || cell.getAttribute('Index'));
+      const cellIndex = explicitCellIndex > 0 ? explicitCellIndex - 1 : nextColumn;
+      if (cellIndex > 100) continue;
+      const data = [...cell.getElementsByTagName('*')].find((element) => element.localName === 'Data');
+      const value = data?.textContent || '';
+      const type = data?.getAttribute('ss:Type') || data?.getAttribute('Type');
+      values[cellIndex] = type === 'Number' && value ? value : value;
+      nextColumn = cellIndex + 1;
+    }
+    rows[rowIndex] = values;
+    nextRow = rowIndex + 1;
+  }
+  return rows.map((row) => row || []);
 };
 
 export const readExcelRows = async (file: File) => {

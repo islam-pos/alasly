@@ -224,8 +224,12 @@ export const ReportsCenter: React.FC = () => {
               <div className="text-2xl font-black text-slate-900 mt-1">{salesReport.summary?.count || 0} فاتورة</div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
-              <span className="text-xs text-slate-500 font-semibold">إجمالي المبيعات</span>
+              <span className="text-xs text-slate-500 font-semibold">إجمالي المبيعات (شامل الضريبة)</span>
               <div className="text-2xl font-black text-blue-700 mt-1">{(salesReport.summary?.totalSales || 0).toLocaleString()} ج.م</div>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200">
+              <span className="text-xs text-slate-500 font-semibold">ضريبة القيمة المضافة المحصلة</span>
+              <div className="text-2xl font-black text-slate-800 mt-1">{(salesReport.summary?.totalTax || 0).toLocaleString()} ج.م</div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200">
               <span className="text-xs text-slate-500 font-semibold">إجمالي المبالغ المحصلة</span>
@@ -244,6 +248,7 @@ export const ReportsCenter: React.FC = () => {
                   <th className="py-3 px-4">نوع الفاتورة</th>
                   <th className="py-3 px-4 text-left">قبل الخصم</th>
                   <th className="py-3 px-4 text-left">الخصم</th>
+                  <th className="py-3 px-4 text-left">الضريبة</th>
                   <th className="py-3 px-4 text-left font-bold text-slate-900">الصافي</th>
                   <th className="py-3 px-4 text-center">طريقة الدفع</th>
                 </tr>
@@ -261,6 +266,7 @@ export const ReportsCenter: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-left font-mono">{inv.subtotal?.toLocaleString()} ج.م</td>
                     <td className="py-3 px-4 text-left font-mono text-slate-500">{inv.discount?.toLocaleString()} ج.م</td>
+                    <td className="py-3 px-4 text-left font-mono text-slate-500">{inv.taxAmount?.toLocaleString()} ج.م</td>
                     <td className="py-3 px-4 text-left font-mono font-black text-slate-900">{inv.grandTotal?.toLocaleString()} ج.م</td>
                     <td className="py-3 px-4 text-center">
                       <span className="text-xs px-2 py-0.5 rounded font-bold bg-slate-100 text-slate-700">

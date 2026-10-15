@@ -61,6 +61,7 @@ export const InventoryManagement: React.FC = () => {
   // Count form
   const [countWarehouseId, setCountWarehouseId] = useState('');
   const [countItems, setCountItems] = useState<any[]>([]);
+  const [countSearchQuery, setCountSearchQuery] = useState('');
   const [countNotes, setCountNotes] = useState('');
 
   const loadData = async () => {
@@ -140,6 +141,27 @@ export const InventoryManagement: React.FC = () => {
 
     return matchesSearch && matchesCategory && matchesLowStock;
   });
+  const filteredCountItems = countItems.filter((item) => {
+    const query = countSearchQuery.trim().toLocaleLowerCase();
+    if (!query) return true;
+    return [item.nameAr, item.partNumber, item.sku, item.barcode]
+      .some((value) => typeof value === 'string' && value.toLocaleLowerCase().includes(query));
+  });
+  const transferableItems = transferForm.fromWarehouseId
+    ? balances.filter((item) => {
+        const sourceBalance = item.stockBalances.find(
+          (balance: any) => balance.warehouseId === transferForm.fromWarehouseId
+        );
+        return sourceBalance && sourceBalance.quantity - sourceBalance.reservedQty > 0;
+      })
+    : [];
+  const selectedTransferItem = transferableItems.find((item) => item.id === transferForm.itemId);
+  const selectedTransferBalance = selectedTransferItem?.stockBalances.find(
+    (balance: any) => balance.warehouseId === transferForm.fromWarehouseId
+  );
+  const transferAvailableQuantity = selectedTransferBalance
+    ? selectedTransferBalance.quantity - selectedTransferBalance.reservedQty
+    : 0;
 
   // Top KPIs
   const totalItemsCount = balances.length;
@@ -245,6 +267,7 @@ export const InventoryManagement: React.FC = () => {
   // Prepare Stocktaking
   const handleStartCount = (warehouseId: string) => {
     setCountWarehouseId(warehouseId);
+    setCountSearchQuery('');
     // Populate items for this warehouse
     const itemsForWh = balances.map(item => {
       const bal = item.stockBalances.find((b: any) => b.warehouseId === warehouseId);
@@ -253,6 +276,8 @@ export const InventoryManagement: React.FC = () => {
         itemId: item.id,
         nameAr: item.nameAr,
         partNumber: item.partNumber,
+        sku: item.sku,
+        barcode: item.barcode,
         bookQty,
         physicalQty: bookQty,
         unitCost: item.avgCost || item.costPrice || 0
@@ -855,7 +880,13 @@ export const InventoryManagement: React.FC = () => {
                   <select
                     required
                     value={transferForm.fromWarehouseId}
-                    onChange={(e) => setTransferForm({ ...transferForm, fromWarehouseId: e.target.value })}
+                    onChange={(e) => setTransferForm({
+                      ...transferForm,
+                      fromWarehouseId: e.target.value,
+                      toWarehouseId: transferForm.toWarehouseId === e.target.value ? '' : transferForm.toWarehouseId,
+                      itemId: '',
+                      quantity: 1,
+                    })}
                     className="w-full border rounded-xl px-3 py-2 text-sm bg-white outline-none"
                   >
                     <option value="">اختر المستودع المصدر</option>
@@ -874,7 +905,7 @@ export const InventoryManagement: React.FC = () => {
                   >
                     <option value="">اختر المستودع الوجهة</option>
                     {warehouses.map(w => (
-                      <option key={w.id} value={w.id}>{w.name}</option>
+                      <option key={w.id} value={w.id} disabled={w.id === transferForm.fromWarehouseId}>{w.name}</option>
                     ))}
                   </select>
                 </div>
@@ -889,12 +920,18 @@ export const InventoryManagement: React.FC = () => {
                   className="w-full border rounded-xl px-3 py-2 text-sm bg-white outline-none"
                 >
                   <option value="">اختر الصنف</option>
-                  {balances.map(b => (
+                  {transferableItems.map(b => (
                     <option key={b.id} value={b.id}>
-                      {b.nameAr} - ({b.partNumber || b.sku}) - متاح: {b.availableQuantity}
+                      {b.nameAr} - ({b.partNumber || b.sku}) - متاح بالمصدر: {
+                        b.stockBalances.find((balance: any) => balance.warehouseId === transferForm.fromWarehouseId)?.quantity
+                        - b.stockBalances.find((balance: any) => balance.warehouseId === transferForm.fromWarehouseId)?.reservedQty
+                      }
                     </option>
                   ))}
                 </select>
+                {transferForm.fromWarehouseId && transferableItems.length === 0 && (
+                  <p className="mt-1 text-xs text-amber-700">لا توجد أصناف متاحة للتحويل من المستودع المحدد.</p>
+                )}
               </div>
 
               <div>
@@ -902,11 +939,19 @@ export const InventoryManagement: React.FC = () => {
                 <input
                   type="number"
                   min="1"
+                  max={transferAvailableQuantity}
                   required
+                  disabled={!transferForm.itemId}
                   value={transferForm.quantity}
-                  onChange={(e) => setTransferForm({ ...transferForm, quantity: parseInt(e.target.value) || 1 })}
+                  onChange={(e) => setTransferForm({
+                    ...transferForm,
+                    quantity: Math.min(parseInt(e.target.value) || 1, transferAvailableQuantity),
+                  })}
                   className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
                 />
+                {transferForm.itemId && (
+                  <p className="mt-1 text-xs text-slate-500">الكمية المتاحة للتحويل من المصدر: {transferAvailableQuantity}</p>
+                )}
               </div>
 
               <div>
@@ -966,6 +1011,31 @@ export const InventoryManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmitCount} className="flex-1 flex flex-col overflow-hidden pt-4">
+              <div className="mb-3 flex items-center gap-3">
+                <label className="relative block min-w-0 flex-1">
+                  <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="search"
+                    value={countSearchQuery}
+                    onChange={(event) => setCountSearchQuery(event.target.value)}
+                    placeholder="ابحث باسم الصنف أو رقم القطعة أو SKU أو الباركود..."
+                    className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-10 pl-10 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                  {countSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setCountSearchQuery('')}
+                      aria-label="مسح البحث"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </label>
+                <span className="shrink-0 text-xs text-slate-500">
+                  {filteredCountItems.length} من {countItems.length} صنف
+                </span>
+              </div>
               <div className="overflow-y-auto flex-1 border rounded-xl mb-4">
                 <table className="w-full text-right text-xs">
                   <thead className="bg-slate-50 text-slate-700 sticky top-0 border-b">
@@ -977,7 +1047,7 @@ export const InventoryManagement: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {countItems.map((item, idx) => {
+                    {filteredCountItems.map((item) => {
                       const diff = Number(item.physicalQty) - Number(item.bookQty);
                       return (
                         <tr key={item.itemId} className="hover:bg-slate-50">
@@ -995,7 +1065,9 @@ export const InventoryManagement: React.FC = () => {
                               value={item.physicalQty}
                               onChange={(e) => {
                                 const newItems = [...countItems];
-                                newItems[idx].physicalQty = e.target.value;
+                                const itemIndex = newItems.findIndex((countItem) => countItem.itemId === item.itemId);
+                                if (itemIndex < 0) return;
+                                newItems[itemIndex] = { ...newItems[itemIndex], physicalQty: e.target.value };
                                 setCountItems(newItems);
                               }}
                               className="w-20 text-center border rounded-lg py-1 font-mono font-bold bg-white text-sm outline-none focus:ring-1 focus:ring-blue-500"
@@ -1013,6 +1085,13 @@ export const InventoryManagement: React.FC = () => {
                         </tr>
                       );
                     })}
+                    {filteredCountItems.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="py-10 text-center text-sm text-slate-400">
+                          لا توجد أصناف تطابق البحث
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

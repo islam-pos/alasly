@@ -20,6 +20,7 @@ import profitsRouter from './routes/profits';
 import searchRouter from './routes/search';
 import settingsRouter from './routes/settings';
 import publicPurchaseRequestsRouter from './routes/publicPurchaseRequests';
+import publicRepairApprovalsRouter from './routes/publicRepairApprovals';
 import { authenticate } from './middleware/auth';
 import { authorizeApiPermission } from './middleware/permissions';
 import { migrateEgyptianLocationDefaults } from './migrations/egyptianLocationDefaults';
@@ -40,6 +41,7 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use('/api/items/import', express.json({ limit: '10mb' }));
+app.use('/api/workshop/job-cards', express.json({ limit: '5mb' }));
 app.use(express.json());
 
 // Request logger for audit and debugging
@@ -59,6 +61,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api/public/purchase-requests', publicPurchaseRequestsRouter);
+app.use('/api/public/repair-approvals', publicRepairApprovalsRouter);
 
 // API Routes
 app.use('/api/auth', authRouter);

@@ -158,7 +158,7 @@ export const TaxInvoicePrint: React.FC<{ invoice: any; company?: any }> = ({ inv
       <div className="flex justify-between items-end border-t pt-4">
         <div className="w-64 space-y-1.5 text-xs">
           <div className="flex justify-between text-slate-600">
-            <span>المجموع الفرعي:</span>
+            <span>المجموع الفرعي الخاضع للضريبة:</span>
             <span className="font-mono font-semibold">{(invoice.subtotal || 0).toLocaleString()} ج.م</span>
           </div>
           {Number(invoice.discountAmount) > 0 && (
@@ -167,6 +167,10 @@ export const TaxInvoicePrint: React.FC<{ invoice: any; company?: any }> = ({ inv
               <span className="font-mono font-semibold">-{(invoice.discountAmount || 0).toLocaleString()} ج.م</span>
             </div>
           )}
+          <div className="flex justify-between text-slate-600">
+            <span>ضريبة القيمة المضافة:</span>
+            <span className="font-mono font-semibold">{(invoice.taxAmount || 0).toLocaleString()} ج.م</span>
+          </div>
           <div className="flex justify-between text-sm font-black border-t border-slate-300 pt-2 text-slate-900">
             <span>المبلغ الصافي المستحق:</span>
             <span className="font-mono text-blue-700 text-base">{(invoice.totalAmount || 0).toLocaleString()} ج.م</span>

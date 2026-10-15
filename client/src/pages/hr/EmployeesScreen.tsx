@@ -756,9 +756,10 @@ export const EmployeesScreen: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">الراتب الأساسي (ج.م):</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">الراتب الشهري الأساسي (قابل للتعديل) (ج.م):</label>
                   <input
                     type="number"
+                    min="0"
                     step="0.01"
                     required
                     value={employeeForm.salary}

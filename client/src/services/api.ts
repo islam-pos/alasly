@@ -376,8 +376,74 @@ const apiClient = {
       body: JSON.stringify({ approved, customerNotes }),
     }).then((res) => handleResponse<any>(res)),
 
+  createEstimateApprovalLink: (jobCardId: string, estimateId: string) =>
+    fetch(`${BASE_URL}/workshop/job-cards/${jobCardId}/estimate/${estimateId}/approval-link`, {
+      method: 'POST',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<{ path: string; expiresInHours: number }>(res)),
+
   issuePartToWorkshop: (jobCardId: string, data: { partId: string; warehouseId?: string; quantity: number }) =>
     fetch(`${BASE_URL}/workshop/job-cards/${jobCardId}/parts/issue`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  useWorkshopPart: (jobCardId: string, partId: string, quantity: number) =>
+    fetch(`${BASE_URL}/workshop/job-cards/${jobCardId}/parts/${partId}/use`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ quantity }),
+    }).then((res) => handleResponse<any>(res)),
+
+  returnWorkshopPart: (jobCardId: string, partId: string, quantity: number) =>
+    fetch(`${BASE_URL}/workshop/job-cards/${jobCardId}/parts/${partId}/return`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ quantity }),
+    }).then((res) => handleResponse<any>(res)),
+
+  updateWorkshopLaborTimer: (jobCardId: string, laborId: string, action: 'START' | 'PAUSE' | 'COMPLETE') =>
+    fetch(`${BASE_URL}/workshop/job-cards/${jobCardId}/labor/${laborId}/timer`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ action }),
+    }).then((res) => handleResponse<any>(res)),
+
+  uploadRepairAttachment: (jobCardId: string, data: { fileName: string; dataUrl: string }) =>
+    fetch(`${BASE_URL}/workshop/job-cards/${jobCardId}/attachments`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  getRepairAttachment: async (jobCardId: string, attachmentId: string) => {
+    const res = await fetch(`${BASE_URL}/workshop/job-cards/${jobCardId}/attachments/${attachmentId}/file`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({ error: 'تعذر تحميل الصورة' }));
+      throw new ApiError(errorData.error || 'تعذر تحميل الصورة');
+    }
+    return res.blob();
+  },
+
+  recordRepairHandover: (jobCardId: string, data: {
+    customerName: string;
+    deliveryOdometer: number;
+    checklist: Record<string, boolean>;
+    signatureData: string;
+    warrantyMonths: number;
+    warrantyTerms: string;
+  }) =>
+    fetch(`${BASE_URL}/workshop/job-cards/${jobCardId}/handover`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  recordRepairPayment: (jobCardId: string, data: { amount: number; paymentMethod: 'CASH' | 'CARD' }) =>
+    fetch(`${BASE_URL}/workshop/job-cards/${jobCardId}/payments`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(data),

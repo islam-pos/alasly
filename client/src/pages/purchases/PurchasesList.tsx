@@ -709,8 +709,6 @@ export const PurchasesList: React.FC = () => {
                   <span>المجموع الفرعي:</span>
                   <span className="font-bold">{subtotal.toLocaleString()} ج.م</span>
                 </div>
-                <div className="flex justify-between">
-                </div>
                 <div className="flex justify-between text-brand-700 font-black text-sm pt-2 border-t border-slate-200">
                   <span>الإجمالي النهائي:</span>
                   <span>{grandTotal.toFixed(2)} ج.م</span>

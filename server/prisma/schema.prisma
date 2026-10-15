@@ -636,6 +636,21 @@ model SalesInvoice {
   createdAt       DateTime           @default(now())
   items           SalesInvoiceItem[]
   returns         SalesReturn[]
+  payments        InvoicePayment[]
+}
+
+model InvoicePayment {
+  id            String      @id @default(uuid())
+  invoiceId     String
+  invoice       SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount        Float
+  paymentMethod String
+  cashboxId     String?
+  cashbox       Cashbox?    @relation(fields: [cashboxId], references: [id], onDelete: SetNull)
+  notes         String?
+  createdAt     DateTime    @default(now())
+
+  @@index([invoiceId, createdAt])
 }
 
 model SalesInvoiceItem {
@@ -714,6 +729,13 @@ model RepairOrder {
   paidAmount          Float                @default(0)
   remainingAmount     Float                @default(0)
   notes               String?
+  deliveryOdometer    Int?
+  deliveredAt         DateTime?
+  handoverCustomerName String?
+  handoverSignatureData String?
+  handoverChecklist   String?
+  warrantyMonths      Int                  @default(1)
+  warrantyTerms       String?
   createdById         String?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -723,6 +745,20 @@ model RepairOrder {
   labors              RepairLabor[]
   salesInvoice        SalesInvoice?
   commissions         Commission[]
+  attachments         RepairAttachment[]
+}
+
+model RepairAttachment {
+  id            String      @id @default(uuid())
+  repairOrderId String
+  repairOrder   RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Cascade)
+  storageName   String      @unique
+  fileName      String
+  mimeType      String
+  byteSize      Int
+  createdAt     DateTime    @default(now())
+
+  @@index([repairOrderId, createdAt])
 }
 
 model RepairInspection {
@@ -759,6 +795,8 @@ model RepairEstimate {
   isApprovedByCustomer Boolean              @default(false)
   approvedAt           DateTime?
   customerNotes        String?
+  approvalTokenHash     String?              @unique
+  approvalTokenExpiresAt DateTime?
   status               String               @default("PENDING") // DRAFT, PENDING, APPROVED, REJECTED
   createdAt            DateTime             @default(now())
   items                RepairEstimateItem[]
@@ -811,6 +849,8 @@ model RepairLabor {
   commissionAmount Float       @default(0)
   status           String      @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
   completedAt      DateTime?
+  trackedMinutes   Int         @default(0)
+  timerStartedAt   DateTime?
   createdAt        DateTime    @default(now())
 }
 
@@ -892,6 +932,7 @@ model Cashbox {
   shifts       CashShift[]
   expenses     Expense[]
   revenues     Revenue[]
+  invoicePayments InvoicePayment[]
 }
 
 model CashTransaction {

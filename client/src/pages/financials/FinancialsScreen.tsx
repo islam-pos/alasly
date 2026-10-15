@@ -388,6 +388,7 @@ export const FinancialsScreen: React.FC = () => {
                   <th className="py-3 px-4">المستفيد</th>
                   <th className="py-3 px-4">طريقة الدفع</th>
                   <th className="py-3 px-4 text-left">المبلغ</th>
+                  <th className="py-3 px-4 text-left">الضريبة</th>
                   <th className="py-3 px-4 text-left">الإجمالي</th>
                   <th className="py-3 px-4 text-center">إجراءات</th>
                 </tr>
@@ -395,7 +396,7 @@ export const FinancialsScreen: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {expenses.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-8 text-slate-400">لا توجد مصروفات مسجلة</td>
+                    <td colSpan={9} className="text-center py-8 text-slate-400">لا توجد مصروفات مسجلة</td>
                   </tr>
                 ) : (
                   expenses.map(exp => (
@@ -412,6 +413,7 @@ export const FinancialsScreen: React.FC = () => {
                         {exp.paymentMethod === 'CASH' ? `نقداً (${exp.cashbox?.name || 'الخزينة'})` : `بنك (${exp.bank?.name || 'الحساب'})`}
                       </td>
                       <td className="py-3 px-4 text-left font-mono">{exp.amount.toLocaleString()} ج.م</td>
+                      <td className="py-3 px-4 text-left font-mono text-xs text-slate-500">{(exp.taxAmount || 0).toLocaleString()} ج.م</td>
                       <td className="py-3 px-4 text-left font-mono font-bold text-rose-600">{exp.totalAmount.toLocaleString()} ج.م</td>
                       <td className="py-3 px-4 text-center">
                         <button

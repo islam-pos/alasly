@@ -325,25 +325,27 @@ export const ItemsCatalog: React.FC = () => {
     setImporting(true);
     try {
       const rows = await readExcelRows(file);
-      const normalizedHeaders = rows[0].map((header) => header.trim().toLocaleLowerCase());
+      const normalizedHeaders = rows[0].map((header) =>
+        header.normalize('NFKC').replace(/[\u200B-\u200F\uFEFF]/g, '').trim().toLocaleLowerCase(),
+      );
       const headerAliases: Record<string, string[]> = {
-        sku: ['sku', 'كود الصنف', 'كود sku', 'كود الصنف sku'],
-        nameAr: ['اسم الصنف', 'الاسم العربي', 'namear'],
-        nameEn: ['الاسم الإنجليزي', 'الاسم الانجليزي', 'nameen'],
-        barcode: ['الباركود', 'barcode'],
-        partNumber: ['رقم القطعة', 'part number', 'partnumber', 'oem'],
-        category: ['التصنيف', 'category'],
-        unit: ['الوحدة', 'unit'],
-        manufacturer: ['الشركة المصنعة', 'manufacturer'],
-        countryOfOrigin: ['بلد المنشأ', 'country of origin', 'countryoforigin'],
-        defaultLocation: ['موقع التخزين', 'موقع الرف', 'location'],
-        purchasePrice: ['سعر الشراء', 'purchase price', 'purchaseprice'],
-        sellPrice: ['سعر البيع', 'sell price', 'sellprice'],
-        specialSellPrice: ['السعر الخاص', 'special price', 'specialsellprice'],
-        minStock: ['الحد الأدنى', 'min stock', 'minstock'],
+        sku: ['sku', 'كود الصنف', 'كود sku', 'كود الصنف sku', 'item code'],
+        nameAr: ['اسم الصنف', 'الاسم العربي', 'namear', 'item name', 'name'],
+        nameEn: ['الاسم الإنجليزي', 'الاسم الانجليزي', 'nameen', 'english name'],
+        barcode: ['الباركود', 'barcode', 'bar code'],
+        partNumber: ['رقم القطعة', 'part number', 'partnumber', 'oem', 'رقم الصنف'],
+        category: ['التصنيف', 'category', 'الفئة'],
+        unit: ['الوحدة', 'unit', 'وحدة القياس'],
+        manufacturer: ['الشركة المصنعة', 'manufacturer', 'المصنع'],
+        countryOfOrigin: ['بلد المنشأ', 'country of origin', 'countryoforigin', 'بلد الصنع'],
+        defaultLocation: ['موقع التخزين', 'موقع الرف', 'location', 'الموقع'],
+        purchasePrice: ['سعر الشراء', 'purchase price', 'purchaseprice', 'تكلفة الشراء'],
+        sellPrice: ['سعر البيع', 'sell price', 'sellprice', 'سعر التجزئة'],
+        specialSellPrice: ['السعر الخاص', 'special price', 'specialsellprice', 'سعر خاص'],
+        minStock: ['الحد الأدنى', 'min stock', 'minstock', 'حد الطلب'],
         maxStock: ['الحد الأقصى', 'max stock', 'maxstock'],
-        initialStock: ['رصيد افتتاحي', 'المخزون الافتتاحي', 'initial stock', 'initialstock'],
-        warehouse: ['المخزن الافتتاحي', 'المخزن', 'warehouse'],
+        initialStock: ['رصيد افتتاحي', 'المخزون الافتتاحي', 'initial stock', 'initialstock', 'الكمية الافتتاحية'],
+        warehouse: ['المخزن الافتتاحي', 'المخزن', 'warehouse', 'المستودع'],
       };
       const columnIndices = Object.fromEntries(
         Object.entries(headerAliases).map(([field, aliases]) => [

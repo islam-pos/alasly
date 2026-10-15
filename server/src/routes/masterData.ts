@@ -42,6 +42,8 @@ router.put('/company', async (req, res) => {
         Object.assign(data, { [field]: null });
       }
     }
+    data.currency = 'EGP';
+    data.currencySymbol = 'ج.م';
 
     data.currency = 'EGP';
     data.currencySymbol = 'ج.م';

@@ -231,8 +231,23 @@ router.post('/transfers', authenticate, loadUserPermissions, requirePermission('
     const canViewPrices = canViewItemPrices(req as AuthenticatedRequest);
     const { fromWarehouseId, toWarehouseId, items, notes } = req.body;
 
+    if (typeof fromWarehouseId !== 'string' || !fromWarehouseId ||
+        typeof toWarehouseId !== 'string' || !toWarehouseId) {
+      return res.status(400).json({ error: 'يرجى تحديد المستودع المصدر والوجهة' });
+    }
     if (fromWarehouseId === toWarehouseId) {
       return res.status(400).json({ error: 'لا يمكن التحويل لنفس المخزن' });
+    }
+    if (!Array.isArray(items) || items.length === 0 ||
+        items.some((item: any) => typeof item?.itemId !== 'string' || !item.itemId ||
+          !Number.isInteger(item.quantity) || item.quantity <= 0)) {
+      return res.status(400).json({ error: 'يجب تحديد صنف واحد على الأقل بكمية صحيحة أكبر من صفر' });
+    }
+    if (new Set(items.map((item: any) => item.itemId)).size !== items.length) {
+      return res.status(400).json({ error: 'لا يمكن تكرار الصنف نفسه في التحويل' });
+    }
+    if (notes !== undefined && notes !== null && typeof notes !== 'string') {
+      return res.status(400).json({ error: 'ملاحظات التحويل غير صحيحة' });
     }
 
     const count = await prisma.warehouseTransfer.count();
@@ -250,7 +265,7 @@ router.post('/transfers', authenticate, loadUserPermissions, requirePermission('
           items: {
             create: items.map((it: any) => ({
               itemId: it.itemId,
-              quantity: parseInt(it.quantity),
+              quantity: it.quantity,
             })),
           },
         },
@@ -259,16 +274,30 @@ router.post('/transfers', authenticate, loadUserPermissions, requirePermission('
 
       // 2. Transfer stock quantities
       for (const it of items) {
-        const qty = parseInt(it.quantity);
+        const qty = it.quantity;
         const itemObj = await tx.item.findUnique({ where: { id: it.itemId } });
-
-        // Decrement source warehouse
-        await tx.stockBalance.update({
+        const sourceBalance = await tx.stockBalance.findUnique({
           where: {
             itemId_warehouseId: { itemId: it.itemId, warehouseId: fromWarehouseId },
           },
+        });
+
+        if (!sourceBalance || sourceBalance.quantity - sourceBalance.reservedQty < qty) {
+          throw new Error(`الكمية المتاحة غير كافية للصنف ${itemObj?.nameAr || it.itemId}`);
+        }
+
+        // Decrement source warehouse
+        const sourceUpdate = await tx.stockBalance.updateMany({
+          where: {
+            itemId: it.itemId,
+            warehouseId: fromWarehouseId,
+            quantity: { gte: qty },
+          },
           data: { quantity: { decrement: qty } },
         });
+        if (sourceUpdate.count !== 1) {
+          throw new Error(`تغير رصيد الصنف ${itemObj?.nameAr || it.itemId}؛ أعد المحاولة`);
+        }
 
         // Increment target warehouse
         const targetBalance = await tx.stockBalance.findUnique({

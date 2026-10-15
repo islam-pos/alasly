@@ -600,6 +600,7 @@ export const SalesList: React.FC = () => {
                     <th className="p-2">البيان / الصنف</th>
                     <th className="p-2">الكمية</th>
                     <th className="p-2">السعر</th>
+                    <th className="p-2">الضريبة</th>
                     <th className="p-2">الإجمالي</th>
                   </tr>
                 </thead>
@@ -611,6 +612,7 @@ export const SalesList: React.FC = () => {
                       </td>
                       <td className="p-2 font-mono">{it.quantity}</td>
                       <td className="p-2 font-mono">{it.unitPrice} ج.م</td>
+                      <td className="p-2 font-mono">{(it.taxAmount || 0).toFixed(2)} ج.م</td>
                       <td className="p-2 font-bold font-mono">{it.total.toFixed(2)} ج.م</td>
                     </tr>
                   ))}
@@ -620,6 +622,7 @@ export const SalesList: React.FC = () => {
 
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 text-left font-bold">
               <div>المجموع الفرعي: {selectedInvoice.subtotal.toLocaleString()} ج.م</div>
+              <div>الضريبة: {(selectedInvoice.taxAmount || 0).toFixed(2)} ج.م</div>
               <div className="text-brand-700 text-sm font-black pt-1 border-t border-slate-200">
                 الإجمالي الكلي: {selectedInvoice.grandTotal.toFixed(2)} ج.م
               </div>
