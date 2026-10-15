@@ -314,6 +314,101 @@ router.post('/import', async (req, res) => {
   }
 });
 
+router.post(
+  '/bulk/archive',
+  authenticate,
+  loadUserPermissions,
+  requirePermission('manage_items'),
+  async (req, res) => {
+    const itemIds = req.body?.itemIds;
+    if (!Array.isArray(itemIds) || itemIds.length === 0 || itemIds.length > 5000
+      || itemIds.some((id: unknown) => typeof id !== 'string' || !id.trim())) {
+      return res.status(400).json({ error: 'حدد من 1 إلى 5000 صنف صالح للأرشفة' });
+    }
+    if (new Set(itemIds).size !== itemIds.length) {
+      return res.status(400).json({ error: 'قائمة الأصناف المحددة تحتوي على عناصر مكررة' });
+    }
+
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const archivedItems: { id: string; nameAr: string }[] = [];
+        const skippedItems: { id: string; nameAr: string; reason: string }[] = [];
+
+        for (let offset = 0; offset < itemIds.length; offset += 500) {
+          const batchIds = itemIds.slice(offset, offset + 500) as string[];
+          const items = await tx.item.findMany({
+            where: { id: { in: batchIds }, active: true },
+            select: {
+              id: true,
+              nameAr: true,
+              stockBalances: { select: { quantity: true, reservedQty: true } },
+            },
+          });
+          const itemById = new Map(items.map((item) => [item.id, item]));
+          const eligibleIds: string[] = [];
+
+          for (const id of batchIds) {
+            const item = itemById.get(id);
+            if (!item) {
+              skippedItems.push({ id, nameAr: id, reason: 'الصنف غير موجود أو مؤرشف مسبقاً' });
+              continue;
+            }
+            if (item.stockBalances.some((balance) => balance.quantity !== 0 || balance.reservedQty !== 0)) {
+              skippedItems.push({ id: item.id, nameAr: item.nameAr, reason: 'له رصيد أو كمية محجوزة في المخزون' });
+              continue;
+            }
+            eligibleIds.push(item.id);
+          }
+
+          if (eligibleIds.length === 0) continue;
+          const updated = await tx.item.updateMany({
+            where: {
+              id: { in: eligibleIds },
+              active: true,
+              stockBalances: {
+                none: {
+                  OR: [{ quantity: { not: 0 } }, { reservedQty: { not: 0 } }],
+                },
+              },
+            },
+            data: { active: false },
+          });
+          const archivedIdSet = new Set(eligibleIds);
+          if (updated.count !== eligibleIds.length) {
+            const stillActive = await tx.item.findMany({
+              where: { id: { in: eligibleIds }, active: true },
+              select: { id: true, nameAr: true },
+            });
+            for (const item of stillActive) {
+              archivedIdSet.delete(item.id);
+              skippedItems.push({ id: item.id, nameAr: item.nameAr, reason: 'تغير رصيد المخزون أثناء تنفيذ الأرشفة' });
+            }
+          }
+          archivedItems.push(...items
+            .filter((item) => archivedIdSet.has(item.id))
+            .map(({ id, nameAr }) => ({ id, nameAr })));
+        }
+        return { archivedItems, skippedItems };
+      });
+
+      if (result.archivedItems.length > 0) {
+        await logAudit({
+          action: 'BULK_ARCHIVE',
+          entity: 'Item',
+          details: `أرشفة ${result.archivedItems.length} صنف من المخزون`,
+        });
+      }
+      res.json({
+        archivedCount: result.archivedItems.length,
+        skipped: result.skippedItems,
+      });
+    } catch (error) {
+      console.error('Bulk item archive failed:', error);
+      res.status(500).json({ error: 'تعذر أرشفة الأصناف المحددة' });
+    }
+  },
+);
+
 // Fast lookup by barcode or SKU for POS and scanner
 router.get('/lookup/:code', authenticate, loadUserPermissions, async (req, res) => {
   try {

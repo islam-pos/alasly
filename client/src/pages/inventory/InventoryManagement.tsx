@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Boxes, ArrowLeftRight, ClipboardCheck, AlertTriangle, 
   Search, Plus, Filter, Warehouse, CheckCircle2, 
-  RefreshCw, TrendingDown, DollarSign, PackageCheck, MapPin, Pencil, Save, X, Printer, Barcode
+  RefreshCw, TrendingDown, DollarSign, PackageCheck, MapPin, Pencil, Save, X, Printer, Barcode, Trash2
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -14,6 +14,7 @@ import { BarcodePrintDialog } from '../../components/common/BarcodePrintDialog';
 export const InventoryManagement: React.FC = () => {
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
+  const canManageItems = hasPermission('manage_items');
   const canManagePrices = hasPermission('manage_item_prices');
   const [activeTab, setActiveTab] = useState<'balances' | 'transfers' | 'counts'>('balances');
   
@@ -39,7 +40,8 @@ export const InventoryManagement: React.FC = () => {
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isCountModalOpen, setIsCountModalOpen] = useState(false);
   const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
-  const [selectedPriceItemIds, setSelectedPriceItemIds] = useState<string[]>([]);
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+  const [archivingItems, setArchivingItems] = useState(false);
   const [priceForm, setPriceForm] = useState({
     field: 'sellPrice' as 'purchasePrice' | 'sellPrice',
     targetType: 'selected' as 'selected' | 'category' | 'item',
@@ -167,20 +169,55 @@ export const InventoryManagement: React.FC = () => {
   const totalItemsCount = balances.length;
   const lowStockCount = balances.filter(b => b.isLowStock).length;
   const totalStockValuation = balances.reduce((sum, b) => sum + (b.totalValue || 0), 0);
-  const balanceColumnCount = 7 + (canManagePrices ? 4 : 0);
+  const hasItemSelection = canManageItems || canManagePrices;
+  const balanceColumnCount = 7 + (hasItemSelection ? 1 : 0) + (canManagePrices ? 3 : 0);
 
-  const toggleSelectedPriceItem = (itemId: string, selected: boolean) => {
-    setSelectedPriceItemIds((current) => selected
+  const toggleSelectedItem = (itemId: string, selected: boolean) => {
+    setSelectedItemIds((current) => selected
       ? [...new Set([...current, itemId])]
       : current.filter((id) => id !== itemId));
   };
 
-  const toggleAllVisiblePriceItems = (selected: boolean) => {
-    setSelectedPriceItemIds((current) => {
+  const toggleAllVisibleItems = (selected: boolean) => {
+    setSelectedItemIds((current) => {
       const visibleIds = new Set(filteredBalances.map((item) => item.id));
       const remaining = current.filter((id) => !visibleIds.has(id));
       return selected ? [...remaining, ...visibleIds] : remaining;
     });
+  };
+
+  const handleArchiveSelectedItems = async () => {
+    if (!selectedItemIds.length) {
+      showToast('حدد صنفاً واحداً على الأقل من الجدول', 'error');
+      return;
+    }
+    if (!window.confirm(
+      `سيتم أرشفة ${selectedItemIds.length} صنف محدد. الأرشفة لا تحذف الفواتير أو سجل الحركات، والأصناف التي لها رصيد أو كمية محجوزة ستُتجاوز. هل تريد المتابعة؟`,
+    )) return;
+
+    try {
+      setArchivingItems(true);
+      const result = await api.archiveItems(selectedItemIds);
+      setSelectedItemIds([]);
+      await loadData();
+      if (result.skipped.length) {
+        const skippedDetails = result.skipped
+          .slice(0, 3)
+          .map((item) => `${item.nameAr}: ${item.reason}`)
+          .join('؛ ');
+        const remainingSkipped = result.skipped.length - 3;
+        showToast(
+          `تمت أرشفة ${result.archivedCount} صنف وتجاوز ${result.skipped.length}: ${skippedDetails}${remainingSkipped > 0 ? `، و${remainingSkipped} أصناف أخرى` : ''}`,
+          result.archivedCount ? 'warning' : 'error',
+        );
+      } else {
+        showToast(`تمت أرشفة ${result.archivedCount} صنف بنجاح`, 'success');
+      }
+    } catch (error: any) {
+      showToast(error.message || 'تعذرت أرشفة الأصناف المحددة', 'error');
+    } finally {
+      setArchivingItems(false);
+    }
   };
 
   const handleBulkPriceUpdate = async (event: React.FormEvent) => {
@@ -202,17 +239,17 @@ export const InventoryManagement: React.FC = () => {
       }
       target = { type: 'category', categoryId: selectedCategory };
     } else if (priceForm.targetType === 'item') {
-      if (selectedPriceItemIds.length !== 1) {
+      if (selectedItemIds.length !== 1) {
         showToast('حدد صنفاً واحداً فقط من الجدول', 'error');
         return;
       }
-      target = { type: 'item', itemId: selectedPriceItemIds[0] };
+      target = { type: 'item', itemId: selectedItemIds[0] };
     } else {
-      if (selectedPriceItemIds.length === 0) {
+      if (selectedItemIds.length === 0) {
         showToast('حدد صنفاً واحداً على الأقل من الجدول', 'error');
         return;
       }
-      target = { type: 'items', itemIds: selectedPriceItemIds };
+      target = { type: 'items', itemIds: selectedItemIds };
     }
 
     try {
@@ -226,7 +263,7 @@ export const InventoryManagement: React.FC = () => {
       });
       showToast(`تم تحديث الأسعار لـ ${result.updatedCount} صنف`, 'success');
       setIsPriceModalOpen(false);
-      setSelectedPriceItemIds([]);
+      setSelectedItemIds([]);
       setPriceForm((current) => ({ ...current, value: '' }));
       await loadData();
     } catch (error: any) {
@@ -478,18 +515,47 @@ export const InventoryManagement: React.FC = () => {
             </button>
           </div>
 
-          {canManagePrices && (
+          {hasItemSelection && (
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-xs text-slate-500">
-                الأصناف المحددة: {selectedPriceItemIds.length}
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsPriceModalOpen(true)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold"
-              >
-                تحديث أسعار الأصناف
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xs text-slate-500">
+                  الأصناف المحددة: {selectedItemIds.length}
+                </span>
+                {hasItemSelection && filteredBalances.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => toggleAllVisibleItems(
+                      !filteredBalances.every((item) => selectedItemIds.includes(item.id)),
+                    )}
+                    className="text-xs font-bold text-blue-700 underline underline-offset-2"
+                  >
+                    {filteredBalances.every((item) => selectedItemIds.includes(item.id))
+                      ? 'إلغاء تحديد الأصناف الظاهرة'
+                      : 'تحديد كل الأصناف الظاهرة'}
+                  </button>
+                )}
+                {canManageItems && (
+                  <button
+                    type="button"
+                    onClick={() => void handleArchiveSelectedItems()}
+                    disabled={selectedItemIds.length === 0 || archivingItems}
+                    className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {archivingItems ? 'جارٍ الأرشفة...' : 'أرشفة الأصناف المحددة'}
+                  </button>
+                )}
+              </div>
+              {canManagePrices && (
+                <button
+                  type="button"
+                  onClick={() => setIsPriceModalOpen(true)}
+                  disabled={selectedItemIds.length === 0}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  تحديث أسعار الأصناف
+                </button>
+              )}
             </div>
           )}
 
@@ -498,13 +564,13 @@ export const InventoryManagement: React.FC = () => {
             <table className="w-full text-right text-sm">
               <thead className="bg-slate-50 text-slate-700 font-bold border-b text-xs">
                 <tr>
-                  {canManagePrices && (
+                  {hasItemSelection && (
                     <th className="py-3 px-3 text-center">
                       <input
                         type="checkbox"
                         aria-label="تحديد كل الأصناف الظاهرة"
-                        checked={filteredBalances.length > 0 && filteredBalances.every((item) => selectedPriceItemIds.includes(item.id))}
-                        onChange={(event) => toggleAllVisiblePriceItems(event.target.checked)}
+                        checked={filteredBalances.length > 0 && filteredBalances.every((item) => selectedItemIds.includes(item.id))}
+                        onChange={(event) => toggleAllVisibleItems(event.target.checked)}
                         className="accent-blue-600"
                       />
                     </th>
@@ -537,13 +603,13 @@ export const InventoryManagement: React.FC = () => {
                 ) : (
                   filteredBalances.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                      {canManagePrices && (
+                      {hasItemSelection && (
                         <td className="py-3 px-3 text-center">
                           <input
                             type="checkbox"
                             aria-label={`تحديد ${item.nameAr}`}
-                            checked={selectedPriceItemIds.includes(item.id)}
-                            onChange={(event) => toggleSelectedPriceItem(item.id, event.target.checked)}
+                            checked={selectedItemIds.includes(item.id)}
+                            onChange={(event) => toggleSelectedItem(item.id, event.target.checked)}
                             className="accent-blue-600"
                           />
                         </td>
@@ -689,7 +755,7 @@ export const InventoryManagement: React.FC = () => {
                   onChange={(event) => setPriceForm({ ...priceForm, targetType: event.target.value as 'selected' | 'category' | 'item' })}
                   className="mt-1 w-full border rounded-xl px-3 py-2 bg-white"
                 >
-                  <option value="selected">الأصناف المحددة ({selectedPriceItemIds.length})</option>
+                  <option value="selected">الأصناف المحددة ({selectedItemIds.length})</option>
                   <option value="item">صنف واحد محدد</option>
                   <option value="category">التصنيف المحدد ({categories.find((category) => category.id === selectedCategory)?.nameAr || 'لم يتم اختيار تصنيف'})</option>
                 </select>
@@ -732,7 +798,7 @@ export const InventoryManagement: React.FC = () => {
             {priceForm.targetType === 'category' && !selectedCategory && (
               <p className="text-xs text-amber-700">اختر التصنيف المطلوب من قائمة التصنيفات قبل الحفظ.</p>
             )}
-            {(priceForm.targetType === 'item' && selectedPriceItemIds.length !== 1) && (
+            {(priceForm.targetType === 'item' && selectedItemIds.length !== 1) && (
               <p className="text-xs text-amber-700">حدد صنفاً واحداً فقط من الجدول.</p>
             )}
             <div className="flex justify-end gap-2 border-t pt-4">
