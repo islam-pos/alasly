@@ -9,6 +9,7 @@ export interface User {
   role: string;
   roleNameAr: string;
   permissions: string[];
+  allowedWarehouseId?: string | null;
   branch?: { id: string; name: string };
   employee?: { id: string; name: string };
 }

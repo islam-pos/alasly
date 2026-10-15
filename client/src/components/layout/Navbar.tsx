@@ -95,6 +95,7 @@ export const Navbar: React.FC = () => {
         { label: 'شاشة كاشير قطع الغيار (POS)', to: '/pos', desc: 'نقاط البيع السريعة والباركود' },
         { label: 'فتح أمر إصلاح (Job Card)', to: '/workshop/job-cards', desc: 'استقبال سيارة وتحديد المشكلة' },
         { label: 'تقديرات الورشة', to: '/workshop/job-cards', desc: 'تسعير الإصلاح وموافقة العميل' },
+        { label: 'طلب وصرف قطع الورشة', to: '/workshop/parts', desc: 'طلب القطع ومتابعة صرفها لأوامر الإصلاح' },
         { label: 'فاتورة الصيانة النهائية', to: '/sales?type=MAINTENANCE', desc: 'القطع المستهلكة وأجور اليد' },
         { label: 'فواتير المبيعات العامة', to: '/sales', desc: 'سجل فواتير البيع المعتمدة' },
         { label: 'عروض الأسعار العامة', to: '/sales?type=QUOTATION', desc: 'إنشاء العروض وتحويلها إلى فواتير' },
@@ -199,6 +200,9 @@ export const Navbar: React.FC = () => {
         if (path === '/purchases') return hasPermission('manage_purchases');
         if (path === '/sales') return hasPermission('manage_sales');
         if (path === '/pos') return hasPermission('pos_access');
+        if (path === '/workshop/parts') {
+          return ['manage_workshop', 'manage_jobcards', 'issue_parts', 'manage_inventory'].some(hasPermission);
+        }
         if (path.startsWith('/workshop')) return hasPermission('manage_workshop');
         if (path === '/warehouses') return hasPermission('manage_inventory');
         if (path === '/employees') {

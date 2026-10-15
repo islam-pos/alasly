@@ -348,6 +348,16 @@ const apiClient = {
   getJobCardById: (id: string) =>
     fetch(`${BASE_URL}/workshop/job-cards/${id}`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
+  getWorkshopPartRequests: () =>
+    fetch(`${BASE_URL}/workshop/parts/requests`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  createWorkshopPartRequest: (data: { repairOrderId: string; items: { itemId: string; quantity: number }[] }) =>
+    fetch(`${BASE_URL}/workshop/parts/requests`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
   createJobCard: (data: any) =>
     fetch(`${BASE_URL}/workshop/job-cards`, {
       method: 'POST',

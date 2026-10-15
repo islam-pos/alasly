@@ -17,6 +17,137 @@ const attachmentDirectory = path.join(
   'repair-attachments',
 );
 
+router.get('/parts/requests', async (req: AuthenticatedRequest, res) => {
+  try {
+    const parts = await prisma.repairPart.findMany({
+      where: { repairOrder: branchWhere(req) },
+      select: {
+        id: true,
+        repairOrderId: true,
+        itemId: true,
+        warehouseId: true,
+        requestedQty: true,
+        issuedQty: true,
+        usedQty: true,
+        returnedQty: true,
+        status: true,
+        requestedById: true,
+        createdAt: true,
+        item: { select: { id: true, nameAr: true, sku: true, barcode: true } },
+        warehouse: { select: { id: true, name: true } },
+        repairOrder: {
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            customer: { select: { name: true } },
+            vehicle: { select: { plateNumber: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+    const requesterIds = [...new Set(parts.map((part) => part.requestedById).filter((id): id is string => Boolean(id)))];
+    const requesters = requesterIds.length
+      ? await prisma.user.findMany({
+        where: { id: { in: requesterIds } },
+        select: { id: true, fullName: true },
+      })
+      : [];
+    const requesterNames = new Map(requesters.map((user) => [user.id, user.fullName]));
+    res.json({
+      requests: parts.map((part) => ({
+        ...part,
+        requestedByName: part.requestedById ? requesterNames.get(part.requestedById) || 'مستخدم سابق' : 'طلب من عرض سعر معتمد',
+        remainingQty: Math.max(0, part.requestedQty - part.issuedQty),
+      })),
+    });
+  } catch (error) {
+    console.error('Workshop part requests load failed:', error);
+    res.status(500).json({ error: 'تعذر تحميل طلبات قطع الورشة' });
+  }
+});
+
+router.post('/parts/requests', async (req: AuthenticatedRequest, res) => {
+  const repairOrderId = req.body?.repairOrderId;
+  const requestedItems = req.body?.items;
+  if (typeof repairOrderId !== 'string' || !repairOrderId.trim()
+    || !Array.isArray(requestedItems) || requestedItems.length === 0 || requestedItems.length > 100) {
+    return res.status(400).json({ error: 'حدد أمر الإصلاح وقطعة واحدة على الأقل للطلب' });
+  }
+  if (requestedItems.some((entry: any) => !entry || typeof entry.itemId !== 'string'
+    || !Number.isInteger(Number(entry.quantity)) || Number(entry.quantity) < 1 || Number(entry.quantity) > 10000)) {
+    return res.status(400).json({ error: 'تحقق من الأصناف والكميات المطلوبة؛ الكمية يجب أن تكون عددًا صحيحًا من 1 إلى 10000' });
+  }
+  const requestedItemIds = requestedItems.map((entry: any) => entry.itemId);
+  if (new Set(requestedItemIds).size !== requestedItemIds.length) {
+    return res.status(400).json({ error: 'لا تكرر الصنف نفسه في الطلب؛ اجمع الكمية في سطر واحد' });
+  }
+
+  try {
+    const repairOrder = await prisma.repairOrder.findFirst({
+      where: { id: repairOrderId, ...branchWhere(req) },
+      select: { id: true, orderNumber: true, status: true },
+    });
+    if (!repairOrder) return res.status(404).json({ error: 'أمر الإصلاح غير موجود أو خارج فرعك' });
+    if (repairOrder.status === 'CLOSED' || repairOrder.status === 'CANCELLED') {
+      return res.status(400).json({ error: 'لا يمكن طلب قطع لأمر إصلاح مغلق أو ملغى' });
+    }
+
+    const items = await prisma.item.findMany({
+      where: { id: { in: requestedItemIds }, active: true },
+      select: { id: true, sellPrice: true, avgCost: true },
+    });
+    if (items.length !== requestedItemIds.length) {
+      return res.status(400).json({ error: 'يوجد صنف غير موجود أو مؤرشف ضمن الطلب' });
+    }
+    const itemsById = new Map(items.map((item) => [item.id, item]));
+    const createdParts = await prisma.$transaction(async (tx) => {
+      const created = [];
+      for (const entry of requestedItems as { itemId: string; quantity: number }[]) {
+        const item = itemsById.get(entry.itemId)!;
+        created.push(await tx.repairPart.create({
+          data: {
+            repairOrderId,
+            itemId: item.id,
+            requestedQty: Number(entry.quantity),
+            unitPrice: item.sellPrice,
+            costPrice: item.avgCost,
+            total: item.sellPrice * Number(entry.quantity),
+            status: 'REQUESTED',
+            requestedById: req.user?.id,
+          },
+          select: {
+            id: true,
+            repairOrderId: true,
+            itemId: true,
+            requestedQty: true,
+            issuedQty: true,
+            status: true,
+            requestedById: true,
+            createdAt: true,
+            item: { select: { id: true, nameAr: true, sku: true } },
+          },
+        }));
+      }
+      return created;
+    });
+
+    await logAudit({
+      userId: req.user?.id,
+      action: 'REQUEST_WORKSHOP_PARTS',
+      entity: 'RepairOrder',
+      entityId: repairOrder.id,
+      details: `طلب ${createdParts.length} صنف للورشة لأمر الإصلاح ${repairOrder.orderNumber}`,
+    });
+    res.status(201).json({ requests: createdParts });
+  } catch (error) {
+    console.error('Workshop parts request creation failed:', error);
+    res.status(500).json({ error: 'تعذر إنشاء طلب قطع الورشة' });
+  }
+});
+
 // --- List Job Cards with filters ---
 router.get('/job-cards', async (req: AuthenticatedRequest, res) => {
   try {
@@ -513,7 +644,7 @@ router.post('/job-cards/:id/estimate/:estimateId/approve', async (req, res) => {
 });
 
 // --- Request / Issue Parts to Workshop for Job Card (Section 9: إذن صرف داخلي) ---
-router.post('/job-cards/:id/parts/issue', async (req, res) => {
+router.post('/job-cards/:id/parts/issue', async (req: AuthenticatedRequest, res) => {
   try {
     const repairOrderId = req.params.id;
     const { partId, warehouseId, quantity } = req.body;
@@ -523,17 +654,29 @@ router.post('/job-cards/:id/parts/issue', async (req, res) => {
       return res.status(400).json({ error: 'حدد القطعة وكمية صحيحة أكبر من صفر' });
     }
 
-    const part = await prisma.repairPart.findUnique({
-      where: { id: partId },
+    const part = await prisma.repairPart.findFirst({
+      where: {
+        id: partId,
+        repairOrderId,
+        repairOrder: branchWhere(req),
+      },
       include: { item: true },
     });
 
-    if (!part || part.repairOrderId !== repairOrderId) return res.status(404).json({ error: 'طلب القطعة غير موجود في أمر الإصلاح' });
+    if (!part) return res.status(404).json({ error: 'طلب القطعة غير موجود في أمر الإصلاح أو خارج فرعك' });
     if (part.issuedQty + qty > part.requestedQty) {
       return res.status(400).json({ error: 'الكمية تتجاوز الكمية المطلوبة غير المصروفة' });
     }
 
-    const whId = warehouseId || part.warehouseId || (await prisma.warehouse.findFirst({ where: { code: 'WH-SHOP' } }))?.id;
+    const requestingUser = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { allowedWarehouseId: true },
+    });
+    if (requestingUser?.allowedWarehouseId && warehouseId && warehouseId !== requestingUser.allowedWarehouseId) {
+      return res.status(403).json({ error: 'لا يمكنك الصرف من مستودع غير المستودع المحدد لحسابك' });
+    }
+    const whId = requestingUser?.allowedWarehouseId || warehouseId || part.warehouseId
+      || (await prisma.warehouse.findFirst({ where: { code: 'WH-SHOP' } }))?.id;
     if (!whId) return res.status(400).json({ error: 'لم يتم تحديد مستودع للصرف' });
 
     // Check stock

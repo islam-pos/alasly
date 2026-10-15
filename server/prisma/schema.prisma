@@ -831,6 +831,7 @@ model RepairPart {
   costPrice     Float       @default(0)
   total         Float       @default(0)
   status        String      @default("REQUESTED") // REQUESTED, ISSUED, USED, RETURNED
+  requestedById String?
   issuedAt      DateTime?
   createdAt     DateTime    @default(now())
 }

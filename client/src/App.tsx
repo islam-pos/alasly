@@ -20,6 +20,7 @@ import { SettingsScreen } from './pages/settings/SettingsScreen';
 import { ProfitsDashboard } from './pages/profits/ProfitsDashboard';
 import { JobCardDetail } from './pages/workshop/JobCardDetail';
 import { JobCardsList } from './pages/workshop/JobCardsList';
+import { WorkshopParts } from './pages/workshop/WorkshopParts';
 import { VehicleProfile } from './pages/vehicles/VehicleProfile';
 import { SmartSearchSuggestions } from './components/layout/SmartSearchSuggestions';
 import { AccountingScreen } from './pages/accounting/AccountingScreen';
@@ -84,6 +85,7 @@ const AppRoutes: React.FC = () => {
         <Route path="reports" element={<PermissionGate permission="view_reports"><ReportsCenter /></PermissionGate>} />
         <Route path="profits" element={<PermissionGate permission="view_profits"><ProfitsDashboard /></PermissionGate>} />
         <Route path="settings" element={<PermissionGate permission={['manage_settings', 'view_audit_logs']}><SettingsScreen /></PermissionGate>} />
+        <Route path="workshop/parts" element={<PermissionGate permission={['manage_workshop', 'manage_jobcards', 'issue_parts', 'manage_inventory']}><WorkshopParts /></PermissionGate>} />
         <Route path="workshop/job-cards" element={<PermissionGate permission="manage_workshop"><JobCardsList /></PermissionGate>} />
         <Route path="workshop/job-cards/:id" element={<PermissionGate permission="manage_workshop"><JobCardDetail /></PermissionGate>} />
       </Route>

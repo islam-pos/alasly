@@ -5,13 +5,21 @@ import { AuthenticatedRequest } from './auth';
 const getRequiredPermissions = (path: string, method: string): string[] | null => {
   if (path.startsWith('/dashboard')) return ['view_dashboard'];
   if (path.startsWith('/items')) {
-    return method === 'GET' ? ['manage_items', 'manage_sales', 'manage_purchases', 'pos_access', 'issue_parts'] : ['manage_items'];
+    return method === 'GET'
+      ? ['manage_items', 'manage_inventory', 'manage_sales', 'manage_purchases', 'manage_workshop', 'manage_jobcards', 'pos_access', 'issue_parts']
+      : ['manage_items'];
   }
   if (path.startsWith('/purchases')) return ['manage_purchases'];
   if (path.startsWith('/sales/pos')) return ['pos_access', 'manage_sales'];
   if (path.startsWith('/sales')) return ['manage_sales'];
-  if (path.startsWith('/workshop/job-cards') && path.includes('/parts/issue')) return ['issue_parts'];
+  if (path.startsWith('/workshop/parts/requests')) {
+    return method === 'GET'
+      ? ['manage_workshop', 'manage_jobcards', 'issue_parts', 'manage_inventory']
+      : ['manage_workshop', 'manage_jobcards'];
+  }
+  if (path.startsWith('/workshop/job-cards') && path.includes('/parts/issue')) return ['issue_parts', 'manage_inventory'];
   if (path.startsWith('/workshop/job-cards') && path.includes('/estimate/') && path.endsWith('/approve')) return ['approve_estimate'];
+  if (path === '/workshop/job-cards' && method === 'GET') return ['manage_workshop', 'manage_jobcards', 'issue_parts', 'manage_inventory'];
   if (path.startsWith('/workshop')) return ['manage_workshop', 'manage_jobcards'];
   if (path.startsWith('/inventory')) return ['manage_inventory'];
   if (path.startsWith('/reports')) return ['view_reports'];
