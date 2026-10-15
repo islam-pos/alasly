@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import React, { useRef, useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Wrench,
   Search,
@@ -13,6 +13,7 @@ import {
   Filter,
   ArrowLeft,
   X,
+  ImagePlus,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -36,9 +37,12 @@ export const JobCardsList: React.FC = () => {
   const [serviceAdvisorId, setServiceAdvisorId] = useState('');
   const [complaint, setComplaint] = useState('');
   const [intakeNotes, setIntakeNotes] = useState('');
+  const [intakePhotos, setIntakePhotos] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const intakePhotoInputRef = useRef<HTMLInputElement>(null);
 
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { success, error } = useToast();
 
   useEffect(() => {
@@ -88,6 +92,24 @@ export const JobCardsList: React.FC = () => {
     }
   };
 
+  const handleIntakePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (!files.length) return;
+    if (intakePhotos.length + files.length > 20) {
+      error('الحد الأقصى 20 صورة عند استقبال السيارة');
+      return;
+    }
+    const invalidFile = files.find((file) =>
+      !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 3 * 1024 * 1024,
+    );
+    if (invalidFile) {
+      error('استخدم صور JPG أو PNG أو WebP لا يتجاوز حجم كل منها 3 ميجابايت');
+      return;
+    }
+    setIntakePhotos((current) => [...current, ...files]);
+  };
+
   const handleCreateJobCard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCustomerId || !selectedVehicleId || !complaint) {
@@ -109,11 +131,38 @@ export const JobCardsList: React.FC = () => {
       };
 
       const res = await api.createJobCard(payload);
-      success(`تم فتح أمر الإصلاح رقم ${res.orderNumber} بنجاح`);
+      if (intakePhotos.length) {
+        let uploaded = 0;
+        try {
+          for (const file of intakePhotos) {
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onerror = () => reject(new Error(`تعذرت قراءة الصورة ${file.name}`));
+              reader.onload = () => typeof reader.result === 'string'
+                ? resolve(reader.result)
+                : reject(new Error(`تعذر تجهيز الصورة ${file.name}`));
+              reader.readAsDataURL(file);
+            });
+            await api.uploadRepairAttachment(res.id, { fileName: file.name, dataUrl });
+            uploaded += 1;
+          }
+        } catch {
+          error(`تم فتح أمر الإصلاح ${res.orderNumber}، لكن تعذر رفع الصور (${uploaded} من ${intakePhotos.length}). يمكنك إكمال رفعها من تبويب صور السيارة.`);
+          setNewModalOpen(false);
+          setIntakePhotos([]);
+          loadJobCards();
+          navigate(`/workshop/job-cards/${res.id}`);
+          return;
+        }
+      }
+      success(intakePhotos.length
+        ? `تم فتح أمر الإصلاح رقم ${res.orderNumber} وحفظ ${intakePhotos.length} صورة للاستلام`
+        : `تم فتح أمر الإصلاح رقم ${res.orderNumber} بنجاح`);
       setNewModalOpen(false);
       // Reset
       setComplaint('');
       setIntakeNotes('');
+      setIntakePhotos([]);
       loadJobCards();
     } catch (err: any) {
       error(err.message || 'فشل فتح أمر الإصلاح');
@@ -311,7 +360,10 @@ export const JobCardsList: React.FC = () => {
                 <span>فتح أمر إصلاح جديد (Job Card)</span>
               </h3>
               <button
-                onClick={() => setNewModalOpen(false)}
+                onClick={() => {
+                  setNewModalOpen(false);
+                  setIntakePhotos([]);
+                }}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
@@ -456,6 +508,54 @@ export const JobCardsList: React.FC = () => {
                 />
               </div>
 
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <label className="block font-bold text-slate-700">صور حالة السيارة عند الاستلام</label>
+                    <p className="mt-1 text-[11px] text-slate-500">التقط صور الخدوش والأضرار والحالة الخارجية قبل بدء الصيانة. حتى 20 صورة، JPG أو PNG أو WebP، بحد 3 ميجابايت للصورة.</p>
+                  </div>
+                  <input
+                    ref={intakePhotoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    capture="environment"
+                    multiple
+                    onChange={handleIntakePhotoChange}
+                    className="hidden"
+                    aria-label="اختيار صور السيارة عند الاستلام"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => intakePhotoInputRef.current?.click()}
+                    disabled={intakePhotos.length >= 20 || submitting}
+                    className="inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-white px-3 py-2 font-bold text-brand-700 disabled:opacity-50"
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                    إضافة صور
+                  </button>
+                </div>
+                {intakePhotos.length > 0 && (
+                  <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+                    {intakePhotos.map((file, index) => (
+                      <li key={`${file.name}-${file.lastModified}-${index}`} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <span className="truncate text-slate-700" title={file.name}>
+                          {file.name} · {(file.size / 1024).toFixed(0)} ك.ب
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIntakePhotos((current) => current.filter((_, fileIndex) => fileIndex !== index))}
+                          disabled={submitting}
+                          aria-label={`إزالة الصورة ${file.name}`}
+                          className="shrink-0 rounded-lg p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
               <div className="flex gap-2 pt-3">
                 <button
                   type="submit"
@@ -467,13 +567,16 @@ export const JobCardsList: React.FC = () => {
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>فتح أمر الإصلاح ومباشرة الفحص</span>
+                      <span>{intakePhotos.length ? 'فتح الأمر وحفظ صور الاستلام' : 'فتح أمر الإصلاح ومباشرة الفحص'}</span>
                     </>
                   )}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setNewModalOpen(false)}
+                  onClick={() => {
+                    setNewModalOpen(false);
+                    setIntakePhotos([]);
+                  }}
                   className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs"
                 >
                   إلغاء

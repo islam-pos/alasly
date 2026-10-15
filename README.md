@@ -28,7 +28,7 @@ The global search and text-entry fields provide live suggestions from matching c
 
 ## Workshop estimates, evidence, and vehicle handover
 
-Repair orders support photo attachments stored on the persistent data volume, tracked technician work time, and recording which issued parts were used or returned. A pending estimate can be shared through a temporary, single-use customer approval link; the customer can approve or reject it and leave a note. The estimate is not sent automatically—share the generated link through the channel you choose.
+Repair orders let staff capture or select up to 20 vehicle-condition photos at intake (JPG, PNG, or WebP, up to 3 MB each); the photos remain attached to the repair order and can be viewed in its photos tab. Additional photo attachments can also be added later. Photos are stored on the persistent data volume. Repair orders also support tracked technician work time and recording which issued parts were used or returned. A pending estimate can be shared through a temporary, single-use customer approval link; the customer can approve or reject it and leave a note. The estimate is not sent automatically—share the generated link through the channel you choose.
 
 After invoice creation, the repair order remains ready for delivery. Record any later cash or card payments against the invoice, then complete the handover checklist with the recipient's name, odometer, and signature. Handover closes the repair order and stores the selected warranty duration and terms. Cash payments require an available cashbox; card payments are recorded on the invoice but are not reconciled to a bank account automatically. Uploaded repair photos require the same persistent `/data` volume configured for production.
 
