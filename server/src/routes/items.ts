@@ -1,9 +1,72 @@
 import { Router } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { AuthenticatedRequest, authenticate, loadUserPermissions, requirePermission } from '../middleware/auth';
 
 const router = Router();
+
+const normalizeItemName = (value: string) => value
+  .normalize('NFKC')
+  .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+  .replace(/[آأإ]/g, 'ا')
+  .replace(/ى/g, 'ي')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLocaleLowerCase();
+
+const normalizeItemCode = (value: string) => value.normalize('NFKC').trim().toLocaleUpperCase();
+
+type DuplicateCandidate = {
+  id: string;
+  sku: string;
+  barcode: string | null;
+  nameAr: string;
+  categoryId: string;
+};
+
+const findItemDuplicate = async (
+  client: Prisma.TransactionClient | typeof prisma,
+  item: { id?: string; sku: string; barcode?: string | null; nameAr: string; categoryId: string },
+) => {
+  const candidates = await client.$queryRaw<DuplicateCandidate[]>`
+    SELECT "id", "sku", "barcode", "nameAr", "categoryId"
+    FROM "Item"
+    WHERE LOWER(TRIM("sku")) = LOWER(TRIM(${item.sku}))
+      OR (${item.barcode || ''} <> '' AND "barcode" IS NOT NULL AND LOWER(TRIM("barcode")) = LOWER(TRIM(${item.barcode || ''})))
+      OR "categoryId" = ${item.categoryId}
+  `;
+  const others = candidates.filter((candidate) => candidate.id !== item.id);
+
+  if (others.some((candidate) => normalizeItemCode(candidate.sku) === normalizeItemCode(item.sku))) {
+    return 'كود SKU مستخدم بالفعل في صنف آخر';
+  }
+  if (item.barcode && others.some((candidate) =>
+    candidate.barcode && normalizeItemCode(candidate.barcode) === normalizeItemCode(item.barcode!),
+  )) {
+    return 'الباركود مستخدم بالفعل في صنف آخر';
+  }
+  if (others.some((candidate) =>
+    candidate.categoryId === item.categoryId
+      && normalizeItemName(candidate.nameAr) === normalizeItemName(item.nameAr),
+  )) {
+    return 'اسم الصنف موجود بالفعل داخل التصنيف المحدد';
+  }
+  return null;
+};
+
+const getUniqueConstraintMessage = (error: unknown) => {
+  if (error instanceof Error && [
+    'كود SKU مستخدم بالفعل في صنف آخر',
+    'الباركود مستخدم بالفعل في صنف آخر',
+    'اسم الصنف موجود بالفعل داخل التصنيف المحدد',
+  ].includes(error.message)) return error.message;
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') return null;
+  const target = Array.isArray(error.meta?.target) ? error.meta.target.join(' ') : String(error.meta?.target || '');
+  if (target.toLowerCase().includes('barcode')) return 'الباركود مستخدم بالفعل في صنف آخر';
+  if (target.toLowerCase().includes('sku')) return 'كود SKU مستخدم بالفعل في صنف آخر';
+  return 'كود SKU أو الباركود مستخدم بالفعل في صنف آخر';
+};
 
 const hasPermission = (req: AuthenticatedRequest, permission: string) =>
   req.authenticatedRole === 'admin' || req.rolePermissions?.includes(permission) === true;
@@ -122,6 +185,7 @@ router.post('/import', async (req, res) => {
     const errors: { row: number; sku?: string; reason: string }[] = [];
     const seenSkus = new Set<string>();
     const seenBarcodes = new Set<string>();
+    const seenNames = new Set<string>();
 
     for (const [index, rawRow] of rows.entries()) {
       const rowNumber = index + 2;
@@ -167,19 +231,25 @@ router.post('/import', async (req, res) => {
         continue;
       }
 
-      const skuKey = sku.toLocaleLowerCase();
-      const barcodeKey = barcode.toLocaleLowerCase();
-      if (seenSkus.has(skuKey) || await prisma.item.findUnique({ where: { sku } })) {
-        duplicates.push({ row: rowNumber, sku, reason: 'كود SKU موجود مسبقًا؛ تم تخطي الصف' });
-        continue;
-      }
-      if (barcode && (seenBarcodes.has(barcodeKey) || await prisma.item.findUnique({ where: { barcode } }))) {
-        duplicates.push({ row: rowNumber, sku, reason: 'الباركود مستخدم في صنف آخر؛ تم تخطي الصف' });
+      const skuKey = normalizeItemCode(sku);
+      const barcodeKey = normalizeItemCode(barcode);
+      const nameKey = `${category.id}:${normalizeItemName(nameAr)}`;
+      const duplicateReason = seenSkus.has(skuKey)
+        ? 'كود SKU مكرر داخل الملف؛ تم تخطي الصف'
+        : barcode && seenBarcodes.has(barcodeKey)
+          ? 'الباركود مكرر داخل الملف؛ تم تخطي الصف'
+          : seenNames.has(nameKey)
+            ? 'اسم الصنف مكرر داخل التصنيف داخل الملف؛ تم تخطي الصف'
+            : await findItemDuplicate(prisma, { sku, barcode, nameAr, categoryId: category.id });
+      if (duplicateReason) {
+        duplicates.push({ row: rowNumber, sku, reason: `${duplicateReason}؛ تم تخطي الصف` });
         continue;
       }
 
       try {
         const item = await prisma.$transaction(async (tx) => {
+          const transactionDuplicate = await findItemDuplicate(tx, { sku, barcode, nameAr, categoryId: category.id });
+          if (transactionDuplicate) throw new Error(transactionDuplicate);
           const createdItem = await tx.item.create({
             data: {
               nameAr,
@@ -223,11 +293,17 @@ router.post('/import', async (req, res) => {
         });
         seenSkus.add(skuKey);
         if (barcode) seenBarcodes.add(barcodeKey);
+        seenNames.add(nameKey);
         created.push(item.nameAr);
         await logAudit({ action: 'CREATE', entity: 'Item', entityId: item.id, details: `استيراد صنف: ${item.nameAr} (${item.sku})` });
       } catch (error) {
         console.error(`Failed to import item at row ${rowNumber}:`, error);
-        errors.push({ row: rowNumber, sku, reason: 'فشل حفظ الصنف؛ تحقق من عدم تكرار SKU أو الباركود والبيانات المرتبطة' });
+        const message = error instanceof Error ? error.message : '';
+        if (message.includes('مستخدم بالفعل') || message.includes('موجود بالفعل')) {
+          duplicates.push({ row: rowNumber, sku, reason: `${message}؛ تم تخطي الصف` });
+        } else {
+          errors.push({ row: rowNumber, sku, reason: 'فشل حفظ الصنف؛ تحقق من البيانات المرتبطة' });
+        }
       }
     }
 
@@ -313,55 +389,90 @@ router.post('/', authenticate, loadUserPermissions, requirePermission('manage_it
       ...safeItemData
     } = itemData;
 
-    const count = await prisma.item.count();
-    const sku = safeItemData.sku || `SKU-${String(count + 1).padStart(4, '0')}`;
-    const barcode = safeItemData.barcode || `628${String(Date.now()).slice(-9)}`;
+    const itemNameAr = String(safeItemData.nameAr || '').trim();
+    const categoryId = String(safeItemData.categoryId || '').trim();
+    let sku = normalizeItemCode(String(safeItemData.sku || ''));
+    if (!sku) {
+      let nextSku = await prisma.item.count() + 1;
+      do {
+        sku = `SKU-${String(nextSku++).padStart(4, '0')}`;
+      } while ((await prisma.$queryRaw<{ id: string }[]>`
+        SELECT "id" FROM "Item" WHERE LOWER(TRIM("sku")) = LOWER(TRIM(${sku})) LIMIT 1
+      `).length > 0);
+    }
+    let barcode = normalizeItemCode(String(safeItemData.barcode || ''));
+    if (!barcode) {
+      const timeSuffix = String(Date.now()).slice(-9);
+      do {
+        barcode = `628${timeSuffix}${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
+      } while ((await prisma.$queryRaw<{ id: string }[]>`
+        SELECT "id" FROM "Item" WHERE LOWER(TRIM("barcode")) = LOWER(TRIM(${barcode})) LIMIT 1
+      `).length > 0);
+    }
+    const itemDataToCreate = {
+      ...safeItemData,
+      nameAr: itemNameAr,
+      categoryId,
+      sku,
+      barcode,
+      purchasePrice: canManagePrices ? parseFloat(requestedPurchasePrice) || 0 : 0,
+      avgCost: canManagePrices ? parseFloat(requestedPurchasePrice) || 0 : 0,
+      sellPrice: canManagePrices ? parseFloat(requestedSellPrice) || 0 : 0,
+      specialSellPrice: canManagePrices
+        ? parseFloat(requestedSpecialSellPrice) || parseFloat(requestedSellPrice) * 0.9 || 0
+        : 0,
+      minStock: parseInt(itemData.minStock) || 5,
+      maxStock: parseInt(itemData.maxStock) || 100,
+    };
 
-    const item = await prisma.item.create({
-      data: {
-        ...safeItemData,
+    const duplicateReason = await findItemDuplicate(prisma, {
+      sku,
+      barcode,
+      nameAr: itemNameAr,
+      categoryId,
+    });
+    if (duplicateReason) return res.status(409).json({ error: duplicateReason });
+
+    const item = await prisma.$transaction(async (tx) => {
+      const transactionDuplicate = await findItemDuplicate(tx, {
         sku,
         barcode,
-        purchasePrice: canManagePrices ? parseFloat(requestedPurchasePrice) || 0 : 0,
-        avgCost: canManagePrices ? parseFloat(requestedPurchasePrice) || 0 : 0,
-        sellPrice: canManagePrices ? parseFloat(requestedSellPrice) || 0 : 0,
-        specialSellPrice: canManagePrices
-          ? parseFloat(requestedSpecialSellPrice) || parseFloat(requestedSellPrice) * 0.9 || 0
-          : 0,
-        minStock: parseInt(itemData.minStock) || 5,
-        maxStock: parseInt(itemData.maxStock) || 100,
-      },
+        nameAr: itemNameAr,
+        categoryId,
+      });
+      if (transactionDuplicate) throw new Error(transactionDuplicate);
+
+      const createdItem = await tx.item.create({ data: itemDataToCreate });
+      if (initialWarehouseId && initialStock > 0) {
+        await tx.stockBalance.create({
+          data: {
+            itemId: createdItem.id,
+            warehouseId: initialWarehouseId,
+            quantity: parseInt(initialStock),
+          },
+        });
+        await tx.stockTransaction.create({
+          data: {
+            itemId: createdItem.id,
+            warehouseId: initialWarehouseId,
+            type: 'ADJUSTMENT',
+            quantity: parseInt(initialStock),
+            unitCost: createdItem.avgCost,
+            totalCost: parseInt(initialStock) * createdItem.avgCost,
+            referenceType: 'Initial',
+            notes: 'رصيد افتتاحي عند تعريف الصنف',
+          },
+        });
+      }
+      return createdItem;
     });
-
-    // If initial stock is specified
-    if (initialWarehouseId && initialStock > 0) {
-      await prisma.stockBalance.create({
-        data: {
-          itemId: item.id,
-          warehouseId: initialWarehouseId,
-          quantity: parseInt(initialStock),
-        },
-      });
-
-      await prisma.stockTransaction.create({
-        data: {
-          itemId: item.id,
-          warehouseId: initialWarehouseId,
-          type: 'ADJUSTMENT',
-          quantity: parseInt(initialStock),
-          unitCost: item.avgCost,
-          totalCost: parseInt(initialStock) * item.avgCost,
-          referenceType: 'Initial',
-          notes: 'رصيد افتتاحي عند تعريف الصنف',
-        },
-      });
-    }
 
     await logAudit({ action: 'CREATE', entity: 'Item', entityId: item.id, details: `إضافة صنف جديد: ${item.nameAr}` });
 
     res.status(201).json(hideUnauthorizedPrices(item, authenticatedReq));
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const duplicateMessage = getUniqueConstraintMessage(error);
+    res.status(duplicateMessage ? 409 : 400).json({ error: duplicateMessage || error.message });
   }
 });
 
@@ -376,21 +487,43 @@ router.put('/:id', authenticate, loadUserPermissions, requirePermission('manage_
       delete updateData.specialSellPrice;
     }
     delete updateData.avgCost;
-    const item = await prisma.item.update({
-      where: { id: req.params.id },
-      data: {
-        ...updateData,
-        purchasePrice: updateData.purchasePrice === undefined ? undefined : parseFloat(updateData.purchasePrice),
-        sellPrice: updateData.sellPrice === undefined ? undefined : parseFloat(updateData.sellPrice),
-        specialSellPrice: updateData.specialSellPrice === undefined ? undefined : parseFloat(updateData.specialSellPrice),
-      },
+    const currentItem = await prisma.item.findUnique({ where: { id: req.params.id } });
+    if (!currentItem) return res.status(404).json({ error: 'الصنف غير موجود' });
+
+    const duplicateCandidate = {
+      id: currentItem.id,
+      sku: normalizeItemCode(String(updateData.sku ?? currentItem.sku)),
+      barcode: updateData.barcode === undefined
+        ? currentItem.barcode
+        : normalizeItemCode(String(updateData.barcode || '')) || null,
+      nameAr: String(updateData.nameAr ?? currentItem.nameAr).trim(),
+      categoryId: String(updateData.categoryId ?? currentItem.categoryId),
+    };
+    const duplicateReason = await findItemDuplicate(prisma, duplicateCandidate);
+    if (duplicateReason) return res.status(409).json({ error: duplicateReason });
+
+    const item = await prisma.$transaction(async (tx) => {
+      const transactionDuplicate = await findItemDuplicate(tx, duplicateCandidate);
+      if (transactionDuplicate) throw new Error(transactionDuplicate);
+      return tx.item.update({
+        where: { id: req.params.id },
+        data: {
+          ...updateData,
+          ...(updateData.sku !== undefined ? { sku: duplicateCandidate.sku } : {}),
+          ...(updateData.barcode !== undefined ? { barcode: duplicateCandidate.barcode } : {}),
+          purchasePrice: updateData.purchasePrice === undefined ? undefined : parseFloat(updateData.purchasePrice),
+          sellPrice: updateData.sellPrice === undefined ? undefined : parseFloat(updateData.sellPrice),
+          specialSellPrice: updateData.specialSellPrice === undefined ? undefined : parseFloat(updateData.specialSellPrice),
+        },
+      });
     });
 
     await logAudit({ action: 'UPDATE', entity: 'Item', entityId: item.id, details: `تحديث بيانات الصنف: ${item.nameAr}` });
 
     res.json(hideUnauthorizedPrices(item, authenticatedReq));
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const duplicateMessage = getUniqueConstraintMessage(error);
+    res.status(duplicateMessage ? 409 : 400).json({ error: duplicateMessage || error.message });
   }
 });
 

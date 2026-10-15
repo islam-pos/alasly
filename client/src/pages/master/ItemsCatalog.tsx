@@ -47,6 +47,17 @@ const itemExportColumns = [
   ['المخزون المتاح', (item: any) => item.availableQuantity ?? item.totalQuantity],
 ] as const;
 
+const normalizeItemName = (value: string) => value
+  .normalize('NFKC')
+  .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+  .replace(/[آأإ]/g, 'ا')
+  .replace(/ى/g, 'ي')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLocaleLowerCase();
+
+const normalizeItemCode = (value: string) => value.normalize('NFKC').trim().toLocaleUpperCase();
+
 export const ItemsCatalog: React.FC = () => {
   const { hasPermission } = useAuth();
   const canManagePrices = hasPermission('manage_item_prices');
@@ -133,6 +144,24 @@ export const ItemsCatalog: React.FC = () => {
     }
     if (editingItemId && !formData.sku.trim()) {
       error('كود SKU مطلوب عند تعديل الصنف');
+      return;
+    }
+    const otherItems = items.filter((item) => item.id !== editingItemId);
+    const sku = normalizeItemCode(formData.sku);
+    const barcode = normalizeItemCode(formData.barcode);
+    const nameAr = normalizeItemName(formData.nameAr);
+    if (sku && otherItems.some((item) => normalizeItemCode(String(item.sku || '')) === sku)) {
+      error('كود SKU مستخدم بالفعل في صنف آخر');
+      return;
+    }
+    if (barcode && otherItems.some((item) => normalizeItemCode(String(item.barcode || '')) === barcode)) {
+      error('الباركود مستخدم بالفعل في صنف آخر');
+      return;
+    }
+    if (otherItems.some((item) =>
+      item.categoryId === formData.categoryId && normalizeItemName(String(item.nameAr || '')) === nameAr,
+    )) {
+      error('اسم الصنف موجود بالفعل داخل التصنيف المحدد');
       return;
     }
 
