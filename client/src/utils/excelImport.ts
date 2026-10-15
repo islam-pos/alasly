@@ -89,7 +89,7 @@ const readXlsxRows = (buffer: ArrayBuffer) => {
     : [];
 
   return [...worksheet.getElementsByTagName('sheetData')[0]?.getElementsByTagName('row') || []]
-    .slice(0, MAX_ROWS + 1)
+    .slice(0, MAX_ROWS + 2)
     .map((row) => {
       const values: string[] = [];
       for (const cell of [...row.getElementsByTagName('c')]) {
@@ -111,7 +111,7 @@ const readSpreadsheetXmlRows = (text: string) => {
     .find((element) => element.localName === 'Worksheet');
   const sourceRows = [...(worksheet ? worksheet.getElementsByTagName('*') : [])]
     .filter((element) => element.localName === 'Row')
-    .slice(0, MAX_ROWS + 1);
+    .slice(0, MAX_ROWS + 2);
   const rows: string[][] = [];
   let nextRow = 0;
   for (const row of sourceRows) {
@@ -136,6 +136,21 @@ const readSpreadsheetXmlRows = (text: string) => {
   return rows.map((row) => row || []);
 };
 
+const readLegacyBinaryXlsRows = async (buffer: ArrayBuffer) => {
+  const XLSX = await import('@e965/xlsx');
+  const workbook = XLSX.read(buffer, { type: 'array', sheetRows: MAX_ROWS + 2 });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
+  if (!sheet) throw new Error('لم يتم العثور على ورقة داخل ملف Excel');
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    raw: true,
+    defval: '',
+    blankrows: true,
+  });
+  return rows.map((row) => row.map((value) => value === null || value === undefined ? '' : String(value)));
+};
+
 export const readExcelRows = async (file: File) => {
   if (file.size > MAX_FILE_BYTES) throw new Error('حجم الملف يتجاوز الحد المسموح (10 ميجابايت)');
   const extension = file.name.toLowerCase().split('.').pop();
@@ -143,12 +158,17 @@ export const readExcelRows = async (file: File) => {
   if (extension === 'xlsx') {
     rows = readXlsxRows(await file.arrayBuffer());
   } else if (extension === 'xls') {
-    rows = readSpreadsheetXmlRows(await file.text());
+    const prefix = await file.slice(0, 1024).text();
+    if (/^\uFEFF?\s*(?:<\?xml\b|<Workbook\b)/i.test(prefix)) {
+      rows = readSpreadsheetXmlRows(await file.text());
+    } else {
+      rows = await readLegacyBinaryXlsRows(await file.arrayBuffer());
+    }
   } else {
     throw new Error('صيغة الملف غير مدعومة. استخدم ملف .xlsx أو ملف Excel .xls تم تنزيله من النظام');
   }
 
-  if (rows.length > MAX_ROWS) throw new Error(`الحد الأقصى للاستيراد هو ${MAX_ROWS} صنف في المرة الواحدة`);
+  if (rows.length > MAX_ROWS + 1) throw new Error(`الحد الأقصى للاستيراد هو ${MAX_ROWS} صنف في المرة الواحدة`);
   if (!rows.length || !rows[0].some((cell) => cell.trim())) throw new Error('ورقة Excel فارغة');
   return rows;
 };

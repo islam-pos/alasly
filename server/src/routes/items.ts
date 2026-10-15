@@ -191,6 +191,7 @@ router.post('/import', async (req, res) => {
               unitId: unit.id,
               manufacturer: String(row.manufacturer || '').trim() || null,
               countryOfOrigin: String(row.countryOfOrigin || '').trim() || null,
+              fitment: String(row.fitment || '').trim() || null,
               defaultLocation: String(row.defaultLocation || '').trim() || null,
               purchasePrice,
               avgCost: purchasePrice,

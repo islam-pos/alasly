@@ -325,19 +325,24 @@ export const ItemsCatalog: React.FC = () => {
     setImporting(true);
     try {
       const rows = await readExcelRows(file);
-      const normalizedHeaders = rows[0].map((header) =>
-        header.normalize('NFKC').replace(/[\u200B-\u200F\uFEFF]/g, '').trim().toLocaleLowerCase(),
-      );
+      const normalizeHeader = (header: string) => header
+        .normalize('NFKC')
+        .replace(/[\u200B-\u200F\uFEFF]/g, '')
+        .replace(/[\u064B-\u065F\u0670]/g, '')
+        .trim()
+        .toLocaleLowerCase();
+      const normalizedHeaders = rows[0].map(normalizeHeader);
       const headerAliases: Record<string, string[]> = {
         sku: ['sku', 'كود الصنف', 'كود sku', 'كود الصنف sku', 'item code'],
-        nameAr: ['اسم الصنف', 'الاسم العربي', 'namear', 'item name', 'name'],
+        nameAr: ['اسم الصنف', 'الاسم العربي', 'اسم الصنف العربي', 'اسم المنتج', 'namear', 'item name', 'name'],
         nameEn: ['الاسم الإنجليزي', 'الاسم الانجليزي', 'nameen', 'english name'],
         barcode: ['الباركود', 'barcode', 'bar code'],
         partNumber: ['رقم القطعة', 'part number', 'partnumber', 'oem', 'رقم الصنف'],
-        category: ['التصنيف', 'category', 'الفئة'],
-        unit: ['الوحدة', 'unit', 'وحدة القياس'],
+        category: ['التصنيف', 'اسم التصنيف', 'category', 'category name', 'الفئة'],
+        unit: ['الوحدة', 'unit', 'unit name', 'وحدة القياس'],
         manufacturer: ['الشركة المصنعة', 'manufacturer', 'المصنع'],
         countryOfOrigin: ['بلد المنشأ', 'country of origin', 'countryoforigin', 'بلد الصنع'],
+        fitment: ['توافق المركبات', 'توافق السيارة', 'vehicle fitment', 'fitment'],
         defaultLocation: ['موقع التخزين', 'موقع الرف', 'location', 'الموقع'],
         purchasePrice: ['سعر الشراء', 'purchase price', 'purchaseprice', 'تكلفة الشراء'],
         sellPrice: ['سعر البيع', 'sell price', 'sellprice', 'سعر التجزئة'],
@@ -350,7 +355,7 @@ export const ItemsCatalog: React.FC = () => {
       const columnIndices = Object.fromEntries(
         Object.entries(headerAliases).map(([field, aliases]) => [
           field,
-          normalizedHeaders.findIndex((header) => aliases.includes(header)),
+          normalizedHeaders.findIndex((header) => aliases.some((alias) => normalizeHeader(alias) === header)),
         ]),
       );
       const missingHeaders = ['sku', 'nameAr', 'category', 'unit'].filter((field) => columnIndices[field] < 0);
