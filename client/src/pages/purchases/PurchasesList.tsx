@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { exportToExcel, exportToPdf, formatExportDate } from '../../utils/exports';
 
 export const PurchasesList: React.FC = () => {
@@ -34,6 +35,8 @@ export const PurchasesList: React.FC = () => {
   const [shortageModalOpen, setShortageModalOpen] = useState(false);
   const [shortageQuantities, setShortageQuantities] = useState<Record<string, number>>({});
   const [shortageSubmitting, setShortageSubmitting] = useState(false);
+  const [priceHistory, setPriceHistory] = useState<any>(null);
+  const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
   const [barcodeInput, setBarcodeInput] = useState('');
   const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
   const [cameraError, setCameraError] = useState('');
@@ -54,6 +57,7 @@ export const PurchasesList: React.FC = () => {
 
   const [searchParams] = useSearchParams();
   const { success, error } = useToast();
+  const { user } = useAuth();
 
   useEffect(() => {
     loadData();
@@ -220,16 +224,7 @@ export const PurchasesList: React.FC = () => {
         items: validItems,
       });
 
-      success('تم اعتماد فاتورة المشتريات وزيادة رصيد المخزن بنجاح!');
-      if (createdInvoice.whatsappNotification?.sent) {
-        success('تم إرسال نسخة PDF للمورد عبر واتساب');
-      } else if (createdInvoice.whatsappNotification?.reason === 'not_configured') {
-        error('لم تُرسل الفاتورة: إعدادات WhatsApp Cloud API غير مكتملة');
-      } else if (createdInvoice.whatsappNotification?.reason === 'no_supplier_or_opt_in') {
-        error('لم تُرسل الفاتورة: رقم واتساب المورد أو موافقته على الاستلام غير مسجل');
-      } else if (createdInvoice.whatsappNotification?.error) {
-        error(`تعذر إرسال فاتورة المورد عبر واتساب: ${createdInvoice.whatsappNotification.error}`);
-      }
+      success(`تم حفظ الفاتورة ${createdInvoice.invoiceNumber} كمسودة؛ المخزون والحسابات لن يتغيرا قبل اعتماد مستخدم آخر`);
       setModalOpen(false);
       setInvoiceItems([{ itemId: '', quantity: 10, unitPrice: 0 }]);
       setSupplierInvoiceNo('');
@@ -238,6 +233,33 @@ export const PurchasesList: React.FC = () => {
       error(err.message || 'فشل اعتماد فاتورة المشتريات');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleApproveInvoice = async (invoiceId: string) => {
+    try {
+      const approvedInvoice = await api.approvePurchaseInvoice(invoiceId);
+      success(`تم اعتماد الفاتورة ${approvedInvoice.invoiceNumber} وتحديث المخزون والحسابات`);
+      if (approvedInvoice.whatsappNotification?.sent) {
+        success('تم إرسال نسخة PDF للمورد عبر واتساب');
+      } else if (approvedInvoice.whatsappNotification?.error) {
+        error(`تعذر إرسال فاتورة المورد عبر واتساب: ${approvedInvoice.whatsappNotification.error}`);
+      }
+      await loadData();
+    } catch (err: any) {
+      error(err.message || 'تعذر اعتماد فاتورة المشتريات');
+    }
+  };
+
+  const handleRejectInvoice = async (invoiceId: string) => {
+    const reason = window.prompt('اكتب سبب رفض فاتورة المشتريات');
+    if (!reason?.trim()) return;
+    try {
+      await api.rejectPurchaseInvoice(invoiceId, reason.trim());
+      success('تم رفض الفاتورة دون التأثير على المخزون أو الحسابات');
+      await loadData();
+    } catch (err: any) {
+      error(err.message || 'تعذر رفض فاتورة المشتريات');
     }
   };
 
@@ -292,6 +314,17 @@ export const PurchasesList: React.FC = () => {
       error(err.message || 'فشل إنشاء طلب النواقص');
     } finally {
       setShortageSubmitting(false);
+    }
+  };
+
+  const openPriceHistory = async (itemId: string) => {
+    setPriceHistoryLoading(true);
+    try {
+      setPriceHistory(await api.getSupplierPriceHistory(itemId));
+    } catch (err: any) {
+      error(err.message || 'تعذر تحميل مقارنة الأسعار');
+    } finally {
+      setPriceHistoryLoading(false);
     }
   };
 
@@ -390,18 +423,19 @@ export const PurchasesList: React.FC = () => {
                 <th className="p-3.5">طريقة الدفع</th>
                 <th className="p-3.5">الحالة</th>
                 <th className="p-3.5">التاريخ</th>
+                <th className="p-3.5">الإجراء</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-slate-400">
+                  <td colSpan={11} className="p-8 text-center text-slate-400">
                     جاري تحميل فواتير المشتريات...
                   </td>
                 </tr>
               ) : filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-12 text-center text-slate-400">
+                  <td colSpan={11} className="p-12 text-center text-slate-400">
                     لا توجد فواتير مشتريات
                   </td>
                 </tr>
@@ -420,11 +454,23 @@ export const PurchasesList: React.FC = () => {
                     <td className="p-3.5 font-semibold text-slate-600">{inv.paymentMethod}</td>
                     <td className="p-3.5">
                       <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                        {inv.status}
+                        {inv.status === 'DRAFT' ? 'مسودة بانتظار الاعتماد' : inv.status}
                       </span>
                     </td>
                     <td className="p-3.5 text-slate-500 font-mono text-[11px]">
                       {new Date(inv.date).toLocaleDateString('ar-SA')}
+                    </td>
+                    <td className="p-3.5">
+                      {inv.status === 'DRAFT' && inv.createdById !== user?.id && (
+                        <div className="flex gap-1">
+                          <button onClick={() => handleApproveInvoice(inv.id)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">
+                            اعتماد
+                          </button>
+                          <button onClick={() => handleRejectInvoice(inv.id)} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white">
+                            رفض
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -465,7 +511,7 @@ export const PurchasesList: React.FC = () => {
             <div className="max-h-80 overflow-auto rounded-xl border">
               <table className="w-full text-right text-xs">
                 <thead className="sticky top-0 bg-slate-50">
-                  <tr><th className="p-3">الصنف</th><th className="p-3">المتاح</th><th className="p-3">حد الطلب</th><th className="p-3">كمية الطلب</th></tr>
+                  <tr><th className="p-3">الصنف</th><th className="p-3">المتاح</th><th className="p-3">حد الطلب</th><th className="p-3">كمية الطلب المقترحة</th><th className="p-3">الأسعار</th></tr>
                 </thead>
                 <tbody className="divide-y">
                   {lowStockItems.map((item) => (
@@ -486,9 +532,14 @@ export const PurchasesList: React.FC = () => {
                           className="w-24 rounded-lg border px-2 py-1 text-center"
                         />
                       </td>
+                      <td className="p-3">
+                        <button type="button" onClick={() => void openPriceHistory(item.id)} className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700">
+                          مقارنة الموردين
+                        </button>
+                      </td>
                     </tr>
                   ))}
-                  {!lowStockItems.length && <tr><td colSpan={4} className="p-6 text-center text-slate-500">لا توجد أصناف تحت حد الطلب.</td></tr>}
+                  {!lowStockItems.length && <tr><td colSpan={5} className="p-6 text-center text-slate-500">لا توجد أصناف تحت حد الطلب.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -499,6 +550,31 @@ export const PurchasesList: React.FC = () => {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {(priceHistory || priceHistoryLoading) && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="max-h-[80vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="font-black text-slate-900">مقارنة أسعار الموردين</h2>
+                {priceHistory?.item && <p className="mt-1 text-xs text-slate-500">{priceHistory.item.nameAr} · {priceHistory.item.sku}</p>}
+              </div>
+              <button onClick={() => setPriceHistory(null)} aria-label="إغلاق" className="p-2 text-slate-500"><X className="h-5 w-5" /></button>
+            </div>
+            {priceHistoryLoading ? <p className="p-8 text-center text-slate-500">جارٍ تحميل الأسعار...</p> : (
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-50"><tr><th className="p-3">المورد</th><th className="p-3">رقم الفاتورة</th><th className="p-3">التاريخ</th><th className="p-3">الكمية</th><th className="p-3">سعر الوحدة</th></tr></thead>
+                <tbody className="divide-y">
+                  {priceHistory?.prices?.map((price: any, index: number) => <tr key={`${price.invoiceNumber}-${index}`}>
+                    <td className="p-3 font-bold">{price.supplier.name}</td><td className="p-3 font-mono">{price.invoiceNumber}</td><td className="p-3">{new Date(price.date).toLocaleDateString('ar-EG')}</td><td className="p-3">{price.quantity}</td><td className="p-3 font-bold">{Number(price.unitPrice).toLocaleString()} ج.م</td>
+                  </tr>)}
+                  {!priceHistory?.prices?.length && <tr><td colSpan={5} className="p-8 text-center text-slate-500">لا توجد فواتير مشتريات معتمدة لهذا الصنف</td></tr>}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       )}
 

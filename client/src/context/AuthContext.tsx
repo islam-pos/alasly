@@ -18,7 +18,8 @@ interface AuthContextValue {
   user: User | null;
   token: string | null;
   loading: boolean;
-  login: (credentials: any) => Promise<void>;
+  login: (credentials: any) => Promise<any>;
+  completeLogin: (response: { token: string; user: User }) => void;
   logout: () => void;
   hasPermission: (perm: string) => boolean;
 }
@@ -61,12 +62,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const res = await api.login(credentials);
-      localStorage.setItem('autocare_token', res.token);
-      setToken(res.token);
-      setUser(res.user);
+      if (res.token && res.user) completeLogin(res);
+      return res;
     } finally {
       setLoading(false);
     }
+  };
+
+  const completeLogin = (res: { token: string; user: User }) => {
+    localStorage.setItem('autocare_token', res.token);
+    setToken(res.token);
+    setUser(res.user);
   };
 
   const logout = () => {
@@ -82,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, hasPermission }}>
+    <AuthContext.Provider value={{ user, token, loading, login, completeLogin, logout, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );

@@ -3,27 +3,58 @@ import { useNavigate } from 'react-router-dom';
 import { Wrench, Lock, User as UserIcon, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { api } from '../services/api';
 
 export const Login: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaStep, setMfaStep] = useState<'login' | 'verify' | 'enroll'>('login');
+  const [setupToken, setSetupToken] = useState('');
+  const [mfaSecret, setMfaSecret] = useState('');
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const { login } = useAuth();
+  const { login, completeLogin } = useAuth();
   const { success, error } = useToast();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password) {
+    if (mfaStep === 'login' && (!username || !password)) {
       error('يرجى إدخال اسم المستخدم وكلمة المرور');
       return;
     }
 
     setSubmitting(true);
     try {
-      await login({ username, password });
-      success('تم تسجيل الدخول بنجاح');
-      navigate('/');
+      if (mfaStep === 'enroll') {
+        const response = await api.enableMfa(setupToken, mfaSecret, mfaCode);
+        completeLogin(response);
+        success('تم تفعيل المصادقة الثنائية وتسجيل الدخول بنجاح');
+        navigate('/');
+        return;
+      }
+      const response = await login({
+        username,
+        password,
+        ...(mfaStep === 'verify' ? { mfaCode } : {}),
+      });
+      if (response.mfaSetupRequired) {
+        setSetupToken(response.setupToken);
+        const setup = await api.setupMfa(response.setupToken);
+        setMfaSecret(setup.secret);
+        setQrCodeDataUrl(setup.qrCodeDataUrl);
+        setMfaStep('enroll');
+        success('امسح رمز QR بتطبيق المصادقة ثم أدخل الرمز الظاهر لإكمال الإعداد');
+      } else if (response.mfaRequired) {
+        setMfaStep('verify');
+        setMfaCode('');
+      } else if (response.token) {
+        success('تم تسجيل الدخول بنجاح');
+        navigate('/');
+      } else {
+        throw new Error('استجابة تسجيل الدخول غير مكتملة');
+      }
     } catch (err: any) {
       error(err.message || 'فشل تسجيل الدخول');
     } finally {
@@ -48,8 +79,18 @@ export const Login: React.FC = () => {
           </p>
         </div>
 
+        {mfaStep === 'enroll' && (
+          <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-center">
+            <p className="mb-3 text-sm font-bold text-slate-800">إعداد المصادقة الثنائية لمدير النظام</p>
+            {qrCodeDataUrl && <img src={qrCodeDataUrl} alt="رمز إعداد المصادقة الثنائية" className="mx-auto mb-3 h-44 w-44" />}
+            <p className="text-xs text-slate-600">أو أدخل المفتاح يدوياً في تطبيق Authenticator</p>
+            <code className="mt-1 inline-block select-all rounded bg-white px-2 py-1 text-sm font-bold tracking-widest">{mfaSecret}</code>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
+          {mfaStep !== 'enroll' && (
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">اسم المستخدم</label>
             <div className="relative">
@@ -63,7 +104,9 @@ export const Login: React.FC = () => {
               <UserIcon className="w-5 h-5 text-slate-400 absolute right-3 top-3.5" />
             </div>
           </div>
+          )}
 
+          {mfaStep !== 'enroll' && (
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">كلمة المرور</label>
             <div className="relative">
@@ -77,7 +120,25 @@ export const Login: React.FC = () => {
               <Lock className="w-5 h-5 text-slate-400 absolute right-3 top-3.5" />
             </div>
           </div>
+          )}
 
+            {mfaStep !== 'login' && (
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-slate-700">
+                  {mfaStep === 'enroll' ? 'رمز التطبيق لإكمال التفعيل' : 'رمز المصادقة الثنائية'}
+                </label>
+                <input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="000000"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center font-mono text-lg tracking-[0.4em] text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+            )}
           <button
             type="submit"
             disabled={submitting}
@@ -87,7 +148,7 @@ export const Login: React.FC = () => {
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : (
               <>
-                <span>تسجيل الدخول إلى النظام</span>
+                <span>{mfaStep === 'enroll' ? 'تفعيل المصادقة وإكمال الدخول' : mfaStep === 'verify' ? 'التحقق والدخول' : 'تسجيل الدخول إلى النظام'}</span>
                 <ArrowLeft className="w-4 h-4" />
               </>
             )}

@@ -10,6 +10,7 @@ import {
   startTelegramQrPairing,
   submitTelegramQrPassword,
 } from '../services/telegramQr';
+import { getOffsiteBackupStatus } from '../services/offsiteBackups';
 
 const router = Router();
 
@@ -32,6 +33,49 @@ const requireAdmin = async (req: AuthenticatedRequest, res: import('express').Re
     return false;
   }
 };
+
+router.get('/operations/health', async (req, res) => {
+  if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    const [pendingNotifications, dueNotifications, oldestDue, offsite, integrations] = await Promise.all([
+      prisma.notificationDelivery.count({ where: { status: 'PENDING' } }),
+      prisma.notificationDelivery.count({ where: { status: 'PENDING', nextAttemptAt: { lte: new Date() } } }),
+      prisma.notificationDelivery.findFirst({
+        where: { status: 'PENDING', nextAttemptAt: { lte: new Date() } },
+        orderBy: { nextAttemptAt: 'asc' },
+        select: { nextAttemptAt: true },
+      }),
+      Promise.resolve(getOffsiteBackupStatus()),
+      getIntegrationStatus(),
+    ]);
+    res.json({
+      checkedAt: new Date().toISOString(),
+      uptimeSeconds: Math.floor(process.uptime()),
+      services: {
+        api: { status: 'HEALTHY' },
+        database: { status: 'HEALTHY' },
+        offsiteBackups: {
+          status: offsite.configured ? 'CONFIGURED' : 'NOT_CONFIGURED',
+          ...offsite,
+        },
+        notifications: {
+          status: dueNotifications > 0 ? 'NEEDS_ATTENTION' : 'HEALTHY',
+          pending: pendingNotifications,
+          due: dueNotifications,
+          oldestDueAt: oldestDue?.nextAttemptAt || null,
+        },
+        messaging: {
+          whatsapp: integrations.whatsapp.connected ? 'CONNECTED' : 'DISCONNECTED',
+          telegram: integrations.telegram.connected ? 'CONNECTED' : 'DISCONNECTED',
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Failed to load operations health:', error);
+    res.status(500).json({ error: 'تعذر تحميل حالة تشغيل النظام' });
+  }
+});
 
 router.get('/integrations', async (req, res) => {
   if (!await requireAdmin(req as AuthenticatedRequest, res)) return;

@@ -215,6 +215,16 @@ const migrate = async () => {
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "Supplier_customerId_key" ON "Supplier"("customerId")`;
   await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "CashTransaction_customerId_idx" ON "CashTransaction"("customerId")`;
   await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "CashTransaction_supplierId_idx" ON "CashTransaction"("supplierId")`;
+  await ensureColumn('User', 'failedLoginAttempts', 'INTEGER NOT NULL DEFAULT 0');
+  await ensureColumn('User', 'loginLockedUntil', 'DATETIME');
+  await ensureColumn('User', 'mfaSecret', 'TEXT');
+  await ensureColumn('User', 'mfaEnabled', 'BOOLEAN NOT NULL DEFAULT false');
+  await ensureColumn('PurchaseInvoice', 'approvedById', 'TEXT');
+  await ensureColumn('PurchaseInvoice', 'approvedAt', 'DATETIME');
+  await ensureColumn('InventoryCount', 'reviewedById', 'TEXT');
+  await ensureColumn('InventoryCount', 'reviewedAt', 'DATETIME');
+  await ensureColumn('InventoryCount', 'rejectionReason', 'TEXT');
+  await ensureColumn('InvoicePayment', 'cashTransactionId', 'TEXT');
 };
 
 migrate()

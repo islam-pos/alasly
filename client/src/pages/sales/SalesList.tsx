@@ -42,6 +42,15 @@ export const SalesList: React.FC = () => {
   const [quotationCart, setQuotationCart] = useState<any[]>([]);
   const [convertingQuotationId, setConvertingQuotationId] = useState<string | null>(null);
   const [selectedQuotationForConversion, setSelectedQuotationForConversion] = useState<any>(null);
+  const [paymentInvoice, setPaymentInvoice] = useState<any>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'BANK'>('CASH');
+  const [paymentCashboxId, setPaymentCashboxId] = useState('');
+  const [cashboxes, setCashboxes] = useState<any[]>([]);
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [agingOpen, setAgingOpen] = useState(false);
+  const [agingLoading, setAgingLoading] = useState(false);
+  const [agingRows, setAgingRows] = useState<any[]>([]);
   const [conversionPaymentMethod, setConversionPaymentMethod] = useState<'CASH' | 'CARD' | 'CREDIT' | 'SPLIT'>('CASH');
   const [conversionCashPaid, setConversionCashPaid] = useState(0);
   const [conversionCardPaid, setConversionCardPaid] = useState(0);
@@ -70,6 +79,58 @@ export const SalesList: React.FC = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openPaymentDialog = async (invoice: any) => {
+    setPaymentInvoice(invoice);
+    setPaymentAmount(String(invoice.remainingAmount || ''));
+    setPaymentMethod('CASH');
+    try {
+      const response = await api.getCashboxes();
+      const activeCashboxes = (response.data || []).filter((cashbox: any) => cashbox.active);
+      setCashboxes(activeCashboxes);
+      setPaymentCashboxId(activeCashboxes[0]?.id || '');
+    } catch (loadError: any) {
+      error(loadError.message || 'تعذر تحميل الخزائن');
+    }
+  };
+
+  const submitInvoicePayment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!paymentInvoice) return;
+    const amount = Number(paymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > Number(paymentInvoice.remainingAmount)) {
+      error('أدخل مبلغاً موجباً لا يتجاوز المتبقي على الفاتورة');
+      return;
+    }
+    setSavingPayment(true);
+    try {
+      await api.postInvoicePayment(paymentInvoice.id, {
+        amount,
+        paymentMethod,
+        ...(paymentMethod === 'CASH' ? { cashboxId: paymentCashboxId } : {}),
+      });
+      success('تم تسجيل التحصيل وتحديث رصيد العميل');
+      setPaymentInvoice(null);
+      await loadInvoices();
+    } catch (paymentError: any) {
+      error(paymentError.message || 'تعذر تسجيل التحصيل');
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
+  const openAgingReport = async () => {
+    setAgingOpen(true);
+    setAgingLoading(true);
+    try {
+      const response = await api.getReceivablesAging();
+      setAgingRows(response.data || []);
+    } catch (agingError: any) {
+      error(agingError.message || 'تعذر تحميل أعمار الديون');
+    } finally {
+      setAgingLoading(false);
     }
   };
 
@@ -273,6 +334,9 @@ export const SalesList: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <button onClick={() => void openAgingReport()} className="flex items-center gap-2 rounded-xl bg-amber-600 px-3 py-2.5 text-xs font-bold text-white">
+            <DollarSign className="h-4 w-4" /> أعمار مديونية العملاء
+          </button>
           <button onClick={() => exportInvoices('excel')} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white">
             <Download className="h-4 w-4" /> Excel
           </button>
@@ -426,6 +490,15 @@ export const SalesList: React.FC = () => {
                         <RotateCcw className="w-3.5 h-3.5" />
                       </button>
                     )}
+                    {inv.customerId && Number(inv.remainingAmount) > 0 && ['POSTED', 'PARTIALLY_PAID'].includes(inv.status) && (
+                      <button
+                        onClick={() => void openPaymentDialog(inv)}
+                        className="rounded-lg bg-emerald-50 p-1.5 text-emerald-700 hover:bg-emerald-100"
+                        title="تسجيل تحصيل"
+                      >
+                        <DollarSign className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -463,6 +536,7 @@ export const SalesList: React.FC = () => {
                 </label>
               </div>
             )}
+
             <p className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-800">
               عند التأكيد سيتحقق النظام من توفر المخزون ويخصم الأصناف، ثم يصدر الفاتورة ويسجل الدفعة المختارة.
             </p>
@@ -694,6 +768,74 @@ export const SalesList: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {paymentInvoice && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <form onSubmit={submitInvoicePayment} className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-black text-slate-900">تحصيل فاتورة {paymentInvoice.invoiceNumber}</h2>
+                <p className="mt-1 text-xs text-slate-500">المتبقي: {Number(paymentInvoice.remainingAmount).toLocaleString()} ج.م</p>
+              </div>
+              <button type="button" onClick={() => setPaymentInvoice(null)} aria-label="إغلاق" className="p-2 text-slate-500"><X className="h-5 w-5" /></button>
+            </div>
+            <label className="block text-xs font-bold text-slate-700">
+              مبلغ التحصيل
+              <input type="number" min="0.01" max={paymentInvoice.remainingAmount} step="0.01" required value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm" />
+            </label>
+            <label className="block text-xs font-bold text-slate-700">
+              طريقة الدفع
+              <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as 'CASH' | 'CARD' | 'BANK')} className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm">
+                <option value="CASH">نقدي</option><option value="CARD">بطاقة</option><option value="BANK">تحويل بنكي</option>
+              </select>
+            </label>
+            {paymentMethod === 'CASH' && (
+              <label className="block text-xs font-bold text-slate-700">
+                الخزينة
+                <select required value={paymentCashboxId} onChange={(event) => setPaymentCashboxId(event.target.value)} className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm">
+                  <option value="">اختر الخزينة</option>
+                  {cashboxes.map((cashbox) => <option key={cashbox.id} value={cashbox.id}>{cashbox.name}</option>)}
+                </select>
+              </label>
+            )}
+            <div className="flex justify-end gap-2 border-t pt-4">
+              <button type="button" onClick={() => setPaymentInvoice(null)} className="rounded-xl border px-4 py-2 text-sm">إلغاء</button>
+              <button type="submit" disabled={savingPayment} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{savingPayment ? 'جارٍ الحفظ...' : 'حفظ التحصيل'}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {agingOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="max-h-[85vh] w-full max-w-5xl overflow-auto rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-black text-slate-900">أعمار مديونية العملاء</h2>
+              <button onClick={() => setAgingOpen(false)} aria-label="إغلاق" className="p-2 text-slate-500"><X className="h-5 w-5" /></button>
+            </div>
+            {!agingLoading && agingRows.some((row) => row.over90Days > 0) && (
+              <p role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
+                تنبيه: توجد مديونيات تجاوز عمرها 90 يوماً لدى {agingRows.filter((row) => row.over90Days > 0).length} عميل.
+              </p>
+            )}
+            {agingLoading ? <p className="p-8 text-center text-slate-500">جارٍ تحميل التقرير...</p> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-slate-50"><tr>
+                    <th className="p-3">العميل</th><th className="p-3">حتى 30 يوماً</th><th className="p-3">31-60 يوماً</th><th className="p-3">61-90 يوماً</th><th className="p-3">أكثر من 90 يوماً</th><th className="p-3">الإجمالي</th>
+                  </tr></thead>
+                  <tbody className="divide-y">
+                    {agingRows.map((row) => <tr key={row.customer.id}>
+                      <td className="p-3 font-bold">{row.customer.name}</td><td className="p-3">{row.current.toLocaleString()} ج.م</td><td className="p-3">{row.days31To60.toLocaleString()} ج.م</td><td className="p-3">{row.days61To90.toLocaleString()} ج.م</td><td className="p-3">{row.over90Days.toLocaleString()} ج.م</td><td className="p-3 font-black">{row.total.toLocaleString()} ج.م</td>
+                    </tr>)}
+                    {!agingRows.length && <tr><td colSpan={6} className="p-8 text-center text-slate-500">لا توجد مديونيات مفتوحة</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

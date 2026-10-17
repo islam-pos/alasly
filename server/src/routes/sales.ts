@@ -10,6 +10,163 @@ import { buildSalesReturnSnapshot } from '../services/salesReturns';
 
 const router = Router();
 
+router.get('/receivables/aging', async (req: AuthenticatedRequest, res) => {
+  try {
+    const invoices = await prisma.salesInvoice.findMany({
+      where: {
+        ...branchWhere(req),
+        invoiceType: { not: 'QUOTATION' },
+        remainingAmount: { gt: 0 },
+        status: { in: ['POSTED', 'PARTIALLY_PAID'] },
+        customerId: { not: null },
+      },
+      include: { customer: { select: { id: true, name: true, phone: true } } },
+      orderBy: { date: 'asc' },
+    });
+    const today = Date.now();
+    const customerTotals = new Map<string, any>();
+    for (const invoice of invoices) {
+      if (!invoice.customer) continue;
+      const ageDays = Math.max(0, Math.floor((today - invoice.date.getTime()) / 86_400_000));
+      const total = customerTotals.get(invoice.customer.id) || {
+        customer: invoice.customer,
+        current: 0,
+        days31To60: 0,
+        days61To90: 0,
+        over90Days: 0,
+        total: 0,
+        invoices: [],
+      };
+      const balance = invoice.remainingAmount;
+      if (ageDays <= 30) total.current += balance;
+      else if (ageDays <= 60) total.days31To60 += balance;
+      else if (ageDays <= 90) total.days61To90 += balance;
+      else total.over90Days += balance;
+      total.total += balance;
+      total.invoices.push({
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        date: invoice.date,
+        ageDays,
+        remainingAmount: balance,
+      });
+      customerTotals.set(invoice.customer.id, total);
+    }
+    res.json([...customerTotals.values()].sort((a, b) => b.total - a.total));
+  } catch (error) {
+    console.error('Failed to build receivables aging report:', error);
+    res.status(500).json({ error: 'تعذر تحميل تقرير أعمار مديونية العملاء' });
+  }
+});
+
+router.post('/invoices/:id/payments', async (req: AuthenticatedRequest, res) => {
+  const requestedAmount = Number(req.body?.amount);
+  const amount = Number.isFinite(requestedAmount) ? Math.round(requestedAmount * 100) / 100 : Number.NaN;
+  const paymentMethod = req.body?.paymentMethod;
+  const cashboxId = typeof req.body?.cashboxId === 'string' ? req.body.cashboxId : null;
+  if (!Number.isFinite(amount) || amount <= 0 || !['CASH', 'CARD', 'BANK'].includes(paymentMethod)) {
+    return res.status(400).json({ error: 'قيمة التحصيل وطريقة الدفع غير صالحتين' });
+  }
+  if (paymentMethod === 'CASH' && !cashboxId) {
+    return res.status(400).json({ error: 'اختر الخزينة لاستلام المبلغ النقدي' });
+  }
+
+  try {
+    const payment = await prisma.$transaction(async (tx) => {
+      const invoice = await tx.salesInvoice.findFirst({
+        where: { id: req.params.id, ...branchWhere(req) },
+      });
+      if (!invoice || !invoice.customerId) throw new Error('فاتورة العميل غير موجودة');
+      if (!['POSTED', 'PARTIALLY_PAID'].includes(invoice.status) || invoice.remainingAmount <= 0) {
+        throw new Error('لا توجد مديونية مفتوحة على هذه الفاتورة');
+      }
+      if (amount > invoice.remainingAmount) throw new Error('قيمة التحصيل تتجاوز المتبقي على الفاتورة');
+      if (paymentMethod === 'CASH') {
+        const cashbox = await tx.cashbox.findUnique({ where: { id: cashboxId! } });
+        if (!cashbox?.active) throw new Error('الخزينة غير موجودة أو غير نشطة');
+        if (
+          req.user?.role !== 'admin' &&
+          cashbox.branchId &&
+          cashbox.branchId !== req.user?.branchId
+        ) throw new Error('لا تملك صلاحية التحصيل على خزينة فرع آخر');
+      }
+
+      const remainingAmount = Math.round(Math.max(0, invoice.remainingAmount - amount) * 100) / 100;
+      const nextStatus = remainingAmount === 0 ? 'PAID' : 'PARTIALLY_PAID';
+      let cashTransactionId: string | null = null;
+      if (paymentMethod === 'CASH') {
+        const cashTransaction = await tx.cashTransaction.create({
+          data: {
+            cashboxId: cashboxId!,
+            type: 'RECEIPT',
+            amount,
+            referenceType: 'CUSTOMER_PAYMENT',
+            referenceId: invoice.id,
+            partyType: 'CUSTOMER',
+            customerId: invoice.customerId,
+            description: `تحصيل فاتورة ${invoice.invoiceNumber}`,
+            createdById: req.user?.id,
+          },
+        });
+        await tx.cashbox.update({
+          where: { id: cashboxId! },
+          data: { balance: { increment: amount } },
+        });
+        cashTransactionId = cashTransaction.id;
+      }
+      const createdPayment = await tx.invoicePayment.create({
+        data: {
+          invoiceId: invoice.id,
+          amount,
+          paymentMethod,
+          cashboxId,
+          cashTransactionId,
+          notes: typeof req.body?.notes === 'string' ? req.body.notes.slice(0, 500) : null,
+        },
+      });
+      await tx.salesInvoice.update({
+        where: { id: invoice.id },
+        data: { remainingAmount, status: nextStatus },
+      });
+      await tx.customer.update({
+        where: { id: invoice.customerId },
+        data: { currentBalance: { decrement: amount } },
+      });
+      const debitAccount = paymentMethod === 'CASH' ? '1000' : paymentMethod === 'CARD' ? '1010' : '1020';
+      await postJournalEntry(tx, {
+        journalCode: 'CSH',
+        memo: `تحصيل فاتورة ${invoice.invoiceNumber}`,
+        referenceType: 'InvoicePayment',
+        referenceId: createdPayment.id,
+        branchId: invoice.branchId,
+        lines: [
+          { accountCode: debitAccount, debit: amount, label: `تحصيل ${paymentMethod}` },
+          {
+            accountCode: '1100',
+            credit: amount,
+            label: `تحصيل مديونية ${invoice.invoiceNumber}`,
+            partnerType: 'CUSTOMER',
+            partnerId: invoice.customerId,
+          },
+        ],
+      });
+      return { ...createdPayment, invoiceNumber: invoice.invoiceNumber, remainingAmount };
+    });
+    await logAudit({
+      userId: req.user?.id,
+      action: 'RECEIPT',
+      entity: 'InvoicePayment',
+      entityId: payment.id,
+      details: `تحصيل ${amount} ج.م من فاتورة ${payment.invoiceNumber}`,
+      ipAddress: req.ip,
+    });
+    res.status(201).json(payment);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'تعذر تسجيل التحصيل';
+    res.status(message === 'فاتورة العميل غير موجودة' ? 404 : 400).json({ error: message });
+  }
+});
+
 // --- List Sales Invoices ---
 router.get('/invoices', async (req: AuthenticatedRequest, res) => {
   try {

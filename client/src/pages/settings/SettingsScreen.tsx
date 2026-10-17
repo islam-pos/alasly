@@ -47,8 +47,10 @@ export const SettingsScreen: React.FC = () => {
   const canViewAuditLogs = user?.role === 'admin' || user?.permissions?.includes('view_audit_logs') === true;
   const [activeTab, setActiveTab] = useState<'company' | 'branches' | 'rbac' | 'users' | 'audit' | 'integrations' | 'backups'>('company');
   const [loading, setLoading] = useState(true);
-  const [backups, setBackups] = useState<{ id: string; type: 'daily' | 'manual'; date: string; sizeBytes: number }[]>([]);
+  const [backups, setBackups] = useState<{ id: string; type: 'daily' | 'manual'; date: string; sizeBytes: number; offsiteStatus: string }[]>([]);
   const [restorePending, setRestorePending] = useState(false);
+  const [offsiteStatus, setOffsiteStatus] = useState<{ configured: boolean; encrypted: boolean; bucket: string | null } | null>(null);
+  const [operationsHealth, setOperationsHealth] = useState<any>(null);
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [backupBusy, setBackupBusy] = useState(false);
 
@@ -59,6 +61,8 @@ export const SettingsScreen: React.FC = () => {
   const [permissions, setPermissions] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [permissionReview, setPermissionReview] = useState<any>(null);
+  const [savingPermissionReview, setSavingPermissionReview] = useState(false);
   const [employeeOptions, setEmployeeOptions] = useState<any[]>([]);
   const [userPasswords, setUserPasswords] = useState<Record<string, string>>({});
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
@@ -187,14 +191,41 @@ export const SettingsScreen: React.FC = () => {
         setEmployeeOptions(employeesRes.data);
       })
       .catch((err: any) => showToast(err.response?.data?.error || 'فشل تحميل المستخدمين', 'error'));
+    api.getPermissionReview()
+      .then((response) => setPermissionReview(response.data))
+      .catch((err: any) => showToast(err.message || 'تعذر تحميل تاريخ مراجعة الصلاحيات', 'error'));
   }, [activeTab]);
+
+  const handleMarkPermissionsReviewed = async () => {
+    setSavingPermissionReview(true);
+    try {
+      const response = await api.markPermissionsReviewed();
+      setPermissionReview(response.data);
+      showToast(`تم تسجيل مراجعة صلاحيات ${response.data.activeUsers} حساباً نشطاً`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'تعذر تسجيل مراجعة الصلاحيات', 'error');
+    } finally {
+      setSavingPermissionReview(false);
+    }
+  };
 
   const loadBackups = async () => {
     setLoadingBackups(true);
     try {
-      const response = await api.settings.getBackups();
-      setBackups(response.data.backups);
-      setRestorePending(response.data.restorePending);
+      const [backupResult, healthResult] = await Promise.allSettled([
+        api.settings.getBackups(),
+        api.settings.getOperationsHealth(),
+      ]);
+      if (backupResult.status === 'rejected') throw backupResult.reason;
+      setBackups(backupResult.value.data.backups);
+      setRestorePending(backupResult.value.data.restorePending);
+      setOffsiteStatus(backupResult.value.data.offsite);
+      if (healthResult.status === 'fulfilled') {
+        setOperationsHealth(healthResult.value.data);
+      } else {
+        setOperationsHealth(null);
+        showToast(healthResult.reason?.message || 'تعذر تحميل مراقبة تشغيل النظام', 'error');
+      }
     } catch (err: any) {
       showToast(err.response?.data?.error || err.message || 'تعذر تحميل النسخ الاحتياطية', 'error');
     } finally {
@@ -210,7 +241,13 @@ export const SettingsScreen: React.FC = () => {
     setBackupBusy(true);
     try {
       const response = await api.settings.createManualBackup();
-      showToast('تم إنشاء النسخة الاحتياطية بنجاح', 'success');
+      const remoteStatus = response.data.backup.offsiteStatus;
+      showToast(
+        remoteStatus === 'SYNCED'
+          ? 'تم إنشاء النسخة ومزامنتها مشفرة إلى R2'
+          : 'تم إنشاء النسخة المحلية؛ لم تتم مزامنتها إلى R2',
+        remoteStatus === 'SYNCED' ? 'success' : 'warning',
+      );
       await loadBackups();
       const blob = await api.settings.downloadBackup(response.data.backup.id);
       const url = URL.createObjectURL(blob);
@@ -221,6 +258,19 @@ export const SettingsScreen: React.FC = () => {
       URL.revokeObjectURL(url);
     } catch (err: any) {
       showToast(err.response?.data?.error || err.message || 'تعذر إنشاء أو تنزيل النسخة الاحتياطية', 'error');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleTestOffsiteBackups = async () => {
+    setBackupBusy(true);
+    try {
+      await api.settings.testOffsiteBackups();
+      showToast('اتصال Cloudflare R2 والتشفير يعملان بنجاح', 'success');
+      await loadBackups();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || err.message || 'تعذر التحقق من اتصال R2', 'error');
     } finally {
       setBackupBusy(false);
     }
@@ -896,6 +946,19 @@ export const SettingsScreen: React.FC = () => {
           <p className="text-sm text-slate-600">
             أنشئ الحسابات، اربطها بالموظفين، وحدد الصلاحيات الفردية أو استخدم صلاحيات الدور. كلمات المرور لا تقل عن 16 بايت.
           </p>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div>
+              <div className="font-bold text-amber-900">مراجعة دورية للصلاحيات</div>
+              <p className="mt-1 text-xs text-amber-800">
+                {permissionReview?.reviewedAt
+                  ? `آخر مراجعة بواسطة ${permissionReview.reviewer?.fullName || 'مدير النظام'} في ${new Date(permissionReview.reviewedAt).toLocaleString('ar-EG')}`
+                  : 'لم تُسجل مراجعة سابقة للصلاحيات.'}
+              </p>
+            </div>
+            <button type="button" disabled={savingPermissionReview} onClick={() => void handleMarkPermissionsReviewed()} className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+              {savingPermissionReview ? 'جارٍ التسجيل...' : 'تسجيل اكتمال المراجعة'}
+            </button>
+          </div>
           <div className="overflow-x-auto border rounded-xl">
             <table className="w-full text-right text-sm">
               <thead className="bg-slate-50 text-slate-700 font-bold border-b text-xs">
@@ -1044,6 +1107,34 @@ export const SettingsScreen: React.FC = () => {
 
       {activeTab === 'backups' && user?.role === 'admin' && (
         <section className="space-y-5 rounded-b-2xl border border-slate-200 border-t-0 bg-white p-6">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-bold text-slate-900">مراقبة التشغيل</h2>
+              <span className="text-xs text-slate-500">
+                {operationsHealth?.checkedAt
+                  ? `آخر فحص: ${new Date(operationsHealth.checkedAt).toLocaleString('ar-EG')}`
+                  : 'بيانات المراقبة غير متاحة'}
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {[
+                ['واجهة النظام', operationsHealth?.services?.api?.status === 'HEALTHY' ? 'سليمة' : 'غير متاحة'],
+                ['قاعدة البيانات', operationsHealth?.services?.database?.status === 'HEALTHY' ? 'سليمة' : 'غير متاحة'],
+                ['النسخ الخارجي', operationsHealth?.services?.offsiteBackups?.status === 'CONFIGURED' ? 'مهيأ' : 'غير مهيأ'],
+                ['التنبيهات المعلقة', operationsHealth?.services?.notifications
+                  ? `${operationsHealth.services.notifications.pending} معلقة · ${operationsHealth.services.notifications.due} مستحقة`
+                  : 'غير متاحة'],
+                ['قنوات WhatsApp / Telegram', operationsHealth?.services?.messaging
+                  ? `${operationsHealth.services.messaging.whatsapp === 'CONNECTED' ? 'متصل' : 'غير متصل'} / ${operationsHealth.services.messaging.telegram === 'CONNECTED' ? 'متصل' : 'غير متصل'}`
+                  : 'غير متاحة'],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500">{label}</div>
+                  <div className="mt-1 text-sm font-bold text-slate-800">{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-black text-slate-900">النسخ الاحتياطي والاستعادة</h2>
@@ -1058,8 +1149,21 @@ export const SettingsScreen: React.FC = () => {
               {backupBusy ? 'جارٍ إنشاء النسخة...' : 'إنشاء وتنزيل نسخة الآن'}
             </button>
           </div>
-          <div role="note" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            النسخ المجدولة تُحفظ على وحدة تخزين Railway نفسها؛ نزّل نسخة دورية واحفظها خارج Railway للحماية من فقدان وحدة التخزين.
+          <div className={`rounded-xl border p-4 text-sm ${offsiteStatus?.configured ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-bold">النسخ خارج Railway — Cloudflare R2</div>
+                <p className="mt-1">
+                  {offsiteStatus?.configured
+                    ? `الاتصال مضبوط${offsiteStatus.bucket ? ` إلى ${offsiteStatus.bucket}` : ''}؛ الملفات مشفرة محليًا قبل الرفع.`
+                    : 'لم يتم إعداد R2 بعد. أضف R2_ACCOUNT_ID وR2_BUCKET وR2_ACCESS_KEY_ID وR2_SECRET_ACCESS_KEY وBACKUP_ENCRYPTION_KEY إلى متغيرات Railway.'}
+                </p>
+                {!offsiteStatus?.configured && <p className="mt-1">أنشئ مفتاح تشفير عشوائيًا بطول 32 بايت واحتفظ بنسخة آمنة منه؛ فقدانه يمنع استعادة النسخ الخارجية.</p>}
+              </div>
+              <button type="button" disabled={backupBusy || !offsiteStatus?.configured} onClick={() => void handleTestOffsiteBackups()} className="rounded-lg border border-current px-3 py-2 text-xs font-bold disabled:opacity-50">
+                اختبار الاتصال
+              </button>
+            </div>
           </div>
           {restorePending && (
             <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800">
@@ -1081,7 +1185,12 @@ export const SettingsScreen: React.FC = () => {
                   <tr key={backup.id}>
                     <td className="p-3 font-bold">{backup.type === 'daily' ? 'تلقائية يومية' : 'يدوية'}</td>
                     <td className="p-3">{new Date(backup.date).toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' })}</td>
-                    <td className="p-3">{(backup.sizeBytes / (1024 * 1024)).toFixed(2)} MB</td>
+                    <td className="p-3">
+                      {(backup.sizeBytes / (1024 * 1024)).toFixed(2)} MB
+                      <div className={`mt-1 text-xs ${backup.offsiteStatus === 'SYNCED' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                        {backup.offsiteStatus === 'SYNCED' ? 'نسخة خارجية مشفرة' : 'محلية فقط'}
+                      </div>
+                    </td>
                     <td className="p-3">
                       <div className="flex gap-2">
                         <button type="button" onClick={() => void handleDownloadBackup(backup.id)} className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold">

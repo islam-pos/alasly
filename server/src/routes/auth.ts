@@ -4,6 +4,15 @@ import { prisma } from '../lib/prisma';
 import { authenticate, generateToken, AuthenticatedRequest } from '../middleware/auth';
 import { logAudit } from '../middleware/audit';
 import { availablePermissions } from '../services/permissions';
+import {
+  createMfaOtpAuthUrl,
+  createMfaSecret,
+  createMfaSetupToken,
+  decryptMfaSecret,
+  encryptMfaSecret,
+  readMfaSetupToken,
+  verifyMfaCode,
+} from '../services/mfa';
 
 const router = Router();
 const permissionKeys = new Set<string>(availablePermissions.map(({ key }) => key));
@@ -41,6 +50,43 @@ const validPermissionOverrides = (value: unknown): value is string[] =>
   Array.isArray(value) &&
   value.every((permission) => typeof permission === 'string' && permissionKeys.has(permission));
 
+const registerFailedLogin = async (userId: string) => {
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { failedLoginAttempts: { increment: 1 } },
+  });
+  if (user.failedLoginAttempts < 5) return;
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      failedLoginAttempts: 0,
+      loginLockedUntil: new Date(Date.now() + 15 * 60 * 1000),
+    },
+  });
+};
+
+const loginResponse = (user: any) => ({
+  token: generateToken({
+    id: user.id,
+    username: user.username,
+    role: user.role.name,
+    branchId: user.branchId || undefined,
+  }),
+  user: {
+    id: user.id,
+    username: user.username,
+    fullName: user.fullName,
+    email: user.email,
+    phone: user.phone,
+    role: user.role.name,
+    roleNameAr: user.role.nameAr,
+    permissions: getEffectivePermissions(user.role.permissions, user.permissionOverrides),
+    allowedWarehouseId: user.allowedWarehouseId,
+    branch: user.branch,
+    employee: user.employee,
+  },
+});
+
 // Login
 router.post('/login', async (req, res) => {
   try {
@@ -62,16 +108,32 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'بيانات الدخول غير صحيحة أو الحساب معطل' });
     }
 
+    if (user.loginLockedUntil && user.loginLockedUntil.getTime() > Date.now()) {
+      return res.status(429).json({
+        error: `تم إيقاف تسجيل الدخول مؤقتاً بسبب محاولات فاشلة؛ حاول بعد ${Math.ceil((user.loginLockedUntil.getTime() - Date.now()) / 60_000)} دقيقة`,
+      });
+    }
+
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
+      await registerFailedLogin(user.id);
       return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
     }
 
-    const token = generateToken({
-      id: user.id,
-      username: user.username,
-      role: user.role.name,
-      branchId: user.branchId || undefined,
+    if (user.role.name === 'admin' && !user.mfaEnabled) {
+      return res.json({ mfaSetupRequired: true, setupToken: createMfaSetupToken(user.id) });
+    }
+    if (user.role.name === 'admin' && user.mfaEnabled) {
+      if (typeof req.body?.mfaCode !== 'string') return res.json({ mfaRequired: true });
+      if (!user.mfaSecret || !verifyMfaCode(decryptMfaSecret(user.mfaSecret), req.body.mfaCode)) {
+        await registerFailedLogin(user.id);
+        return res.status(401).json({ mfaRequired: true, error: 'رمز المصادقة الثنائية غير صحيح' });
+      }
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { failedLoginAttempts: 0, loginLockedUntil: null },
     });
 
     await logAudit({
@@ -83,25 +145,113 @@ router.post('/login', async (req, res) => {
       ipAddress: req.ip,
     });
 
-    res.json({
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        fullName: user.fullName,
-        email: user.email,
-        phone: user.phone,
-        role: user.role.name,
-        roleNameAr: user.role.nameAr,
-        permissions: getEffectivePermissions(user.role.permissions, user.permissionOverrides),
-        allowedWarehouseId: user.allowedWarehouseId,
-        branch: user.branch,
-        employee: user.employee,
-      },
-    });
+    res.json(loginResponse(user));
   } catch (error: any) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'حدث خطأ في الخادم أثناء تسجيل الدخول' });
+  }
+});
+
+router.post('/mfa/setup', async (req, res) => {
+  try {
+    const userId = readMfaSetupToken(req.body?.setupToken);
+    if (!userId) return res.status(401).json({ error: 'انتهت صلاحية جلسة إعداد المصادقة؛ سجل الدخول مجدداً' });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true },
+    });
+    if (!user?.active || user.role.name !== 'admin' || user.mfaEnabled) {
+      return res.status(403).json({ error: 'جلسة إعداد المصادقة غير صالحة لهذا الحساب' });
+    }
+    const secret = createMfaSecret();
+    const qr = await createMfaOtpAuthUrl(user.username, secret);
+    res.json({ secret, ...qr });
+  } catch (error) {
+    console.error('Failed to create MFA setup:', error);
+    res.status(500).json({ error: 'تعذر إنشاء إعداد المصادقة الثنائية' });
+  }
+});
+
+router.post('/mfa/enable', async (req, res) => {
+  try {
+    const userId = readMfaSetupToken(req.body?.setupToken);
+    const { secret, code } = req.body || {};
+    if (!userId || typeof secret !== 'string' || !/^[A-Z2-7]{32}$/.test(secret)) {
+      return res.status(400).json({ error: 'بيانات إعداد المصادقة الثنائية غير صالحة أو منتهية' });
+    }
+    if (!verifyMfaCode(secret, code)) return res.status(401).json({ error: 'رمز التطبيق غير صحيح' });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true, branch: true, employee: true },
+    });
+    if (!user?.active || user.role.name !== 'admin' || user.mfaEnabled) {
+      return res.status(403).json({ error: 'لا يمكن تفعيل المصادقة الثنائية لهذا الحساب' });
+    }
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        mfaSecret: encryptMfaSecret(secret),
+        mfaEnabled: true,
+        failedLoginAttempts: 0,
+        loginLockedUntil: null,
+      },
+    });
+    await logAudit({
+      userId: user.id,
+      action: 'MFA_ENABLED',
+      entity: 'User',
+      entityId: user.id,
+      details: 'تفعيل المصادقة الثنائية لمدير النظام',
+      ipAddress: req.ip,
+    });
+    res.json(loginResponse(user));
+  } catch (error) {
+    console.error('Failed to enable MFA:', error);
+    res.status(500).json({ error: 'تعذر تفعيل المصادقة الثنائية' });
+  }
+});
+
+router.get('/permissions/review', authenticate, async (req: AuthenticatedRequest, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const review = await prisma.auditLog.findFirst({
+      where: { entity: 'PermissionReview', action: 'PERMISSIONS_REVIEW' },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        createdAt: true,
+        user: { select: { id: true, fullName: true } },
+      },
+    });
+    res.json({ reviewedAt: review?.createdAt || null, reviewer: review?.user || null });
+  } catch (error) {
+    console.error('Failed to load permission review status:', error);
+    res.status(500).json({ error: 'تعذر تحميل حالة مراجعة الصلاحيات' });
+  }
+});
+
+router.post('/permissions/review', authenticate, async (req: AuthenticatedRequest, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const [activeUsers, reviewer] = await Promise.all([
+      prisma.user.count({ where: { active: true } }),
+      prisma.user.findUnique({ where: { id: req.user!.id }, select: { fullName: true } }),
+    ]);
+    if (!reviewer) return res.status(404).json({ error: 'المستخدم المراجع غير موجود' });
+    await logAudit({
+      userId: req.user!.id,
+      action: 'PERMISSIONS_REVIEW',
+      entity: 'PermissionReview',
+      details: `مراجعة صلاحيات الأدوار والمستخدمين النشطين (${activeUsers} حساباً)`,
+      ipAddress: req.ip,
+    });
+    res.status(201).json({
+      reviewedAt: new Date(),
+      reviewer: { id: req.user!.id, fullName: reviewer.fullName },
+      activeUsers,
+    });
+  } catch (error) {
+    console.error('Failed to record permission review:', error);
+    res.status(500).json({ error: 'تعذر تسجيل مراجعة الصلاحيات' });
   }
 });
 

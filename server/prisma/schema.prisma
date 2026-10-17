@@ -183,6 +183,10 @@ model User {
   allowedCashboxId   String?
   permissionOverrides String?
   active             Boolean   @default(true)
+  failedLoginAttempts Int      @default(0)
+  loginLockedUntil   DateTime?
+  mfaSecret          String?
+  mfaEnabled         Boolean   @default(false)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   auditLogs          AuditLog[]
@@ -559,6 +563,8 @@ model PurchaseInvoice {
   remainingAmount       Float                 @default(0)
   paymentMethod         String                @default("CREDIT") // CASH, BANK, CREDIT
   status                String                @default("POSTED") // DRAFT, APPROVED, POSTED, PAID, PARTIALLY_PAID, CANCELLED
+  approvedById          String?
+  approvedAt            DateTime?
   notes                 String?
   createdById           String?
   createdAt             DateTime              @default(now())
@@ -656,6 +662,8 @@ model InvoicePayment {
   paymentMethod String
   cashboxId     String?
   cashbox       Cashbox?    @relation(fields: [cashboxId], references: [id], onDelete: SetNull)
+  cashTransactionId String?
+  cashTransaction CashTransaction? @relation(fields: [cashTransactionId], references: [id], onDelete: SetNull)
   notes         String?
   createdAt     DateTime    @default(now())
 
@@ -898,9 +906,12 @@ model InventoryCount {
   warehouseId String
   warehouse   Warehouse            @relation(fields: [warehouseId], references: [id])
   countDate   DateTime             @default(now())
-  status      String               @default("COMPLETED") // DRAFT, IN_PROGRESS, COMPLETED, ADJUSTED
+  status      String               @default("PENDING_APPROVAL") // DRAFT, IN_PROGRESS, PENDING_APPROVAL, ADJUSTED
   notes       String?
   createdById String?
+  reviewedById String?
+  reviewedAt  DateTime?
+  rejectionReason String?
   createdAt   DateTime             @default(now())
   items       InventoryCountItem[]
   adjustments InventoryAdjustment[]
@@ -964,6 +975,7 @@ model CashTransaction {
   customer      Customer? @relation("CustomerCashTransactions", fields: [customerId], references: [id], onDelete: SetNull)
   supplierId    String?
   supplier      Supplier? @relation("SupplierCashTransactions", fields: [supplierId], references: [id], onDelete: SetNull)
+  invoicePayments InvoicePayment[]
   description   String?
   createdById   String?
   createdAt     DateTime  @default(now())

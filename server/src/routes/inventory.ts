@@ -381,10 +381,18 @@ router.get('/counts', authenticate, loadUserPermissions, requirePermission('mana
 
 router.post('/counts', authenticate, loadUserPermissions, requirePermission('manage_inventory'), async (req, res) => {
   try {
+    const authenticatedReq = req as AuthenticatedRequest;
     const canViewPrices = canViewItemPrices(req as AuthenticatedRequest);
     const { warehouseId, items, notes } = req.body;
     if (!warehouseId || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'يجب تحديد المستودع وأصناف الجرد' });
+    }
+    if (items.some((item: any) =>
+      typeof item?.itemId !== 'string' ||
+      !Number.isInteger(Number(item.physicalQty)) ||
+      Number(item.physicalQty) < 0
+    ) || new Set(items.map((item: any) => item.itemId)).size !== items.length) {
+      return res.status(400).json({ error: 'بيانات أصناف الجرد غير صالحة أو تحتوي على أصناف مكررة' });
     }
 
     const itemCosts = await prisma.item.findMany({
@@ -395,6 +403,11 @@ router.post('/counts', authenticate, loadUserPermissions, requirePermission('man
       return res.status(400).json({ error: 'بعض أصناف الجرد غير موجودة' });
     }
     const costByItemId = new Map(itemCosts.map((item) => [item.id, item.avgCost]));
+    const currentBalances = await prisma.stockBalance.findMany({
+      where: { warehouseId, itemId: { in: items.map((item: any) => item.itemId) } },
+      select: { itemId: true, quantity: true },
+    });
+    const quantityByItemId = new Map(currentBalances.map((balance) => [balance.itemId, balance.quantity]));
 
     const countNumber = `CNT-${new Date().getFullYear()}-${String((await prisma.inventoryCount.count()) + 1).padStart(3, '0')}`;
 
@@ -403,53 +416,138 @@ router.post('/counts', authenticate, loadUserPermissions, requirePermission('man
         countNumber,
         warehouseId,
         notes: notes || null,
-        status: 'COMPLETED',
+        status: 'PENDING_APPROVAL',
+        createdById: authenticatedReq.user!.id,
         items: {
           create: items.map((it: any) => ({
             itemId: it.itemId,
-            bookQty: parseInt(it.bookQty),
-            physicalQty: parseInt(it.physicalQty),
-            difference: parseInt(it.physicalQty) - parseInt(it.bookQty),
+            bookQty: quantityByItemId.get(it.itemId) || 0,
+            physicalQty: Number(it.physicalQty),
+            difference: Number(it.physicalQty) - (quantityByItemId.get(it.itemId) || 0),
             unitCost: costByItemId.get(it.itemId) || 0,
             notes: it.notes || null,
           })),
         },
       },
-      include: { items: { include: { item: true } } },
+      include: { warehouse: true, items: { include: { item: true } } },
     });
 
-    // Auto apply adjustments if differences exist
-    for (const it of items) {
-      const diff = parseInt(it.physicalQty) - parseInt(it.bookQty);
-      if (diff !== 0) {
-        await prisma.stockBalance.update({
-          where: {
-            itemId_warehouseId: { itemId: it.itemId, warehouseId },
-          },
-          data: { quantity: parseInt(it.physicalQty) },
-        });
-
-        await prisma.stockTransaction.create({
-          data: {
-            itemId: it.itemId,
-            warehouseId,
-            type: 'ADJUSTMENT',
-            quantity: diff,
-            unitCost: costByItemId.get(it.itemId) || 0,
-            totalCost: diff * (costByItemId.get(it.itemId) || 0),
-            referenceType: 'InventoryCount',
-            referenceId: inventoryCount.id,
-            notes: `تسوية جرد دوري برقم ${countNumber}`,
-          },
-        });
-      }
-    }
-
-    await logAudit({ action: 'STOCKTAKING', entity: 'InventoryCount', entityId: inventoryCount.id, details: `اعتماد جرد مخزني ${countNumber}` });
-
+    await logAudit({
+      userId: authenticatedReq.user!.id,
+      action: 'CREATE',
+      entity: 'InventoryCount',
+      entityId: inventoryCount.id,
+      details: `إنشاء جرد ${countNumber} بانتظار الاعتماد`,
+      ipAddress: req.ip,
+    });
     res.status(201).json(sanitizeInventoryRecord(inventoryCount, canViewPrices));
   } catch (err: any) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/counts/:id/approve', authenticate, loadUserPermissions, requirePermission('manage_inventory'), async (req, res) => {
+  const authenticatedReq = req as AuthenticatedRequest;
+  try {
+    const approvedCount = await prisma.$transaction(async (tx) => {
+      const count = await tx.inventoryCount.findUnique({
+        where: { id: req.params.id },
+        include: { items: true },
+      });
+      if (!count) throw new Error('الجرد غير موجود');
+      if (count.status !== 'PENDING_APPROVAL') throw new Error('الجرد ليس بانتظار الاعتماد');
+      if (count.createdById === authenticatedReq.user!.id) throw new Error('لا يمكن اعتماد جرد أنشأته بنفسك');
+
+      for (const entry of count.items) {
+        const current = await tx.stockBalance.findUnique({
+          where: { itemId_warehouseId: { itemId: entry.itemId, warehouseId: count.warehouseId } },
+        });
+        const currentQty = current?.quantity || 0;
+        if (currentQty !== entry.bookQty) {
+          throw new Error('تغير رصيد صنف بعد إجراء الجرد؛ أنشئ جرداً جديداً قبل الاعتماد');
+        }
+        const difference = entry.physicalQty - currentQty;
+        if (difference === 0) continue;
+        if (current) {
+          await tx.stockBalance.update({
+            where: { id: current.id },
+            data: { quantity: entry.physicalQty },
+          });
+        } else {
+          await tx.stockBalance.create({
+            data: { itemId: entry.itemId, warehouseId: count.warehouseId, quantity: entry.physicalQty },
+          });
+        }
+        await tx.stockTransaction.create({
+          data: {
+            itemId: entry.itemId,
+            warehouseId: count.warehouseId,
+            type: 'ADJUSTMENT',
+            quantity: difference,
+            unitCost: entry.unitCost,
+            totalCost: difference * entry.unitCost,
+            referenceType: 'InventoryCount',
+            referenceId: count.id,
+            notes: `تسوية جرد دوري برقم ${count.countNumber}`,
+          },
+        });
+      }
+      return tx.inventoryCount.update({
+        where: { id: count.id },
+        data: {
+          status: 'ADJUSTED',
+          reviewedById: authenticatedReq.user!.id,
+          reviewedAt: new Date(),
+        },
+        include: { warehouse: true, items: { include: { item: true } } },
+      });
+    });
+    await logAudit({
+      userId: authenticatedReq.user!.id,
+      action: 'APPROVE',
+      entity: 'InventoryCount',
+      entityId: approvedCount.id,
+      details: `اعتماد جرد مخزني ${approvedCount.countNumber}`,
+      ipAddress: req.ip,
+    });
+    res.json(sanitizeInventoryRecord(approvedCount, canViewItemPrices(authenticatedReq)));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'تعذر اعتماد الجرد';
+    res.status(message === 'الجرد غير موجود' ? 404 : 400).json({ error: message });
+  }
+});
+
+router.post('/counts/:id/reject', authenticate, loadUserPermissions, requirePermission('manage_inventory'), async (req, res) => {
+  const authenticatedReq = req as AuthenticatedRequest;
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  if (!reason || reason.length > 500) return res.status(400).json({ error: 'سبب رفض الجرد مطلوب وبحد أقصى 500 حرف' });
+  try {
+    const count = await prisma.inventoryCount.findUnique({ where: { id: req.params.id } });
+    if (!count) return res.status(404).json({ error: 'الجرد غير موجود' });
+    if (count.status !== 'PENDING_APPROVAL') return res.status(400).json({ error: 'الجرد ليس بانتظار المراجعة' });
+    if (count.createdById === authenticatedReq.user!.id) return res.status(400).json({ error: 'لا يمكن رفض جرد أنشأته بنفسك' });
+    const rejected = await prisma.inventoryCount.update({
+      where: { id: count.id },
+      data: {
+        status: 'REJECTED',
+        reviewedById: authenticatedReq.user!.id,
+        reviewedAt: new Date(),
+        rejectionReason: reason,
+      },
+      include: { warehouse: true, items: { include: { item: true } } },
+    });
+    await logAudit({
+      userId: authenticatedReq.user!.id,
+      action: 'REJECT',
+      entity: 'InventoryCount',
+      entityId: count.id,
+      details: `رفض جرد ${count.countNumber}: ${reason}`,
+      ipAddress: req.ip,
+    });
+    res.json(sanitizeInventoryRecord(rejected, canViewItemPrices(authenticatedReq)));
+  } catch (error) {
+    console.error('Failed to reject inventory count:', error);
+    res.status(500).json({ error: 'تعذر رفض الجرد' });
   }
 });
 

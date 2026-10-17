@@ -1,15 +1,15 @@
 import { Router } from 'express';
-import { promises as fs } from 'fs';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { AuthenticatedRequest } from '../middleware/auth';
 import {
   createManualBackup,
-  getBackupArchivePath,
+  ensureLocalBackup,
   isRestorePending,
   listBackups,
   queueBackupRestore,
 } from '../services/backups';
+import { getOffsiteStatus, verifyOffsiteBackupConfiguration } from '../services/offsiteBackups';
 
 const router = Router();
 
@@ -36,7 +36,11 @@ const requireAdmin = async (req: AuthenticatedRequest, res: import('express').Re
 router.get('/', async (req, res) => {
   if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
   try {
-    res.json({ backups: await listBackups(), restorePending: await isRestorePending() });
+    res.json({
+      backups: await listBackups(),
+      restorePending: await isRestorePending(),
+      offsite: await getOffsiteStatus(),
+    });
   } catch (error) {
     console.error('Failed to list backups:', error);
     res.status(500).json({ error: 'تعذر تحميل النسخ الاحتياطية' });
@@ -64,11 +68,20 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.post('/offsite/test', async (req, res) => {
+  if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
+  try {
+    res.json({ status: await verifyOffsiteBackupConfiguration() });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'تعذر الاتصال بمخزن R2';
+    res.status(502).json({ error: message });
+  }
+});
+
 router.get('/:id/download', async (req, res) => {
   if (!await requireAdmin(req as AuthenticatedRequest, res)) return;
   try {
-    const archivePath = getBackupArchivePath(req.params.id);
-    await fs.access(archivePath);
+    const archivePath = await ensureLocalBackup(req.params.id);
     res.download(archivePath, req.params.id, (error) => {
       if (error) console.error('Backup download failed:', error);
     });
@@ -89,6 +102,7 @@ router.post('/:id/restore', async (req, res) => {
     return;
   }
   try {
+    await ensureLocalBackup(req.params.id);
     await queueBackupRestore(req.params.id, authenticatedReq.user!.id);
     await logAudit({
       userId: authenticatedReq.user?.id,

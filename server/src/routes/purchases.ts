@@ -9,6 +9,46 @@ import { branchWhere } from '../services/branchScope';
 
 const router = Router();
 
+router.get('/items/:itemId/price-history', async (req, res) => {
+  try {
+    const item = await prisma.item.findUnique({
+      where: { id: req.params.itemId },
+      select: { id: true, nameAr: true, sku: true },
+    });
+    if (!item) return res.status(404).json({ error: 'الصنف غير موجود' });
+    const history = await prisma.purchaseInvoiceItem.findMany({
+      where: {
+        itemId: item.id,
+        invoice: {
+          ...branchWhere(req as AuthenticatedRequest),
+          status: { notIn: ['DRAFT', 'CANCELLED'] },
+        },
+      },
+      include: {
+        invoice: {
+          select: {
+            invoiceNumber: true,
+            date: true,
+            supplier: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    res.json({ item, prices: history.map(({ invoice, quantity, unitPrice }) => ({
+      supplier: invoice.supplier,
+      invoiceNumber: invoice.invoiceNumber,
+      date: invoice.date,
+      quantity,
+      unitPrice,
+    })) });
+  } catch (error) {
+    console.error('Failed to load supplier price history:', error);
+    res.status(500).json({ error: 'تعذر تحميل مقارنة أسعار الموردين' });
+  }
+});
+
 // --- Purchase Requests ---
 router.get('/requests', async (req, res) => {
   try {
@@ -87,21 +127,35 @@ router.get('/invoices', async (req: AuthenticatedRequest, res) => {
   }
 });
 
-router.post('/invoices', async (req, res) => {
+router.post('/invoices', async (req: AuthenticatedRequest, res) => {
   try {
     const { items, ...data } = req.body;
+    if (
+      !Array.isArray(items) || items.length === 0 ||
+      typeof data.supplierId !== 'string' || typeof data.warehouseId !== 'string' ||
+      items.some((item: any) =>
+        typeof item?.itemId !== 'string' ||
+        !Number.isInteger(Number(item.quantity)) || Number(item.quantity) <= 0 ||
+        !Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) < 0
+      )
+    ) return res.status(400).json({ error: 'بيانات فاتورة المشتريات غير صالحة' });
     const subtotal = items.reduce((sum: number, it: any) => sum + (parseFloat(it.unitPrice) * parseInt(it.quantity)), 0);
     const discount = parseFloat(data.discount) || 0;
+    if (!Number.isFinite(discount) || discount < 0 || discount > subtotal) {
+      return res.status(400).json({ error: 'قيمة الخصم غير صالحة' });
+    }
     const taxableAmount = Math.max(0, subtotal - discount);
     const taxAmount = 0;
     const grandTotal = taxableAmount;
     const paidAmount = parseFloat(data.paidAmount) || 0;
+    if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > grandTotal) {
+      return res.status(400).json({ error: 'المبلغ المدفوع يجب ألا يتجاوز إجمالي الفاتورة' });
+    }
     const remainingAmount = Math.max(0, grandTotal - paidAmount);
 
     const invoice = await withInvoiceTransaction(prisma, async (tx) => {
       const invoiceNumber = await nextInvoiceNumber(tx, 'PINV');
-      // 1. Create invoice
-      const createdInvoice = await tx.purchaseInvoice.create({
+      return tx.purchaseInvoice.create({
         data: {
           invoiceNumber,
           supplierInvoiceNumber: data.supplierInvoiceNumber || null,
@@ -115,8 +169,9 @@ router.post('/invoices', async (req, res) => {
           paidAmount,
           remainingAmount,
           paymentMethod: data.paymentMethod || 'CREDIT',
-          status: remainingAmount === 0 ? 'PAID' : paidAmount > 0 ? 'PARTIALLY_PAID' : 'POSTED',
+          status: 'DRAFT',
           notes: data.notes || null,
+          createdById: req.user?.id,
           items: {
             create: items.map((it: any) => {
               const itemTotal = parseFloat(it.unitPrice) * parseInt(it.quantity);
@@ -131,137 +186,177 @@ router.post('/invoices', async (req, res) => {
             }),
           },
         },
+        include: { supplier: true, warehouse: true, items: { include: { item: true } } },
+      });
+    });
+
+    await logAudit({
+      userId: req.user?.id,
+      action: 'CREATE',
+      entity: 'PurchaseInvoice',
+      entityId: invoice.id,
+      details: `إنشاء مسودة فاتورة مشتريات ${invoice.invoiceNumber}`,
+      ipAddress: req.ip,
+    });
+    res.status(201).json(invoice);
+  } catch (err: any) {
+    console.error('Purchase invoice error:', err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/invoices/:id/approve', async (req: AuthenticatedRequest, res) => {
+  try {
+    const invoice = await prisma.$transaction(async (tx) => {
+      const draft = await tx.purchaseInvoice.findFirst({
+        where: { id: req.params.id, ...branchWhere(req) },
+        include: { items: true },
       });
 
-      // 2. Increase stock and update cost for each item
-      for (const it of items) {
-        const qty = parseInt(it.quantity);
-        const price = parseFloat(it.unitPrice);
-
-        // Update or insert StockBalance
-        const currentBalance = await tx.stockBalance.findUnique({
-          where: {
-            itemId_warehouseId: {
-              itemId: it.itemId,
-              warehouseId: data.warehouseId,
+      router.post('/invoices/:id/reject', async (req: AuthenticatedRequest, res) => {
+        const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+        if (!reason || reason.length > 500) return res.status(400).json({ error: 'سبب رفض الفاتورة مطلوب وبحد أقصى 500 حرف' });
+        try {
+          const invoice = await prisma.purchaseInvoice.findFirst({
+            where: { id: req.params.id, ...branchWhere(req) },
+          });
+          if (!invoice) return res.status(404).json({ error: 'فاتورة المشتريات غير موجودة' });
+          if (invoice.status !== 'DRAFT') return res.status(400).json({ error: 'لا يمكن رفض إلا فاتورة بانتظار الاعتماد' });
+          if (invoice.createdById === req.user?.id) return res.status(400).json({ error: 'لا يمكن رفض فاتورة أنشأتها بنفسك' });
+          const rejected = await prisma.purchaseInvoice.update({
+            where: { id: invoice.id },
+            data: {
+              status: 'CANCELLED',
+              notes: [invoice.notes, `رفض: ${reason}`].filter(Boolean).join('\n').slice(0, 2000),
             },
-          },
-        });
+            include: { supplier: true, warehouse: true, items: { include: { item: true } } },
+          });
+          await logAudit({
+            userId: req.user?.id,
+            action: 'REJECT',
+            entity: 'PurchaseInvoice',
+            entityId: invoice.id,
+            details: `رفض فاتورة مشتريات ${invoice.invoiceNumber}: ${reason}`,
+            ipAddress: req.ip,
+          });
+          res.json(rejected);
+        } catch (error) {
+          console.error('Failed to reject purchase invoice:', error);
+          res.status(500).json({ error: 'تعذر رفض فاتورة المشتريات' });
+        }
+      });
+      if (!draft) throw new Error('فاتورة المشتريات غير موجودة');
+      if (draft.status !== 'DRAFT') throw new Error('الفاتورة ليست مسودة بانتظار الاعتماد');
+      if (draft.createdById === req.user?.id) throw new Error('لا يمكن اعتماد فاتورة أنشأتها بنفسك');
+      if (draft.paidAmount < 0 || draft.paidAmount > draft.grandTotal) throw new Error('المبلغ المدفوع المسجل غير صالح');
+      const remainingAmount = Math.max(0, draft.grandTotal - draft.paidAmount);
 
+      for (const item of draft.items) {
+        const currentBalance = await tx.stockBalance.findUnique({
+          where: { itemId_warehouseId: { itemId: item.itemId, warehouseId: draft.warehouseId } },
+        });
+        const previousQty = currentBalance?.quantity || 0;
         if (currentBalance) {
           await tx.stockBalance.update({
             where: { id: currentBalance.id },
-            data: { quantity: currentBalance.quantity + qty },
+            data: { quantity: previousQty + item.quantity },
           });
         } else {
           await tx.stockBalance.create({
-            data: {
-              itemId: it.itemId,
-              warehouseId: data.warehouseId,
-              quantity: qty,
-            },
+            data: { itemId: item.itemId, warehouseId: draft.warehouseId, quantity: item.quantity },
           });
         }
-
-        // Record stock transaction
         await tx.stockTransaction.create({
           data: {
-            itemId: it.itemId,
-            warehouseId: data.warehouseId,
+            itemId: item.itemId,
+            warehouseId: draft.warehouseId,
             type: 'PURCHASE',
-            quantity: qty,
-            unitCost: price,
-            totalCost: qty * price,
+            quantity: item.quantity,
+            unitCost: item.unitPrice,
+            totalCost: item.quantity * item.unitPrice,
             referenceType: 'PurchaseInvoice',
-            referenceId: createdInvoice.id,
-            notes: `شراء بموجب فاتورة مشتريات ${invoiceNumber}`,
+            referenceId: draft.id,
+            notes: `شراء بموجب فاتورة مشتريات ${draft.invoiceNumber}`,
           },
         });
-
-        // Update item purchasePrice & weighted average cost
-        const itemObj = await tx.item.findUnique({ where: { id: it.itemId } });
-        if (itemObj) {
-          const oldQty = currentBalance ? currentBalance.quantity : 0;
-          const newAvgCost = oldQty + qty > 0 ? ((oldQty * itemObj.avgCost) + (qty * price)) / (oldQty + qty) : price;
-          await tx.item.update({
-            where: { id: it.itemId },
-            data: {
-              purchasePrice: price,
-              avgCost: Math.round(newAvgCost * 100) / 100,
-            },
-          });
-        }
+        const stockItem = await tx.item.findUnique({ where: { id: item.itemId } });
+        if (!stockItem) throw new Error(`الصنف ${item.itemId} لم يعد موجوداً`);
+        const newAverage = previousQty + item.quantity > 0
+          ? ((previousQty * stockItem.avgCost) + (item.quantity * item.unitPrice)) / (previousQty + item.quantity)
+          : item.unitPrice;
+        await tx.item.update({
+          where: { id: item.itemId },
+          data: { purchasePrice: item.unitPrice, avgCost: Math.round(newAverage * 100) / 100 },
+        });
       }
 
-      // 3. Update Supplier balance (increase liability by remaining amount)
       if (remainingAmount > 0) {
         await tx.supplier.update({
-          where: { id: data.supplierId },
-          data: {
-            currentBalance: { increment: remainingAmount },
-          },
+          where: { id: draft.supplierId },
+          data: { currentBalance: { increment: remainingAmount } },
         });
       }
-
-      const paymentMethod = data.paymentMethod || 'CREDIT';
-      const accountingLines = [
-        ...((subtotal - discount) > 0 ? [{ accountCode: '1200', debit: subtotal - discount, label: 'إضافة مشتريات إلى المخزون' }] : []),
-        ...(taxAmount > 0 ? [{ accountCode: '1300', debit: taxAmount, label: 'ضريبة قيمة مضافة - مدخلات' }] : []),
-        ...(remainingAmount > 0 ? [{
-          accountCode: '2000',
-          credit: remainingAmount,
-          label: 'ذمم المورد',
-          partnerType: 'SUPPLIER',
-          partnerId: data.supplierId,
-        }] : []),
-        ...(paidAmount > 0 ? [{
-          accountCode: paymentMethod === 'CASH' ? '1000' : paymentMethod === 'CARD' ? '1010' : paymentMethod === 'BANK' ? '1020' : '2990',
-          credit: paidAmount,
-          label: `سداد مشتريات - ${paymentMethod}`,
-        }] : []),
-      ];
+      const paymentMethod = draft.paymentMethod || 'CREDIT';
       await postJournalEntry(tx, {
         journalCode: 'PUR',
-        memo: `فاتورة مشتريات ${invoiceNumber}`,
+        memo: `فاتورة مشتريات ${draft.invoiceNumber}`,
         referenceType: 'PurchaseInvoice',
-        referenceId: createdInvoice.id,
-        branchId: data.branchId || null,
-        lines: accountingLines,
+        referenceId: draft.id,
+        branchId: draft.branchId,
+        lines: [
+          ...(draft.grandTotal > 0 ? [{ accountCode: '1200', debit: draft.grandTotal, label: 'إضافة مشتريات إلى المخزون' }] : []),
+          ...(remainingAmount > 0 ? [{
+            accountCode: '2000',
+            credit: remainingAmount,
+            label: 'ذمم المورد',
+            partnerType: 'SUPPLIER',
+            partnerId: draft.supplierId,
+          }] : []),
+          ...(draft.paidAmount > 0 ? [{
+            accountCode: paymentMethod === 'CASH' ? '1000' : paymentMethod === 'CARD' ? '1010' : paymentMethod === 'BANK' ? '1020' : '2990',
+            credit: draft.paidAmount,
+            label: `سداد مشتريات - ${paymentMethod}`,
+          }] : []),
+        ],
       });
-
-      return createdInvoice;
+      return tx.purchaseInvoice.update({
+        where: { id: draft.id },
+        data: {
+          remainingAmount,
+          status: remainingAmount === 0 ? 'PAID' : draft.paidAmount > 0 ? 'PARTIALLY_PAID' : 'POSTED',
+          approvedById: req.user?.id,
+          approvedAt: new Date(),
+        },
+        include: { supplier: true, warehouse: true, items: { include: { item: true } } },
+      });
     });
 
-    await logAudit({ action: 'POST', entity: 'PurchaseInvoice', entityId: invoice.id, details: `اعتماد فاتورة مشتريات ${invoice.invoiceNumber} بمبلغ ${grandTotal} ج.م` });
-
+    await logAudit({
+      userId: req.user?.id,
+      action: 'APPROVE',
+      entity: 'PurchaseInvoice',
+      entityId: invoice.id,
+      details: `اعتماد فاتورة مشتريات ${invoice.invoiceNumber} بمبلغ ${invoice.grandTotal} ج.م`,
+      ipAddress: req.ip,
+    });
     let whatsappNotification: { sent: boolean; reason?: string } | { sent: false; error: string } = {
       sent: false,
       reason: 'no_supplier_or_opt_in',
     };
-    const invoiceForMessage = await prisma.purchaseInvoice.findUnique({
-      where: { id: invoice.id },
-      include: { supplier: true, items: { include: { item: true } } },
-    });
-    if (invoiceForMessage?.supplier.whatsappOptIn && invoiceForMessage.supplier.whatsappNumber) {
+    if (invoice.supplier.whatsappOptIn && invoice.supplier.whatsappNumber) {
       try {
         const company = await prisma.companySetting.findFirst();
         if (!company) throw new Error('بيانات المنشأة غير موجودة لإنشاء ملف الفاتورة');
-        whatsappNotification = await sendInvoicePdf(
-          'supplier',
-          invoiceForMessage,
-          company,
-          invoiceForMessage.supplier,
-        );
-      } catch (whatsappError: any) {
-        console.error(`WhatsApp supplier invoice send failed for ${invoice.invoiceNumber}:`, whatsappError);
-        whatsappNotification = { sent: false, error: whatsappError.message || 'تعذر إرسال الفاتورة عبر واتساب' };
+        whatsappNotification = await sendInvoicePdf('supplier', invoice, company, invoice.supplier);
+      } catch (error: any) {
+        console.error(`WhatsApp supplier invoice send failed for ${invoice.invoiceNumber}:`, error);
+        whatsappNotification = { sent: false, error: error.message || 'تعذر إرسال الفاتورة عبر واتساب' };
       }
     }
-
-    res.status(201).json({ ...invoice, whatsappNotification });
-  } catch (err: any) {
-    console.error('Purchase invoice error:', err);
-    res.status(400).json({ error: err.message });
+    res.json({ ...invoice, whatsappNotification });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'تعذر اعتماد فاتورة المشتريات';
+    res.status(message === 'فاتورة المشتريات غير موجودة' ? 404 : 400).json({ error: message });
   }
 });
 

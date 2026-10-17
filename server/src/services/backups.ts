@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { create as createTar } from 'tar';
 import { prisma } from '../lib/prisma';
+import { downloadOffsiteBackup, listOffsiteBackups, uploadOffsiteBackup } from './offsiteBackups';
 
 export type BackupKind = 'daily' | 'manual';
 export type BackupMetadata = { id: string; type: string; date: string; sizeBytes: number };
@@ -78,10 +79,41 @@ export const listBackups = async () => {
         sizeBytes: stats.size,
       };
     }));
-  return backups.sort((a, b) => b.date.localeCompare(a.date));
+  const remoteBackups = await listOffsiteBackups();
+  const remoteById = new Map(remoteBackups.map((backup) => [backup.id, backup]));
+  const localIds = new Set(backups.map((backup) => backup.id));
+  const merged = backups.map((backup) => ({
+    ...backup,
+    offsiteStatus: remoteById.has(backup.id) ? 'SYNCED' : 'NOT_SYNCED',
+    offsiteSizeBytes: remoteById.get(backup.id)?.sizeBytes ?? null,
+  }));
+  for (const backup of remoteBackups) {
+    if (localIds.has(backup.id)) continue;
+    const parsed = parseBackupName(backup.id);
+    if (!parsed) continue;
+    merged.push({
+      ...backup,
+      type: parsed.kind,
+      offsiteStatus: 'SYNCED',
+      offsiteSizeBytes: backup.sizeBytes,
+    });
+  }
+  return merged.sort((a, b) => b.date.localeCompare(a.date));
 };
 
 export const getBackupArchivePath = (id: string) => getArchivePath(id);
+
+export const ensureLocalBackup = async (id: string) => {
+  const archivePath = getArchivePath(id);
+  try {
+    await fs.access(archivePath);
+    return archivePath;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  await downloadOffsiteBackup(id, archivePath);
+  return archivePath;
+};
 
 export const getBackupsToPrune = (backups: BackupMetadata[]) => {
   const keepCounts: Record<BackupKind, number> = { daily: dailyRetention, manual: manualRetention };
@@ -101,7 +133,16 @@ export const getBackupsToPrune = (backups: BackupMetadata[]) => {
 };
 
 const pruneBackups = async () => {
-  const backups = await listBackups();
+  const directory = getBackupDirectory();
+  const entries = await fs.readdir(directory, { withFileTypes: true });
+  const backups = await Promise.all(entries
+    .filter((entry) => entry.isFile() && isSafeBackupId(entry.name))
+    .map(async (entry) => ({
+      id: entry.name,
+      date: (await fs.stat(path.join(directory, entry.name))).mtime.toISOString(),
+      sizeBytes: 0,
+      type: parseBackupName(entry.name)!.kind,
+    })));
   await Promise.all(getBackupsToPrune(backups).map((id) => fs.unlink(getArchivePath(id))));
 };
 
@@ -159,8 +200,22 @@ const createBackup = async (kind: BackupKind) => {
     await fs.writeFile(path.join(stageDirectory, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
     await createTar({ gzip: true, file: archivePath, cwd: backupDirectory }, [stageName]);
     await fs.rename(archivePath, getArchivePath(id));
+    let offsiteStatus = 'NOT_CONFIGURED';
+    let offsiteError: string | null = null;
+    try {
+      const uploaded = await uploadOffsiteBackup(id, getArchivePath(id));
+      offsiteStatus = uploaded.status;
+    } catch (error) {
+      offsiteStatus = 'FAILED';
+      offsiteError = error instanceof Error ? error.message : String(error);
+      console.error(`Offsite backup upload failed (${id}); local backup is retained:`, error);
+    }
     await pruneBackups();
-    return (await listBackups()).find((backup) => backup.id === id)!;
+    return {
+      ...(await listBackups()).find((backup) => backup.id === id)!,
+      offsiteStatus,
+      offsiteError,
+    };
   } catch (error) {
     await fs.rm(archivePath, { force: true }).catch(() => undefined);
     throw error;

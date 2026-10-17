@@ -13,7 +13,7 @@ import { BarcodePrintDialog } from '../../components/common/BarcodePrintDialog';
 
 export const InventoryManagement: React.FC = () => {
   const { showToast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const canManageItems = hasPermission('manage_items');
   const canManagePrices = hasPermission('manage_item_prices');
   const [activeTab, setActiveTab] = useState<'balances' | 'transfers' | 'counts'>('balances');
@@ -343,12 +343,29 @@ export const InventoryManagement: React.FC = () => {
           unitCost: it.unitCost
         }))
       });
-      showToast('تم اعتماد الجرد وتحديث أرصدة المخزون بنجاح', 'success');
+      showToast('تم تسجيل الجرد وإرساله للمراجعة؛ لن تتغير الأرصدة قبل الاعتماد', 'success');
       setIsCountModalOpen(false);
       setCountNotes('');
       loadData();
     } catch (err: any) {
       showToast(err.message || 'فشل حفظ الجرد', 'error');
+    }
+  };
+
+  const handleReviewCount = async (countId: string, action: 'approve' | 'reject') => {
+    try {
+      if (action === 'approve') {
+        await api.approveCount(countId);
+        showToast('تم اعتماد الجرد وتسوية الأرصدة', 'success');
+      } else {
+        const reason = window.prompt('اكتب سبب رفض الجرد');
+        if (!reason?.trim()) return;
+        await api.rejectCount(countId, reason.trim());
+        showToast('تم رفض الجرد دون تغيير أرصدة المخزون', 'success');
+      }
+      await loadData();
+    } catch (err: any) {
+      showToast(err.message || 'تعذرت مراجعة الجرد', 'error');
     }
   };
 
@@ -835,6 +852,7 @@ export const InventoryManagement: React.FC = () => {
                   <th className="py-3 px-4">الأصناف المحولة</th>
                   <th className="py-3 px-4">ملاحظات</th>
                   <th className="py-3 px-4 text-center">الحالة</th>
+                  <th className="py-3 px-4 text-center">الإجراء</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -892,7 +910,7 @@ export const InventoryManagement: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {counts.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-8 text-slate-400">لا توجد سجلات جرد معتمدة</td>
+                    <td colSpan={8} className="text-center py-8 text-slate-400">لا توجد سجلات جرد</td>
                   </tr>
                 ) : (
                   counts.map(cnt => {
@@ -917,8 +935,17 @@ export const InventoryManagement: React.FC = () => {
                         <td className="py-3 px-4 text-xs text-slate-500">{cnt.notes || '-'}</td>
                         <td className="py-3 px-4 text-center">
                           <span className="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-bold">
-                            معتمد ومسوّى
+                            {cnt.status === 'PENDING_APPROVAL' ? 'بانتظار الاعتماد' : cnt.status === 'REJECTED' ? 'مرفوض' : 'معتمد ومسوّى'}
                           </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {cnt.status === 'PENDING_APPROVAL' && user?.id !== cnt.createdById && (
+                            <div className="flex justify-center gap-2">
+                              <button onClick={() => handleReviewCount(cnt.id, 'approve')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">اعتماد</button>
+                              <button onClick={() => handleReviewCount(cnt.id, 'reject')} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white">رفض</button>
+                            </div>
+                          )}
+                          {cnt.status === 'REJECTED' && <span className="text-xs text-slate-500">{cnt.rejectionReason}</span>}
                         </td>
                       </tr>
                     );

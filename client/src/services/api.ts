@@ -50,11 +50,34 @@ const apiClient = {
       body: JSON.stringify(credentials),
     }).then((res) => handleResponse<any>(res)),
 
+  setupMfa: (setupToken: string) =>
+    fetch(`${BASE_URL}/auth/mfa/setup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ setupToken }),
+    }).then((res) => handleResponse<any>(res)),
+
+  enableMfa: (setupToken: string, secret: string, code: string) =>
+    fetch(`${BASE_URL}/auth/mfa/enable`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ setupToken, secret, code }),
+    }).then((res) => handleResponse<any>(res)),
+
   getMe: () =>
     fetch(`${BASE_URL}/auth/me`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
   getUsers: () =>
     fetch(`${BASE_URL}/auth/users`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  getPermissionReview: () =>
+    fetch(`${BASE_URL}/auth/permissions/review`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  markPermissionsReviewed: () =>
+    fetch(`${BASE_URL}/auth/permissions/review`, {
+      method: 'POST',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<any>(res)),
 
   createUser: (data: any) =>
     fetch(`${BASE_URL}/auth/users`, {
@@ -287,6 +310,23 @@ const apiClient = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
+  approvePurchaseInvoice: (id: string) =>
+    fetch(`${BASE_URL}/purchases/invoices/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<any>(res)),
+
+  rejectPurchaseInvoice: (id: string, reason: string) =>
+    fetch(`${BASE_URL}/purchases/invoices/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ reason }),
+    }).then((res) => handleResponse<any>(res)),
+
+  getSupplierPriceHistory: (itemId: string) =>
+    fetch(`${BASE_URL}/purchases/items/${encodeURIComponent(itemId)}/price-history`, { headers: getHeaders() })
+      .then((res) => handleResponse<any>(res)),
+
   getSupplierStatement: (id: string) =>
     fetch(`${BASE_URL}/purchases/suppliers/${id}/statement`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
@@ -300,6 +340,16 @@ const apiClient = {
     if (params?.customerId) query.append('customerId', params.customerId);
     return fetch(`${BASE_URL}/sales/invoices?${query.toString()}`, { headers: getHeaders() }).then((res) => handleResponse<any>(res));
   },
+
+  postInvoicePayment: (invoiceId: string, data: { amount: number; paymentMethod: string; cashboxId?: string; notes?: string }) =>
+    fetch(`${BASE_URL}/sales/invoices/${encodeURIComponent(invoiceId)}/payments`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  getReceivablesAging: () =>
+    fetch(`${BASE_URL}/sales/receivables/aging`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
   getSalesInvoiceById: (id: string) =>
     fetch(`${BASE_URL}/sales/invoices/${id}`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
@@ -525,6 +575,19 @@ const apiClient = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
+  approveCount: (id: string) =>
+    fetch(`${BASE_URL}/inventory/counts/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<any>(res)),
+
+  rejectCount: (id: string, reason: string) =>
+    fetch(`${BASE_URL}/inventory/counts/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ reason }),
+    }).then((res) => handleResponse<any>(res)),
+
   // Financials
   getExpenses: () =>
     fetch(`${BASE_URL}/financials/expenses`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
@@ -744,13 +807,26 @@ const apiClient = {
 
   getBackups: () =>
     fetch(`${BASE_URL}/backups`, { headers: getHeaders() }).then((res) =>
-      handleResponse<{ data: { backups: { id: string; type: 'daily' | 'manual'; date: string; sizeBytes: number }[]; restorePending: boolean } }>(res)),
+      handleResponse<{ data: {
+        backups: { id: string; type: 'daily' | 'manual'; date: string; sizeBytes: number; offsiteStatus: string }[];
+        restorePending: boolean;
+        offsite: { configured: boolean; encrypted: boolean; bucket: string | null; provider: string; backups: unknown[] };
+      } }>(res)),
+
+  getOperationsHealth: () =>
+    fetch(`${BASE_URL}/settings/operations/health`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  testOffsiteBackups: () =>
+    fetch(`${BASE_URL}/backups/offsite/test`, {
+      method: 'POST',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<any>(res)),
 
   createManualBackup: () =>
     fetch(`${BASE_URL}/backups`, {
       method: 'POST',
       headers: getHeaders(),
-    }).then((res) => handleResponse<{ data: { backup: { id: string; type: 'daily' | 'manual'; date: string; sizeBytes: number } } }>(res)),
+    }).then((res) => handleResponse<{ data: { backup: { id: string; type: 'daily' | 'manual'; date: string; sizeBytes: number; offsiteStatus?: string } } }>(res)),
 
   downloadBackup: async (id: string) => {
     const response = await fetch(`${BASE_URL}/backups/${encodeURIComponent(id)}/download`, { headers: getHeaders() });
@@ -855,6 +931,8 @@ export const api = Object.assign(apiClient, {
     createTransfer: apiClient.createTransfer,
     getCounts: apiClient.getCounts,
     createCount: apiClient.createCount,
+    approveCount: apiClient.approveCount,
+    rejectCount: apiClient.rejectCount,
   },
   financials: {
     getExpenses: apiClient.getExpenses,
@@ -915,6 +993,8 @@ export const api = Object.assign(apiClient, {
     saveNotificationIntegrations: apiClient.saveNotificationIntegrations,
     testNotificationIntegration: apiClient.testNotificationIntegration,
     getBackups: apiClient.getBackups,
+    getOperationsHealth: apiClient.getOperationsHealth,
+    testOffsiteBackups: apiClient.testOffsiteBackups,
     createManualBackup: apiClient.createManualBackup,
     downloadBackup: apiClient.downloadBackup,
     restoreBackup: apiClient.restoreBackup,
