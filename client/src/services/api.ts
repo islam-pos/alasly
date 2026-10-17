@@ -398,6 +398,10 @@ const apiClient = {
   getJobCardById: (id: string) =>
     fetch(`${BASE_URL}/workshop/job-cards/${id}`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
+  getLaborServices: () =>
+    fetch(`${BASE_URL}/workshop/labor-services`, { headers: getHeaders() })
+      .then((res) => handleResponse<{ services: { name: string; rate: number }[] }>(res)),
+
   getWorkshopPartRequests: () =>
     fetch(`${BASE_URL}/workshop/parts/requests`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 

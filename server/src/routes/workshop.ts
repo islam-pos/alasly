@@ -17,6 +17,31 @@ const attachmentDirectory = path.join(
   'repair-attachments',
 );
 
+router.get('/labor-services', async (req: AuthenticatedRequest, res) => {
+  try {
+    const services = await prisma.repairLabor.groupBy({
+      by: ['serviceName'],
+      where: {
+        serviceName: { not: '' },
+        repairOrder: { is: branchWhere(req) },
+      },
+      _count: { id: true },
+      _avg: { rate: true },
+      orderBy: { _count: { id: 'desc' } },
+      take: 500,
+    });
+    res.json({
+      services: services.map((service) => ({
+        name: service.serviceName,
+        rate: service._avg.rate || 0,
+      })),
+    });
+  } catch (error) {
+    console.error('Workshop labor services load failed:', error);
+    res.status(500).json({ error: 'تعذر تحميل قائمة خدمات وأجور الورشة' });
+  }
+});
+
 router.get('/parts/requests', async (req: AuthenticatedRequest, res) => {
   try {
     const parts = await prisma.repairPart.findMany({

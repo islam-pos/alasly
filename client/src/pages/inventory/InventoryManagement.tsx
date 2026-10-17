@@ -170,7 +170,7 @@ export const InventoryManagement: React.FC = () => {
   const lowStockCount = balances.filter(b => b.isLowStock).length;
   const totalStockValuation = balances.reduce((sum, b) => sum + (b.totalValue || 0), 0);
   const hasItemSelection = canManageItems || canManagePrices;
-  const balanceColumnCount = 7 + (hasItemSelection ? 1 : 0) + (canManagePrices ? 3 : 0);
+  const balanceColumnCount = 7 + (hasItemSelection ? 1 : 0) + (canManagePrices ? 3 : 0) + (canManageItems ? 1 : 0);
 
   const toggleSelectedItem = (itemId: string, selected: boolean) => {
     setSelectedItemIds((current) => selected
@@ -186,19 +186,19 @@ export const InventoryManagement: React.FC = () => {
     });
   };
 
-  const handleArchiveSelectedItems = async () => {
-    if (!selectedItemIds.length) {
+  const handleArchiveItems = async (itemIds: string[]) => {
+    if (!itemIds.length) {
       showToast('حدد صنفاً واحداً على الأقل من الجدول', 'error');
       return;
     }
     if (!window.confirm(
-      `سيتم أرشفة ${selectedItemIds.length} صنف محدد. الأرشفة لا تحذف الفواتير أو سجل الحركات، والأصناف التي لها رصيد أو كمية محجوزة ستُتجاوز. هل تريد المتابعة؟`,
+      `سيتم حذف ${itemIds.length} صنف من قائمة الأصناف النشطة عن طريق الأرشفة. لن تُحذف الفواتير أو سجل الحركات، والأصناف التي لها رصيد أو كمية محجوزة ستُتجاوز. هل تريد المتابعة؟`,
     )) return;
 
     try {
       setArchivingItems(true);
-      const result = await api.archiveItems(selectedItemIds);
-      setSelectedItemIds([]);
+      const result = await api.archiveItems(itemIds);
+      setSelectedItemIds((current) => current.filter((id) => !itemIds.includes(id)));
       await loadData();
       if (result.skipped.length) {
         const skippedDetails = result.skipped
@@ -214,7 +214,7 @@ export const InventoryManagement: React.FC = () => {
         showToast(`تمت أرشفة ${result.archivedCount} صنف بنجاح`, 'success');
       }
     } catch (error: any) {
-      showToast(error.message || 'تعذرت أرشفة الأصناف المحددة', 'error');
+      showToast(error.message || 'تعذر حذف الأصناف المحددة من القائمة النشطة', 'error');
     } finally {
       setArchivingItems(false);
     }
@@ -554,12 +554,12 @@ export const InventoryManagement: React.FC = () => {
                 {canManageItems && (
                   <button
                     type="button"
-                    onClick={() => void handleArchiveSelectedItems()}
+                    onClick={() => void handleArchiveItems(selectedItemIds)}
                     disabled={selectedItemIds.length === 0 || archivingItems}
                     className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Trash2 className="h-4 w-4" />
-                    {archivingItems ? 'جارٍ الأرشفة...' : 'أرشفة الأصناف المحددة'}
+                    {archivingItems ? 'جارٍ الحذف...' : 'حذف الأصناف المحددة'}
                   </button>
                 )}
               </div>
@@ -606,6 +606,7 @@ export const InventoryManagement: React.FC = () => {
                     </>
                   )}
                   <th className="py-3 px-4">طباعة</th>
+                  {canManageItems && <th className="py-3 px-4">حذف</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -740,6 +741,20 @@ export const InventoryManagement: React.FC = () => {
                           <Printer className="h-4 w-4" />
                         </button>
                       </td>
+                      {canManageItems && (
+                        <td className="py-3 px-4">
+                          <button
+                            type="button"
+                            onClick={() => void handleArchiveItems([item.id])}
+                            disabled={archivingItems}
+                            aria-label={`حذف ${item.nameAr} من الأصناف النشطة`}
+                            title="حذف من القائمة النشطة مع الاحتفاظ بالسجلات التاريخية"
+                            className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}

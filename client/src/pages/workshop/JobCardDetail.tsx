@@ -106,6 +106,8 @@ export const JobCardDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<number>(1);
   const [availableItems, setAvailableItems] = useState<any[]>([]);
+  const [availableLaborServices, setAvailableLaborServices] = useState<{ name: string; rate: number }[]>([]);
+  const [estimatePartSearch, setEstimatePartSearch] = useState<Record<number, string>>({});
 
   // Modals
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
@@ -166,6 +168,9 @@ export const JobCardDetail: React.FC = () => {
     if (id) {
       loadDetails();
       api.getItems().then((res) => setAvailableItems(res.data)).catch(console.error);
+      api.getLaborServices()
+        .then((res) => setAvailableLaborServices(res.services))
+        .catch((err) => error(err.message || 'تعذر تحميل خدمات وأجور الورشة'));
     }
   }, [id]);
 
@@ -964,45 +969,84 @@ export const JobCardDetail: React.FC = () => {
                       </select>
 
                       {item.type === 'PART' ? (
-                        <select
-                          value={item.itemId}
-                          onChange={(e) => {
-                            const found = availableItems.find((ai) => ai.id === e.target.value);
-                            setEstimateItems((prev) =>
-                              prev.map((it, i) =>
-                                i === idx
+                        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row">
+                          <input
+                            type="search"
+                            value={estimatePartSearch[idx] || ''}
+                            onChange={(event) => setEstimatePartSearch((current) => ({
+                              ...current,
+                              [idx]: event.target.value,
+                            }))}
+                            placeholder="ابحث عن قطعة غيار..."
+                            aria-label="البحث عن قطعة غيار"
+                            className="w-full rounded-lg border border-slate-200 bg-white p-2 text-xs sm:w-48"
+                          />
+                          <select
+                            value={item.itemId}
+                            onChange={(e) => {
+                              const found = availableItems.find((ai) => ai.id === e.target.value);
+                              setEstimateItems((prev) =>
+                                prev.map((it, i) =>
+                                  i === idx
+                                    ? {
+                                        ...it,
+                                        itemId: e.target.value,
+                                        description: found?.nameAr || '',
+                                        unitPrice: found?.sellPrice || 0,
+                                      }
+                                    : it
+                                )
+                              );
+                              setEstimatePartSearch((current) => ({ ...current, [idx]: '' }));
+                            }}
+                            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white p-2 text-xs"
+                          >
+                            <option value="">-- اختر قطعة الغيار --</option>
+                            {availableItems
+                              .filter((availableItem) => {
+                                const query = (estimatePartSearch[idx] || '').trim().toLocaleLowerCase();
+                                if (!query || availableItem.id === item.itemId) return true;
+                                return [availableItem.nameAr, availableItem.sku, availableItem.barcode]
+                                  .some((value) => typeof value === 'string' && value.toLocaleLowerCase().includes(query));
+                              })
+                              .map((availableItem) => (
+                                <option key={availableItem.id} value={availableItem.id}>
+                                  {availableItem.nameAr} ({availableItem.sellPrice} ج.م)
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <>
+                          <input
+                            type="text"
+                            list={`estimate-labor-services-${idx}`}
+                            value={item.description}
+                            onChange={(e) => {
+                              const desc = e.target.value;
+                              const selectedService = availableLaborServices.find(
+                                (service) => service.name.trim().toLocaleLowerCase() === desc.trim().toLocaleLowerCase(),
+                              );
+                              setEstimateItems((prev) =>
+                                prev.map((it, i) => (i === idx
                                   ? {
                                       ...it,
-                                      itemId: e.target.value,
-                                      description: found?.nameAr || '',
-                                      unitPrice: found?.sellPrice || 0,
+                                      description: desc,
+                                      ...(selectedService ? { unitPrice: selectedService.rate } : {}),
                                     }
-                                  : it
-                              )
-                            );
-                          }}
-                          className="flex-1 p-2 bg-white border border-slate-200 rounded-lg text-xs"
-                        >
-                          <option value="">-- اختر قطعة الغيار --</option>
-                          {availableItems.map((ai) => (
-                            <option key={ai.id} value={ai.id}>
-                              {ai.nameAr} ({ai.sellPrice} ج.م)
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          value={item.description}
-                          onChange={(e) => {
-                            const desc = e.target.value;
-                            setEstimateItems((prev) =>
-                              prev.map((it, i) => (i === idx ? { ...it, description: desc } : it))
-                            );
-                          }}
-                          placeholder="اسم الخدمة (مثلاً خرط هوبات، تنظيف بخاخات...)"
-                          className="flex-1 p-2 bg-white border border-slate-200 rounded-lg text-xs"
-                        />
+                                  : it))
+                              );
+                            }}
+                            placeholder="ابحث أو اكتب اسم خدمة / أجور..."
+                            aria-label="البحث عن خدمة أو أجور"
+                            className="flex-1 rounded-lg border border-slate-200 bg-white p-2 text-xs"
+                          />
+                          <datalist id={`estimate-labor-services-${idx}`}>
+                            {availableLaborServices.map((service) => (
+                              <option key={service.name} value={service.name} label={`${service.rate} ج.م`} />
+                            ))}
+                          </datalist>
+                        </>
                       )}
 
                       <input

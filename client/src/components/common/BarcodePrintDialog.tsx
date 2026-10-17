@@ -9,19 +9,19 @@ interface BarcodePrintDialogProps {
 }
 
 export const BarcodePrintDialog: React.FC<BarcodePrintDialogProps> = ({ items, onClose, onPrint }) => {
-  const [quantities, setQuantities] = useState(() => items.map(() => '1'));
+  const [quantities, setQuantities] = useState(() => items.map(() => '0'));
   const [searchQuery, setSearchQuery] = useState('');
   const [validationError, setValidationError] = useState('');
-  const visibleItems = items
+  const visibleItems = useMemo(() => items
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => {
       const query = searchQuery.trim().toLocaleLowerCase();
       return !query || [item.nameAr, item.sku, item.barcode || '']
         .some((value) => value.toLocaleLowerCase().includes(query));
-    });
-  const printableIndexes = searchQuery.trim()
-    ? visibleItems.map(({ index }) => index)
-    : items.map((_, index) => index);
+    }), [items, searchQuery]);
+  const printableIndexes = quantities.flatMap((quantity, index) =>
+    Number(quantity) > 0 ? [index] : [],
+  );
   const totalLabels = useMemo(
     () => printableIndexes.reduce((total, index) => total + (Number(quantities[index]) || 0), 0),
     [quantities, printableIndexes],
@@ -31,8 +31,8 @@ export const BarcodePrintDialog: React.FC<BarcodePrintDialogProps> = ({ items, o
 
   const handlePrint = () => {
     const parsedQuantities = quantities.map((value) => Number(value));
-    if (printableIndexes.some((index) =>
-      !Number.isInteger(parsedQuantities[index]) || parsedQuantities[index] < 0 || parsedQuantities[index] > 1000,
+    if (parsedQuantities.some((quantity) =>
+      !Number.isInteger(quantity) || quantity < 0 || quantity > 1000,
     )) {
       setValidationError('أدخل عددًا صحيحًا من 0 إلى 1000 لكل صنف');
       return;
@@ -67,7 +67,7 @@ export const BarcodePrintDialog: React.FC<BarcodePrintDialogProps> = ({ items, o
               تحديد عدد الملصقات لكل صنف
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              {searchQuery.trim() ? 'مع تفعيل البحث ستتم طباعة الأصناف المطابقة فقط.' : 'يمكنك وضع صفر للأصناف التي لا تريد طباعتها.'}
+              ابحث عن الأصناف المطلوبة، ثم أدخل عدد الملصقات لها. الأصناف غير المحددة لن تُطبع.
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="إغلاق" className="rounded-lg p-1 text-slate-500 hover:bg-slate-100">
