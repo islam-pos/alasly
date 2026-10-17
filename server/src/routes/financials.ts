@@ -1,7 +1,10 @@
 import { Router } from 'express';
+import { createHash } from 'crypto';
+import { AuthenticatedRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { postJournalEntry } from '../services/accounting';
+import { findUniqueBankTransactionMatch, isStatementDirection, parseBankStatementCsv } from '../services/bankReconciliation';
 
 const router = Router();
 
@@ -361,19 +364,293 @@ router.get('/banks', async (req, res) => {
     const banks = await prisma.bank.findMany({
       include: {
         transactions: { take: 10, orderBy: { date: 'desc' } },
+        reconciliations: {
+          take: 5,
+          orderBy: { createdAt: 'desc' },
+          include: { lines: { select: { matchedAt: true } } },
+        },
         _count: { select: { transactions: true } },
       },
     });
-    res.json(banks);
+    res.json(banks.map(({ reconciliations, ...bank }) => ({
+      ...bank,
+      reconciliations: reconciliations.map(({ lines, ...reconciliation }) => ({
+        ...reconciliation,
+        matchedCount: lines.filter((line) => line.matchedAt).length,
+        unmatchedCount: lines.filter((line) => !line.matchedAt).length,
+      })),
+    })));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
+router.get('/banks/:bankId/reconciliations', async (req, res) => {
+  try {
+    const reconciliations = await prisma.bankReconciliation.findMany({
+      where: { bankId: req.params.bankId },
+      include: {
+        _count: { select: { lines: true } },
+        lines: { select: { matchedAt: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    res.json(reconciliations.map(({ lines, ...reconciliation }) => ({
+      ...reconciliation,
+      matchedCount: lines.filter((line) => line.matchedAt).length,
+      unmatchedCount: lines.filter((line) => !line.matchedAt).length,
+    })));
+  } catch (error) {
+    console.error('Failed to list bank reconciliations:', error);
+    res.status(500).json({ error: 'تعذر تحميل مطابقات كشف الحساب' });
+  }
+});
+
+router.post('/banks/:bankId/reconciliations', async (req, res) => {
+  const authenticatedReq = req as AuthenticatedRequest;
+  const { csv, fileName } = req.body || {};
+  if (typeof csv !== 'string' || typeof fileName !== 'string' || !fileName.trim()) {
+    return res.status(400).json({ error: 'أرفق ملف CSV وحدد اسمه' });
+  }
+  if (!fileName.toLocaleLowerCase().endsWith('.csv')) {
+    return res.status(400).json({ error: 'صيغة كشف الحساب المدعومة هي CSV فقط' });
+  }
+  let lines;
+  try {
+    lines = parseBankStatementCsv(csv);
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : 'تنسيق كشف الحساب غير صالح' });
+  }
+
+  try {
+    const bank = await prisma.bank.findUnique({ where: { id: req.params.bankId }, select: { id: true } });
+    if (!bank) return res.status(404).json({ error: 'الحساب البنكي غير موجود' });
+
+    const contentHash = createHash('sha256').update(csv, 'utf8').digest('hex');
+    const orderedDates = lines.map((line) => line.transactionDate.getTime()).sort((a, b) => a - b);
+    const created = await prisma.$transaction(async (tx) => {
+      const reconciliation = await tx.bankReconciliation.create({
+        data: {
+          bankId: bank.id,
+          fileName: fileName.trim().replace(/[\\/]/g, '_').slice(0, 180),
+          contentHash,
+          statementStart: new Date(orderedDates[0]),
+          statementEnd: new Date(orderedDates[orderedDates.length - 1]),
+          importedById: authenticatedReq.user?.id,
+          lines: { create: lines },
+        },
+        include: { lines: true },
+      });
+
+      let matchedCount = 0;
+      for (const line of reconciliation.lines) {
+        const direction = line.direction;
+        if (!isStatementDirection(direction)) {
+          throw new Error(`اتجاه غير صالح في سطر كشف الحساب ${line.id}`);
+        }
+        const dateStart = new Date(line.transactionDate);
+        dateStart.setUTCDate(dateStart.getUTCDate() - 3);
+        const dateEnd = new Date(line.transactionDate);
+        dateEnd.setUTCDate(dateEnd.getUTCDate() + 3);
+        const candidates = await tx.bankTransaction.findMany({
+          where: {
+            bankId: bank.id,
+            reconciledAt: null,
+            type: direction === 'CREDIT' ? { in: ['DEPOSIT', 'CARD_SETTLEMENT'] } : 'WITHDRAWAL',
+            amount: { gte: line.amount - 0.01, lte: line.amount + 0.01 },
+            date: { gte: dateStart, lte: dateEnd },
+          },
+          select: { id: true, type: true, amount: true, date: true, referenceNumber: true },
+        });
+        const match = findUniqueBankTransactionMatch({ ...line, direction }, candidates);
+        if (!match) continue;
+        const updated = await tx.bankTransaction.updateMany({
+          where: { id: match.id, reconciledAt: null },
+          data: {
+            reconciledAt: new Date(),
+            reconciledById: authenticatedReq.user?.id,
+            statementReference: line.referenceNumber,
+          },
+        });
+        if (updated.count !== 1) continue;
+        await tx.bankStatementLine.update({
+          where: { id: line.id },
+          data: { matchedTransactionId: match.id, matchedAt: new Date() },
+        });
+        matchedCount += 1;
+      }
+      return { reconciliation, matchedCount };
+    });
+
+    await logAudit({
+      userId: authenticatedReq.user?.id,
+      action: 'IMPORT_BANK_STATEMENT',
+      entity: 'BankReconciliation',
+      entityId: created.reconciliation.id,
+      details: `استيراد ${lines.length} حركة من كشف الحساب ${fileName}; تمت مطابقة ${created.matchedCount} حركة تلقائيًا`,
+      ipAddress: req.ip,
+    });
+    res.status(201).json({
+      id: created.reconciliation.id,
+      bankId: bank.id,
+      fileName: created.reconciliation.fileName,
+      statementStart: created.reconciliation.statementStart,
+      statementEnd: created.reconciliation.statementEnd,
+      lineCount: lines.length,
+      matchedCount: created.matchedCount,
+      unmatchedCount: lines.length - created.matchedCount,
+    });
+  } catch (error: any) {
+    if (error.code === 'P2002') return res.status(409).json({ error: 'تم استيراد هذا الملف من قبل لهذا الحساب البنكي' });
+    console.error('Failed to import bank statement:', error);
+    res.status(500).json({ error: 'تعذر استيراد كشف الحساب' });
+  }
+});
+
+router.get('/banks/reconciliations/:id', async (req, res) => {
+  try {
+    const reconciliation = await prisma.bankReconciliation.findUnique({
+      where: { id: req.params.id },
+      include: {
+        bank: { select: { id: true, bankName: true, accountNumber: true } },
+        lines: {
+          include: {
+            matchedTransaction: {
+              select: { id: true, type: true, amount: true, date: true, referenceNumber: true, description: true },
+            },
+          },
+          orderBy: { transactionDate: 'asc' },
+        },
+      },
+    });
+    if (!reconciliation) return res.status(404).json({ error: 'مطابقة كشف الحساب غير موجودة' });
+    const dateStart = new Date(reconciliation.statementStart);
+    dateStart.setUTCDate(dateStart.getUTCDate() - 31);
+    const dateEnd = new Date(reconciliation.statementEnd);
+    dateEnd.setUTCDate(dateEnd.getUTCDate() + 31);
+    const availableTransactions = await prisma.bankTransaction.findMany({
+      where: {
+        bankId: reconciliation.bankId,
+        reconciledAt: null,
+        date: { gte: dateStart, lte: dateEnd },
+      },
+      select: { id: true, type: true, amount: true, date: true, referenceNumber: true, description: true },
+      orderBy: { date: 'asc' },
+      take: 1000,
+    });
+    res.json({ ...reconciliation, availableTransactions });
+  } catch (error) {
+    console.error('Failed to load bank reconciliation:', error);
+    res.status(500).json({ error: 'تعذر تحميل تفاصيل المطابقة' });
+  }
+});
+
+router.post('/banks/reconciliations/:id/match', async (req: AuthenticatedRequest, res) => {
+  const { lineId, transactionId } = req.body || {};
+  if (typeof lineId !== 'string' || typeof transactionId !== 'string') {
+    return res.status(400).json({ error: 'حدد حركة كشف الحساب والحركة البنكية' });
+  }
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const reconciliation = await tx.bankReconciliation.findUnique({
+        where: { id: req.params.id },
+        include: { lines: { where: { id: lineId } } },
+      });
+      if (!reconciliation) throw new Error('مطابقة كشف الحساب غير موجودة');
+      if (reconciliation.completedAt) throw new Error('لا يمكن تعديل مطابقة مكتملة');
+      const line = reconciliation.lines[0];
+      if (!line || line.matchedTransactionId) throw new Error('سطر كشف الحساب غير موجود أو تمت مطابقته بالفعل');
+      if (!isStatementDirection(line.direction)) throw new Error('اتجاه سطر كشف الحساب غير صالح');
+      const transaction = await tx.bankTransaction.findFirst({
+        where: { id: transactionId, bankId: reconciliation.bankId, reconciledAt: null },
+      });
+      if (!transaction) throw new Error('الحركة البنكية غير موجودة أو تمت مطابقتها بالفعل');
+      const expectedTypes = line.direction === 'CREDIT' ? ['DEPOSIT', 'CARD_SETTLEMENT'] : ['WITHDRAWAL'];
+      if (!expectedTypes.includes(transaction.type) || Math.abs(transaction.amount - line.amount) > 0.01) {
+        throw new Error('يجب أن يتساوى اتجاه ومبلغ الحركة البنكية مع سطر الكشف');
+      }
+      const changed = await tx.bankTransaction.updateMany({
+        where: { id: transaction.id, reconciledAt: null },
+        data: {
+          reconciledAt: new Date(),
+          reconciledById: req.user?.id,
+          statementReference: line.referenceNumber,
+        },
+      });
+      if (changed.count !== 1) throw new Error('تمت مطابقة الحركة من مستخدم آخر؛ أعد تحميل الكشف');
+      const lineUpdate = await tx.bankStatementLine.updateMany({
+        where: { id: line.id, matchedTransactionId: null },
+        data: { matchedTransactionId: transaction.id, matchedAt: new Date() },
+      });
+      if (lineUpdate.count !== 1) throw new Error('تمت مطابقة سطر كشف الحساب من مستخدم آخر؛ أعد تحميل الكشف');
+      return { lineId: line.id, transactionId: transaction.id };
+    });
+    await logAudit({
+      userId: req.user?.id,
+      action: 'MATCH_BANK_STATEMENT_LINE',
+      entity: 'BankReconciliation',
+      entityId: req.params.id,
+      details: `مطابقة سطر كشف الحساب ${result.lineId} مع الحركة البنكية ${result.transactionId}`,
+      ipAddress: req.ip,
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'تعذر مطابقة الحركة البنكية' });
+  }
+});
+
+router.post('/banks/reconciliations/:id/complete', async (req: AuthenticatedRequest, res) => {
+  try {
+    const reconciliation = await prisma.bankReconciliation.findUnique({
+      where: { id: req.params.id },
+      include: { _count: { select: { lines: true } } },
+    });
+    if (!reconciliation) return res.status(404).json({ error: 'مطابقة كشف الحساب غير موجودة' });
+    if (reconciliation.completedAt) return res.status(409).json({ error: 'مطابقة كشف الحساب معتمدة بالفعل' });
+    const unmatchedCount = await prisma.bankStatementLine.count({
+      where: { reconciliationId: reconciliation.id, matchedTransactionId: null },
+    });
+    if (unmatchedCount > 0) {
+      return res.status(400).json({ error: `تبقى ${unmatchedCount} حركة من كشف الحساب دون مطابقة` });
+    }
+    const completed = await prisma.bankReconciliation.updateMany({
+      where: { id: reconciliation.id, completedAt: null },
+      data: { completedAt: new Date() },
+    });
+    if (completed.count !== 1) return res.status(409).json({ error: 'تم اعتماد المطابقة من مستخدم آخر' });
+    await logAudit({
+      userId: req.user?.id,
+      action: 'COMPLETE_BANK_RECONCILIATION',
+      entity: 'BankReconciliation',
+      entityId: reconciliation.id,
+      details: `اعتماد مطابقة كشف حساب ${reconciliation.fileName}؛ ${reconciliation._count.lines} حركة`,
+      ipAddress: req.ip,
+    });
+    res.json({ success: true, completedAt: new Date() });
+  } catch (error) {
+    console.error('Failed to complete bank reconciliation:', error);
+    res.status(500).json({ error: 'تعذر اعتماد مطابقة كشف الحساب' });
+  }
+});
+
 router.post('/banks/transactions', async (req, res) => {
   try {
-    const { bankId, type, amount, referenceNumber, description } = req.body;
+    const { bankId, type, amount, referenceNumber, description, date } = req.body;
     const amountVal = parseFloat(amount);
+    if (typeof bankId !== 'string' || !bankId
+      || !['DEPOSIT', 'WITHDRAWAL', 'TRANSFER', 'CARD_SETTLEMENT'].includes(type)
+      || !Number.isFinite(amountVal) || amountVal <= 0) {
+      return res.status(400).json({ error: 'حدد الحساب ونوع حركة بنكية صحيح ومبلغًا أكبر من صفر' });
+    }
+    if (referenceNumber !== undefined && referenceNumber !== null && typeof referenceNumber !== 'string') {
+      return res.status(400).json({ error: 'رقم مرجع الحركة غير صالح' });
+    }
+    if (description !== undefined && description !== null && typeof description !== 'string') {
+      return res.status(400).json({ error: 'وصف الحركة غير صالح' });
+    }
+    const transactionDate = date ? new Date(date) : new Date();
+    if (!Number.isFinite(transactionDate.getTime())) return res.status(400).json({ error: 'تاريخ الحركة غير صالح' });
 
     const transaction = await prisma.$transaction(async (tx) => {
       if (type === 'DEPOSIT' || type === 'CARD_SETTLEMENT') {
@@ -393,8 +670,10 @@ router.post('/banks/transactions', async (req, res) => {
           bankId,
           type,
           amount: amountVal,
+          date: transactionDate,
           referenceNumber,
           description,
+          createdById: (req as AuthenticatedRequest).user?.id,
         },
       });
 
@@ -416,6 +695,14 @@ router.post('/banks/transactions', async (req, res) => {
       return bankTransaction;
     });
 
+    await logAudit({
+      userId: (req as AuthenticatedRequest).user?.id,
+      action: 'CREATE_BANK_TRANSACTION',
+      entity: 'BankTransaction',
+      entityId: transaction.id,
+      details: `تسجيل حركة ${type} بمبلغ ${amountVal} ج.م`,
+      ipAddress: req.ip,
+    });
     res.status(201).json(transaction);
   } catch (err: any) {
     res.status(400).json({ error: err.message });

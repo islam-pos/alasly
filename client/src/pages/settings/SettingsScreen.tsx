@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { 
   Settings, Building, ShieldCheck, History, 
   Save, Plus, MapPin, Phone, Mail, CheckCircle2, Printer,
-  Users, Key, FileText, Search, MessageCircle
+  Users, Key, FileText, Search, MessageCircle, Database, Download, RotateCcw
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -45,8 +45,12 @@ export const SettingsScreen: React.FC = () => {
   const canManageSettings = user?.role === 'admin' || user?.permissions?.includes('manage_settings') === true;
   const canManageRoles = canManageSettings;
   const canViewAuditLogs = user?.role === 'admin' || user?.permissions?.includes('view_audit_logs') === true;
-  const [activeTab, setActiveTab] = useState<'company' | 'branches' | 'rbac' | 'users' | 'audit' | 'integrations'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'branches' | 'rbac' | 'users' | 'audit' | 'integrations' | 'backups'>('company');
   const [loading, setLoading] = useState(true);
+  const [backups, setBackups] = useState<{ id: string; type: 'daily' | 'manual'; date: string; sizeBytes: number }[]>([]);
+  const [restorePending, setRestorePending] = useState(false);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
 
   // Data states
   const [company, setCompany] = useState<any>({});
@@ -168,6 +172,9 @@ export const SettingsScreen: React.FC = () => {
       case 'integrations':
         if (user?.role === 'admin') setActiveTab('integrations');
         break;
+      case 'backups':
+        if (user?.role === 'admin') setActiveTab('backups');
+        break;
     }
     if (!canManageSettings && canViewAuditLogs) setActiveTab('audit');
   }, [searchParams, user?.role, canViewAuditLogs, canManageSettings]);
@@ -181,6 +188,74 @@ export const SettingsScreen: React.FC = () => {
       })
       .catch((err: any) => showToast(err.response?.data?.error || 'فشل تحميل المستخدمين', 'error'));
   }, [activeTab]);
+
+  const loadBackups = async () => {
+    setLoadingBackups(true);
+    try {
+      const response = await api.settings.getBackups();
+      setBackups(response.data.backups);
+      setRestorePending(response.data.restorePending);
+    } catch (err: any) {
+      showToast(err.response?.data?.error || err.message || 'تعذر تحميل النسخ الاحتياطية', 'error');
+    } finally {
+      setLoadingBackups(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'backups' && user?.role === 'admin') void loadBackups();
+  }, [activeTab, user?.role]);
+
+  const handleCreateBackup = async () => {
+    setBackupBusy(true);
+    try {
+      const response = await api.settings.createManualBackup();
+      showToast('تم إنشاء النسخة الاحتياطية بنجاح', 'success');
+      await loadBackups();
+      const blob = await api.settings.downloadBackup(response.data.backup.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = response.data.backup.id;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      showToast(err.response?.data?.error || err.message || 'تعذر إنشاء أو تنزيل النسخة الاحتياطية', 'error');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleDownloadBackup = async (id: string) => {
+    try {
+      const blob = await api.settings.downloadBackup(id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = id;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      showToast(err.response?.data?.error || err.message || 'تعذر تنزيل النسخة الاحتياطية', 'error');
+    }
+  };
+
+  const handleRestoreBackup = async (id: string) => {
+    const confirmed = window.confirm(
+      `تحذير: ستُستبدل قاعدة البيانات الحالية والمرفقات ببيانات النسخة المختارة. ستدخل الخدمة وضع الصيانة ويلزم إعادة تشغيل Railway. هل تريد المتابعة؟`,
+    );
+    if (!confirmed) return;
+    setBackupBusy(true);
+    try {
+      await api.settings.restoreBackup(id);
+      setRestorePending(true);
+      showToast('تم تجهيز الاستعادة. أعد تشغيل خدمة Railway لتطبيقها.', 'success');
+    } catch (err: any) {
+      showToast(err.response?.data?.error || err.message || 'تعذر تجهيز استعادة النسخة', 'error');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
 
   // Save Company Settings
   const handleSaveCompany = async (e: React.FormEvent) => {
@@ -427,6 +502,17 @@ export const SettingsScreen: React.FC = () => {
           >
             <MessageCircle className="w-4 h-4" />
             ربط التنبيهات
+          </button>
+        )}
+        {user?.role === 'admin' && (
+          <button
+            onClick={() => setActiveTab('backups')}
+            className={`pb-4 px-4 font-bold text-sm border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+              activeTab === 'backups' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            النسخ الاحتياطي والاستعادة
           </button>
         )}
       </div>
@@ -955,6 +1041,76 @@ export const SettingsScreen: React.FC = () => {
       )}
 
       {activeTab === 'integrations' && user?.role === 'admin' && <NotificationIntegrations />}
+
+      {activeTab === 'backups' && user?.role === 'admin' && (
+        <section className="space-y-5 rounded-b-2xl border border-slate-200 border-t-0 bg-white p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-black text-slate-900">النسخ الاحتياطي والاستعادة</h2>
+              <p className="mt-1 text-sm text-slate-600">تُنشأ نسخة يومية بعد الساعة 3 صباحًا بتوقيت القاهرة، وتشمل قاعدة البيانات ومرفقات الورشة.</p>
+            </div>
+            <button
+              type="button"
+              disabled={backupBusy || restorePending}
+              onClick={() => void handleCreateBackup()}
+              className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {backupBusy ? 'جارٍ إنشاء النسخة...' : 'إنشاء وتنزيل نسخة الآن'}
+            </button>
+          </div>
+          <div role="note" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            النسخ المجدولة تُحفظ على وحدة تخزين Railway نفسها؛ نزّل نسخة دورية واحفظها خارج Railway للحماية من فقدان وحدة التخزين.
+          </div>
+          {restorePending && (
+            <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800">
+              توجد استعادة معلقة. واجهات النظام متوقفة حتى إعادة تشغيل خدمة Railway وتطبيق النسخة.
+            </div>
+          )}
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full text-right text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-600">
+                <tr>
+                  <th className="p-3">نوع النسخة</th>
+                  <th className="p-3">التاريخ</th>
+                  <th className="p-3">الحجم</th>
+                  <th className="p-3">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {backups.map((backup) => (
+                  <tr key={backup.id}>
+                    <td className="p-3 font-bold">{backup.type === 'daily' ? 'تلقائية يومية' : 'يدوية'}</td>
+                    <td className="p-3">{new Date(backup.date).toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' })}</td>
+                    <td className="p-3">{(backup.sizeBytes / (1024 * 1024)).toFixed(2)} MB</td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => void handleDownloadBackup(backup.id)} className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold">
+                          <Download className="h-3.5 w-3.5" /> تنزيل
+                        </button>
+                        <button
+                          type="button"
+                          disabled={backupBusy || restorePending}
+                          onClick={() => void handleRestoreBackup(backup.id)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-700 disabled:opacity-50"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" /> استعادة
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!loadingBackups && backups.length === 0 && (
+                  <tr><td colSpan={4} className="p-6 text-center text-slate-500">لا توجد نسخ احتياطية بعد</td></tr>
+                )}
+                {loadingBackups && (
+                  <tr><td colSpan={4} className="p-6 text-center text-slate-500">جارٍ تحميل النسخ الاحتياطية...</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-slate-500">تُحتفظ بآخر 30 نسخة يومية و10 نسخ يدوية. الاستعادة تستبدل قاعدة البيانات والمرفقات، وتتطلب إعادة تشغيل خدمة Railway.</p>
+        </section>
+      )}
 
       {isUserModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

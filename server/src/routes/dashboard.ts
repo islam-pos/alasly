@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
+import { calculateProfitTotals } from '../services/profitCalculations';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.get('/stats', async (req, res) => {
       _count: { id: true },
       where: {
         date: { gte: startOfToday },
-        status: { not: 'CANCELLED' },
+        status: { in: ['PAID', 'PARTIALLY_PAID', 'POSTED', 'RETURNED'] },
         invoiceType: { not: 'QUOTATION' },
       },
     });
@@ -25,7 +26,7 @@ router.get('/stats', async (req, res) => {
       _sum: { grandTotal: true },
       where: {
         date: { gte: startOfMonth },
-        status: { not: 'CANCELLED' },
+        status: { in: ['PAID', 'PARTIALLY_PAID', 'POSTED', 'RETURNED'] },
         invoiceType: { not: 'QUOTATION' },
       },
     });
@@ -36,7 +37,7 @@ router.get('/stats', async (req, res) => {
       where: {
         date: { gte: startOfMonth },
         invoiceType: 'MAINTENANCE',
-        status: { not: 'CANCELLED' },
+        status: { in: ['PAID', 'PARTIALLY_PAID', 'POSTED', 'RETURNED'] },
       },
     });
 
@@ -74,29 +75,43 @@ router.get('/stats', async (req, res) => {
     });
     const inventoryValue = stockBalances.reduce((acc, sb) => acc + (sb.quantity * sb.item.avgCost), 0);
 
-    // 8. Cost of Goods Sold (month)
-    const soldItems = await prisma.salesInvoiceItem.findMany({
-      where: {
-        invoice: { date: { gte: startOfMonth }, status: { not: 'CANCELLED' } },
-        itemType: 'PART',
-      },
-      select: { quantity: true, costPrice: true },
+    const profitDateRange = { gte: startOfMonth, lte: now };
+    const [profitInvoices, salesReturns, commissions, revenues, profitExpenses] = await Promise.all([
+      prisma.salesInvoice.findMany({
+        where: {
+          date: profitDateRange,
+          status: { in: ['PAID', 'PARTIALLY_PAID', 'POSTED', 'RETURNED'] },
+          invoiceType: { not: 'QUOTATION' },
+        },
+        include: { items: { select: { itemType: true, quantity: true, total: true, costPrice: true } } },
+      }),
+      prisma.salesReturn.findMany({
+        where: { date: profitDateRange, status: 'POSTED' },
+        include: { items: { select: { quantity: true, costPrice: true, costPriceIsEstimated: true } } },
+      }),
+      prisma.commission.findMany({ where: { createdAt: profitDateRange }, select: { amount: true } }),
+      prisma.revenue.findMany({ where: { date: profitDateRange }, select: { amount: true } }),
+      prisma.expense.findMany({ where: { date: profitDateRange }, select: { amount: true } }),
+    ]);
+    const profitTotals = calculateProfitTotals({
+      invoices: profitInvoices,
+      returns: salesReturns,
+      commissions,
+      revenues,
+      expenses: profitExpenses,
     });
-    const partsCostMonth = soldItems.reduce((acc, it) => acc + (it.quantity * it.costPrice), 0);
 
-    // Net Profit Month = (Sales Total - Parts Cost - Expenses)
     const totalSalesNum = salesMonth._sum.grandTotal || 0;
     const totalExpNum = expensesMonth._sum.totalAmount || 0;
-    const netProfit = totalSalesNum - partsCostMonth - totalExpNum;
 
     res.json({
       salesToday: salesToday._sum.grandTotal || 0,
       todayInvoicesCount: salesToday._count.id || 0,
       salesMonth: totalSalesNum,
       maintenanceRevenue: maintenanceRev._sum.grandTotal || 0,
-      sparePartsCost: partsCostMonth,
+      sparePartsCost: profitTotals.parts.cost,
       expensesMonth: totalExpNum,
-      netProfit,
+      netProfit: profitTotals.netProfit,
       vehiclesInWorkshop,
       openJobCards,
       customerReceivables,

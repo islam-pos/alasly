@@ -6,6 +6,7 @@ import { sendInvoicePdf } from '../services/whatsapp';
 import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
 import { postJournalEntry } from '../services/accounting';
 import { branchWhere } from '../services/branchScope';
+import { buildSalesReturnSnapshot } from '../services/salesReturns';
 
 const router = Router();
 
@@ -595,68 +596,72 @@ router.post('/invoices/:id/convert-quotation', async (req: AuthenticatedRequest,
 router.post('/returns', async (req, res) => {
   try {
     const { salesInvoiceId, items, reason } = req.body;
-
-    const originalInvoice = await prisma.salesInvoice.findUnique({
-      where: { id: salesInvoiceId },
-      include: { items: true },
-    });
-
-    if (!originalInvoice || originalInvoice.invoiceType === 'QUOTATION') {
-      return res.status(404).json({ error: 'الفاتورة الأصلية غير موجودة أو غير قابلة للإرجاع' });
+    if (typeof salesInvoiceId !== 'string' || !salesInvoiceId || !Array.isArray(items)) {
+      return res.status(400).json({ error: 'بيانات مرتجع المبيعات غير صالحة' });
     }
-
-    const count = await prisma.salesReturn.count();
-    const returnNumber = `RET-${new Date().getFullYear()}-${String(count + 1).padStart(3, '0')}`;
-
-    const subtotal = items.reduce((sum: number, it: any) => sum + (parseFloat(it.unitPrice) * parseInt(it.quantity)), 0);
-    const taxAmount = 0;
-    const totalAmount = subtotal;
+    const requestedItems = items.map((item: any) => ({
+      itemId: typeof item?.itemId === 'string' ? item.itemId : '',
+      quantity: Number(item?.quantity),
+    }));
 
     const returnRecord = await prisma.$transaction(async (tx) => {
-      // 1. Create return
+      const originalInvoice = await tx.salesInvoice.findUnique({
+        where: { id: salesInvoiceId },
+        include: {
+          items: true,
+          returns: { where: { status: 'POSTED' }, include: { items: true } },
+        },
+      });
+      if (!originalInvoice || originalInvoice.invoiceType === 'QUOTATION') {
+        throw new Error('الفاتورة الأصلية غير موجودة أو غير قابلة للإرجاع');
+      }
+      if (!originalInvoice.warehouseId) {
+        throw new Error('لا يوجد مخزن مرتبط بالفاتورة لإعادة القطع إليه');
+      }
+      const snapshot = buildSalesReturnSnapshot({
+        subtotal: originalInvoice.subtotal,
+        discount: originalInvoice.discount,
+        taxAmount: originalInvoice.taxAmount,
+        items: originalInvoice.items,
+        existingReturns: originalInvoice.returns.flatMap((salesReturn) => salesReturn.items),
+        requestedItems,
+      });
+      const count = await tx.salesReturn.count();
+      const returnNumber = `RET-${new Date().getFullYear()}-${String(count + 1).padStart(3, '0')}`;
+
       const ret = await tx.salesReturn.create({
         data: {
           returnNumber,
           salesInvoiceId,
           customerId: originalInvoice.customerId,
-          subtotal,
-          taxAmount,
-          totalAmount,
+          subtotal: snapshot.subtotal,
+          discount: snapshot.discount,
+          taxAmount: snapshot.taxAmount,
+          totalAmount: snapshot.totalAmount,
+          profitBasis: 'ORIGINAL_INVOICE',
           reason: reason || null,
           items: {
-            create: items.map((it: any) => ({
-              itemId: it.itemId,
-              quantity: parseInt(it.quantity),
-              unitPrice: parseFloat(it.unitPrice),
-              total: parseFloat(it.unitPrice) * parseInt(it.quantity),
+            create: snapshot.items.map((item) => ({
+              ...item,
+              costPriceIsEstimated: false,
             })),
           },
         },
       });
 
-      // 2. Restore stock for returned items
-      for (const it of items) {
-        const qty = parseInt(it.quantity);
-        const itemObj = await tx.item.findUnique({ where: { id: it.itemId } });
-
+      for (const item of snapshot.items) {
         await tx.stockBalance.update({
-          where: {
-            itemId_warehouseId: {
-              itemId: it.itemId,
-              warehouseId: originalInvoice.warehouseId!,
-            },
-          },
-          data: { quantity: { increment: qty } },
+          where: { itemId_warehouseId: { itemId: item.itemId, warehouseId: originalInvoice.warehouseId } },
+          data: { quantity: { increment: item.quantity } },
         });
-
         await tx.stockTransaction.create({
           data: {
-            itemId: it.itemId,
-            warehouseId: originalInvoice.warehouseId!,
+            itemId: item.itemId,
+            warehouseId: originalInvoice.warehouseId,
             type: 'SALE_RETURN',
-            quantity: qty,
-            unitCost: itemObj?.avgCost || 0,
-            totalCost: qty * (itemObj?.avgCost || 0),
+            quantity: item.quantity,
+            unitCost: item.costPrice,
+            totalCost: item.quantity * item.costPrice,
             referenceType: 'SalesReturn',
             referenceId: ret.id,
             notes: `مرتجع مبيعات بموجب سند ${returnNumber} للفاتورة ${originalInvoice.invoiceNumber}`,
@@ -668,14 +673,19 @@ router.post('/returns', async (req, res) => {
       if (originalInvoice.customerId && originalInvoice.remainingAmount > 0) {
         await tx.customer.update({
           where: { id: originalInvoice.customerId },
-          data: { currentBalance: { decrement: totalAmount } },
+          data: { currentBalance: { decrement: Math.min(snapshot.totalAmount, originalInvoice.remainingAmount) } },
         });
       }
 
       return ret;
     });
 
-    await logAudit({ action: 'POST', entity: 'SalesReturn', entityId: returnRecord.id, details: `إصدار مرتجع مبيعات ${returnNumber} بمبلغ ${totalAmount} ج.م` });
+    await logAudit({
+      action: 'POST',
+      entity: 'SalesReturn',
+      entityId: returnRecord.id,
+      details: `إصدار مرتجع مبيعات ${returnRecord.returnNumber} بمبلغ ${returnRecord.totalAmount} ج.م`,
+    });
 
     res.status(201).json(returnRecord);
   } catch (err: any) {

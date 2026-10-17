@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma';
 import { getWhatsappQrStatus, sendWhatsappQrMessage } from './whatsappQr';
 import { getTelegramQrStatus, sendTelegramQrMessage } from './telegramQr';
+import { getNotificationRetryDelayMs } from './notificationRetry';
 
 export type NotificationChannel = 'whatsapp' | 'telegram';
 export type NotificationOptions = {
@@ -119,16 +120,90 @@ export const saveIntegrationSettings = async (input: Record<string, unknown>) =>
   return getIntegrationStatus();
 };
 
-const sendToChannel = async (channel: NotificationChannel, text: string, state?: IntegrationState) => {
+const sendToChannel = async (
+  channel: NotificationChannel,
+  text: string,
+  state?: IntegrationState,
+  recipient?: string | null,
+) => {
   const settings = state || await getIntegrationState();
   if (channel === 'whatsapp') {
-    if (!settings.whatsappPhone) throw new Error('Set the WhatsApp recipient phone number in integration settings');
-    await sendWhatsappQrMessage(settings.whatsappPhone, text);
+    const phoneNumber = recipient || settings.whatsappPhone;
+    if (!phoneNumber) throw new Error('Set the WhatsApp recipient phone number in integration settings');
+    await sendWhatsappQrMessage(phoneNumber, text);
     return;
   }
   if (channel === 'telegram') {
     await sendTelegramQrMessage(text);
     return;
+  }
+};
+
+const enqueueNotification = (channel: NotificationChannel, eventKey: string, message: string, recipient?: string) =>
+  prisma.notificationDelivery.upsert({
+    where: { channel_eventKey: { channel, eventKey } },
+    create: { channel, eventKey, message, recipient, status: 'PENDING', nextAttemptAt: new Date() },
+    update: {},
+  });
+
+export const processNotificationOutbox = async () => {
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - 10 * 60 * 1000);
+  const pending = await prisma.notificationDelivery.findMany({
+    where: {
+      OR: [
+        { status: 'PENDING', nextAttemptAt: { lte: now } },
+        { status: 'SENDING', updatedAt: { lt: staleBefore } },
+      ],
+    },
+    orderBy: { nextAttemptAt: 'asc' },
+    take: 50,
+  });
+
+  for (const delivery of pending) {
+    const claimWhere = delivery.status === 'SENDING'
+      ? { id: delivery.id, status: 'SENDING', updatedAt: { lt: staleBefore } }
+      : { id: delivery.id, status: 'PENDING', nextAttemptAt: { lte: now } };
+    const claimed = await prisma.notificationDelivery.updateMany({
+      where: claimWhere,
+      data: { status: 'SENDING', attemptCount: { increment: 1 }, updatedAt: now },
+    });
+    if (claimed.count !== 1) continue;
+
+    try {
+      if (delivery.channel !== 'whatsapp' && delivery.channel !== 'telegram') {
+        throw new Error(`Unsupported notification channel: ${delivery.channel}`);
+      }
+      if (!delivery.message) throw new Error('Queued notification has no message payload');
+      await sendToChannel(delivery.channel, delivery.message, undefined, delivery.recipient);
+      await prisma.notificationDelivery.updateMany({
+        where: { id: delivery.id, status: 'SENDING' },
+        data: { status: 'SENT', sentAt: new Date(), lastError: null },
+      });
+      if (delivery.eventKey.startsWith('maintenance-reminder:')) {
+        const reminderId = delivery.eventKey.slice('maintenance-reminder:'.length);
+        try {
+          await prisma.maintenanceReminder.updateMany({
+            where: { id: reminderId, status: 'PENDING' },
+            data: { status: 'SENT', sentAt: new Date() },
+          });
+        } catch (error) {
+          console.error(`Maintenance reminder status update failed (${reminderId}); notification was delivered:`, error);
+        }
+      }
+    } catch (error) {
+      const attemptCount = delivery.attemptCount + 1;
+      const reason = error instanceof Error ? error.message : String(error);
+      await prisma.notificationDelivery.updateMany({
+        where: { id: delivery.id, status: 'SENDING' },
+        data: {
+          status: 'PENDING',
+          nextAttemptAt: new Date(Date.now() + getNotificationRetryDelayMs(attemptCount)),
+          lastError: reason.slice(0, 1000),
+        },
+      });
+      console.error(`Notification delivery deferred (${delivery.eventKey}, ${delivery.channel}, attempt ${attemptCount}):`, error);
+    }
   }
 };
 
@@ -157,27 +232,20 @@ export const notifyEvent = async (category: NotificationCategory, text: string) 
   try {
     const state = await getIntegrationState();
     if (!state.options[category]) return;
-    await sendToConfiguredChannels(text, state, category);
+    await sendToConfiguredChannels(text, state, category, `event:${category}:${randomUUID()}`);
   } catch (error) {
     console.error(`Notification could not be prepared (${category}):`, error);
   }
 };
 
-const sendToConfiguredChannels = async (text: string, state: IntegrationState, category: string) => {
-  const channels = (['whatsapp', 'telegram'] as NotificationChannel[]).filter((channel) => channel === 'telegram'
-    ? true
-    : Boolean(state.whatsappPhone));
-  const whatsapp = channels.includes('whatsapp') ? await getWhatsappQrStatus() : null;
-  const telegram = channels.includes('telegram') ? await getTelegramQrStatus() : null;
-  const enabledChannels = channels.filter((channel) => channel === 'whatsapp'
-    ? Boolean(whatsapp?.connected)
-    : Boolean(telegram?.connected));
-  const results = await Promise.allSettled(enabledChannels.map((channel) => sendToChannel(channel, text, state)));
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      console.error(`Notification delivery failed (${category}, ${enabledChannels[index]}):`, result.reason);
-    }
-  });
+const sendToConfiguredChannels = async (text: string, state: IntegrationState, category: string, eventKey: string) => {
+  const channels: NotificationChannel[] = [];
+  if (state.whatsappPhone && (await getWhatsappQrStatus()).connected) channels.push('whatsapp');
+  if ((await getTelegramQrStatus()).connected) channels.push('telegram');
+  if (!channels.length) return;
+  await Promise.all(channels.map((channel) =>
+    enqueueNotification(channel, `${eventKey}:${category}`, text, channel === 'whatsapp' ? state.whatsappPhone : undefined)));
+  await processNotificationOutbox();
 };
 
 export const notifyAuditActivity = async (auditId: string) => {
@@ -242,6 +310,7 @@ export const notifyAuditActivity = async (auditId: string) => {
       `${categories.join('، ')}\nالمستخدم: ${actor}\n${details}`,
       state,
       categories.join(','),
+      `audit:${audit.id}`,
     );
   } catch (error) {
     console.error('Audit notification could not be prepared:', error);
@@ -326,18 +395,12 @@ export const sendShiftSummary = async (date: string) => {
       : (await getTelegramQrStatus()).connected;
     if (!configured) continue;
     const eventKey = `shift-summary:${date}`;
-    const claimed = await prisma.$executeRaw`
-      INSERT INTO "NotificationDelivery" ("id", "channel", "eventKey", "sentAt")
-      VALUES (${randomUUID()}, ${channel}, ${eventKey}, CURRENT_TIMESTAMP)
-      ON CONFLICT("channel", "eventKey") DO NOTHING
-    `;
-    if (!claimed) continue;
-    try {
-      await sendToChannel(channel, summary, state);
-    } catch (error) {
-      await prisma.notificationDelivery.delete({ where: { channel_eventKey: { channel, eventKey } } });
-      console.error(`Shift summary delivery failed (${channel}):`, error);
-    }
+    await enqueueNotification(
+      channel,
+      eventKey,
+      summary,
+      channel === 'whatsapp' ? state.whatsappPhone : undefined,
+    );
   }
 };
 
@@ -366,33 +429,19 @@ const sendDueMaintenanceReminders = async () => {
     if ((!dueByDate && !dueByOdometer) || !customer.whatsappOptIn || !customer.whatsappNumber) continue;
 
     const eventKey = `maintenance-reminder:${reminder.id}`;
-    const claimed = await prisma.$executeRaw`
-      INSERT INTO "NotificationDelivery" ("id", "channel", "eventKey", "sentAt")
-      VALUES (${randomUUID()}, 'whatsapp', ${eventKey}, CURRENT_TIMESTAMP)
-      ON CONFLICT("channel", "eventKey") DO NOTHING
-    `;
-    if (!claimed) continue;
-
-    await prisma.maintenanceReminder.update({
+    const due = reminder.dueDate
+      ? `التاريخ المقترح: ${reminder.dueDate.toLocaleDateString('ar-EG')}`
+      : `العداد المستهدف: ${reminder.dueOdometer?.toLocaleString('ar-EG')} كم`;
+    await enqueueNotification(
+      'whatsapp',
+      eventKey,
+      `تذكير صيانة من مركز المحترف: حان موعد ${reminder.serviceName} لسيارتك ${reminder.vehicle.make} ${reminder.vehicle.model}. ${due}`,
+      customer.whatsappNumber,
+    );
+    await prisma.maintenanceReminder.updateMany({
       where: { id: reminder.id },
       data: { lastAttemptAt: now },
     });
-    try {
-      const due = reminder.dueDate
-        ? `التاريخ المقترح: ${reminder.dueDate.toLocaleDateString('ar-EG')}`
-        : `العداد المستهدف: ${reminder.dueOdometer?.toLocaleString('ar-EG')} كم`;
-      await sendWhatsappQrMessage(
-        customer.whatsappNumber,
-        `تذكير صيانة من مركز المحترف: حان موعد ${reminder.serviceName} لسيارتك ${reminder.vehicle.make} ${reminder.vehicle.model}. ${due}`,
-      );
-      await prisma.maintenanceReminder.update({
-        where: { id: reminder.id },
-        data: { status: 'SENT', sentAt: now },
-      });
-    } catch (error) {
-      await prisma.notificationDelivery.delete({ where: { channel_eventKey: { channel: 'whatsapp', eventKey } } });
-      console.error(`Maintenance reminder delivery failed (${reminder.id}):`, error);
-    }
   }
 };
 
@@ -409,6 +458,7 @@ export const startNotificationScheduler = () => {
       const state = await getIntegrationState();
       schedulerErrorLogged = false;
       await sendDueMaintenanceReminders();
+      await processNotificationOutbox();
       if (!state.options.shiftSummary) return;
       const parts = new Intl.DateTimeFormat('en-CA', {
         timeZone: state.timeZone,
@@ -424,6 +474,7 @@ export const startNotificationScheduler = () => {
       const [targetHour, targetMinute] = state.shiftEndTime.split(':').map(Number);
       if (nowMinutes >= targetHour * 60 + targetMinute) {
         await sendShiftSummary(`${part('year')}-${part('month')}-${part('day')}`);
+        await processNotificationOutbox();
       }
     } catch (error) {
       if (!schedulerErrorLogged) {

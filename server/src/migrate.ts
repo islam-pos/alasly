@@ -62,12 +62,50 @@ const migrate = async () => {
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "WhatsappAuthData" ("key" TEXT NOT NULL PRIMARY KEY, "encryptedValue" TEXT NOT NULL)`;
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "TelegramAuthSession" ("id" INTEGER NOT NULL PRIMARY KEY, "encryptedSession" TEXT)`;
   await prisma.$executeRaw`UPDATE "NotificationIntegration" SET "telegram" = NULL WHERE "telegram" IS NOT NULL`;
-  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "NotificationDelivery" ("id" TEXT NOT NULL PRIMARY KEY, "channel" TEXT NOT NULL, "eventKey" TEXT NOT NULL, "sentAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`;
+  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "NotificationDelivery" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "channel" TEXT NOT NULL,
+    "eventKey" TEXT NOT NULL,
+    "message" TEXT,
+    "recipient" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'SENT',
+    "attemptCount" INTEGER NOT NULL DEFAULT 0,
+    "nextAttemptAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastError" TEXT,
+    "sentAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`;
+  await ensureColumn('NotificationDelivery', 'message', 'TEXT');
+  await ensureColumn('NotificationDelivery', 'recipient', 'TEXT');
+  await ensureColumn('NotificationDelivery', 'status', "TEXT NOT NULL DEFAULT 'SENT'");
+  await ensureColumn('NotificationDelivery', 'attemptCount', 'INTEGER NOT NULL DEFAULT 0');
+  await ensureColumn('NotificationDelivery', 'nextAttemptAt', "DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00'");
+  await ensureColumn('NotificationDelivery', 'lastError', 'TEXT');
+  await ensureColumn('NotificationDelivery', 'updatedAt', "DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00'");
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "NotificationDelivery_channel_eventKey_key" ON "NotificationDelivery"("channel", "eventKey")`;
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "NotificationDelivery_status_nextAttemptAt_idx" ON "NotificationDelivery"("status", "nextAttemptAt")`;
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "NotificationDelivery_status_updatedAt_idx" ON "NotificationDelivery"("status", "updatedAt")`;
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "MaintenanceReminder" ("id" TEXT NOT NULL PRIMARY KEY, "vehicleId" TEXT NOT NULL, "serviceName" TEXT NOT NULL, "dueDate" DATETIME, "dueOdometer" INTEGER, "status" TEXT NOT NULL DEFAULT 'PENDING', "notes" TEXT, "sentAt" DATETIME, "lastAttemptAt" DATETIME, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "MaintenanceReminder_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES "Vehicle"("id") ON DELETE CASCADE ON UPDATE CASCADE)`;
   await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "MaintenanceReminder_status_dueDate_idx" ON "MaintenanceReminder"("status", "dueDate")`;
   await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "MaintenanceReminder_vehicleId_status_idx" ON "MaintenanceReminder"("vehicleId", "status")`;
   await ensureColumn('CompanySetting', 'nameEn', 'TEXT');
+  await ensureColumn('SalesReturn', 'discount', 'REAL NOT NULL DEFAULT 0');
+  await ensureColumn('SalesReturn', 'profitBasis', "TEXT NOT NULL DEFAULT 'LEGACY_ESTIMATE'");
+  await ensureColumn('SalesReturnItem', 'costPrice', 'REAL NOT NULL DEFAULT 0');
+  await ensureColumn('SalesReturnItem', 'costPriceIsEstimated', 'BOOLEAN NOT NULL DEFAULT true');
+  await prisma.$executeRaw`
+    UPDATE "SalesReturnItem"
+    SET "costPrice" = COALESCE((
+      SELECT "StockTransaction"."unitCost"
+      FROM "StockTransaction"
+      WHERE "StockTransaction"."referenceType" = 'SalesReturn'
+        AND "StockTransaction"."referenceId" = "SalesReturnItem"."returnId"
+        AND "StockTransaction"."itemId" = "SalesReturnItem"."itemId"
+      ORDER BY "StockTransaction"."createdAt" ASC
+      LIMIT 1
+    ), 0)
+    WHERE "costPriceIsEstimated" = true
+  `;
   await prisma.$executeRaw`UPDATE "CompanySetting" SET "taxRate" = 0 WHERE "taxRate" <> 0`;
   await prisma.$executeRaw`UPDATE "CompanySetting" SET "currency" = 'EGP', "currencySymbol" = 'ج.م'`;
   await ensureColumn('CompanySetting', 'supportTitle', "TEXT NOT NULL DEFAULT 'الدعم الفني والخدمات'");
@@ -112,6 +150,40 @@ const migrate = async () => {
   await ensureColumn('RepairLabor', 'trackedMinutes', 'INTEGER NOT NULL DEFAULT 0');
   await ensureColumn('RepairLabor', 'timerStartedAt', 'DATETIME');
   await ensureColumn('RepairPart', 'requestedById', 'TEXT');
+  await ensureColumn('BankTransaction', 'reconciledAt', 'DATETIME');
+  await ensureColumn('BankTransaction', 'reconciledById', 'TEXT');
+  await ensureColumn('BankTransaction', 'statementReference', 'TEXT');
+  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "BankReconciliation" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "bankId" TEXT NOT NULL,
+    "fileName" TEXT NOT NULL,
+    "contentHash" TEXT NOT NULL,
+    "statementStart" DATETIME NOT NULL,
+    "statementEnd" DATETIME NOT NULL,
+    "importedById" TEXT,
+    "completedAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "BankReconciliation_bankId_fkey" FOREIGN KEY ("bankId") REFERENCES "Bank"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`;
+  await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "BankReconciliation_bankId_contentHash_key" ON "BankReconciliation"("bankId", "contentHash")`;
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "BankReconciliation_bankId_createdAt_idx" ON "BankReconciliation"("bankId", "createdAt")`;
+  await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "BankStatementLine" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "reconciliationId" TEXT NOT NULL,
+    "transactionDate" DATETIME NOT NULL,
+    "amount" REAL NOT NULL,
+    "direction" TEXT NOT NULL,
+    "referenceNumber" TEXT,
+    "description" TEXT,
+    "matchedTransactionId" TEXT,
+    "matchedAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "BankStatementLine_reconciliationId_fkey" FOREIGN KEY ("reconciliationId") REFERENCES "BankReconciliation"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "BankStatementLine_matchedTransactionId_fkey" FOREIGN KEY ("matchedTransactionId") REFERENCES "BankTransaction"("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`;
+  await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "BankStatementLine_matchedTransactionId_key" ON "BankStatementLine"("matchedTransactionId")`;
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "BankStatementLine_reconciliationId_transactionDate_idx" ON "BankStatementLine"("reconciliationId", "transactionDate")`;
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "BankTransaction_bankId_reconciledAt_date_idx" ON "BankTransaction"("bankId", "reconciledAt", "date")`;
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "RepairEstimate_approvalTokenHash_key" ON "RepairEstimate"("approvalTokenHash")`;
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "RepairAttachment" ("id" TEXT NOT NULL PRIMARY KEY, "repairOrderId" TEXT NOT NULL, "storageName" TEXT NOT NULL UNIQUE, "fileName" TEXT NOT NULL, "mimeType" TEXT NOT NULL, "byteSize" INTEGER NOT NULL, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY ("repairOrderId") REFERENCES "RepairOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE)`;
   await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "RepairAttachment_repairOrderId_createdAt_idx" ON "RepairAttachment"("repairOrderId", "createdAt")`;

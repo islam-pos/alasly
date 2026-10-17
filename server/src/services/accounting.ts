@@ -24,6 +24,29 @@ interface PostJournalEntryInput {
 
 const roundToPiastres = (amount: number) => Math.round((amount + Number.EPSILON) * 100);
 
+export const validateJournalLines = (lines: JournalLineInput[]) => {
+  if (lines.length < 2) throw new Error('يجب أن يحتوي القيد على سطرين محاسبيين على الأقل');
+
+  let debitTotal = 0;
+  let creditTotal = 0;
+  for (const line of lines) {
+    const debit = line.debit ?? 0;
+    const credit = line.credit ?? 0;
+    if (!Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0) {
+      throw new Error('قيم المدين والدائن يجب أن تكون أرقاماً موجبة أو صفراً');
+    }
+    if ((debit > 0) === (credit > 0)) {
+      throw new Error('كل سطر يجب أن يحتوي على مدين أو دائن فقط');
+    }
+    debitTotal += roundToPiastres(debit);
+    creditTotal += roundToPiastres(credit);
+  }
+  if (debitTotal !== creditTotal) {
+    throw new Error('القيد غير متوازن: إجمالي المدين يجب أن يساوي إجمالي الدائن');
+  }
+  return { debitTotal, creditTotal };
+};
+
 const nextEntryNumber = async (
   tx: AccountingTransaction,
   journalCode: string,
@@ -65,25 +88,7 @@ export const postJournalEntry = async (
     if (existing) return existing;
   }
 
-  if (input.lines.length < 2) throw new Error('يجب أن يحتوي القيد على سطرين محاسبيين على الأقل');
-
-  let debitTotal = 0;
-  let creditTotal = 0;
-  for (const line of input.lines) {
-    const debit = line.debit ?? 0;
-    const credit = line.credit ?? 0;
-    if (!Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0) {
-      throw new Error('قيم المدين والدائن يجب أن تكون أرقاماً موجبة أو صفراً');
-    }
-    if ((debit > 0) === (credit > 0)) {
-      throw new Error('كل سطر يجب أن يحتوي على مدين أو دائن فقط');
-    }
-    debitTotal += roundToPiastres(debit);
-    creditTotal += roundToPiastres(credit);
-  }
-  if (debitTotal !== creditTotal) {
-    throw new Error('القيد غير متوازن: إجمالي المدين يجب أن يساوي إجمالي الدائن');
-  }
+  validateJournalLines(input.lines);
 
   const journal = await tx.accountingJournal.findUnique({ where: { code: input.journalCode } });
   if (!journal || !journal.active) throw new Error(`دفتر اليومية ${input.journalCode} غير موجود أو غير نشط`);

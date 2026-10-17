@@ -16,6 +16,7 @@ if [ ! -f /data/autocare.db ]; then
 fi
 
 export DATABASE_URL="file:/data/autocare.db"
+node /app/server/dist/restoreBackup.js
 node /app/server/dist/migrate.js
 if [ ! -f /data/.users-secured ]; then
   if [ -z "${INITIAL_ADMIN_PASSWORD:-}" ]; then

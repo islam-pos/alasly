@@ -86,6 +86,14 @@ export const ProfitsDashboard: React.FC = () => {
         </div>
       ) : (
         <>
+          {summary.warnings?.length > 0 && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <div className="font-bold">تنبيه حول دقة التقرير</div>
+              <ul className="mt-1 list-disc space-y-1 pr-5">
+                {summary.warnings.map((warning: string) => <li key={warning}>{warning}</li>)}
+              </ul>
+            </div>
+          )}
           {/* Top 4 Key Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
@@ -129,9 +137,16 @@ export const ProfitsDashboard: React.FC = () => {
 
               <div className="space-y-3">
                 <div className="flex justify-between items-center text-sm p-3 bg-slate-50 rounded-xl">
-                  <span className="text-slate-600">إجمالي مبيعات قطع الغيار (سعر البيع):</span>
+                  <span className="text-slate-600">صافي مبيعات قطع الغيار بعد الخصم والضريبة والمرتجعات:</span>
                   <span className="font-mono font-bold text-slate-900">{summary.parts?.sales?.toLocaleString()} ج.م</span>
                 </div>
+
+                {summary.salesReturns?.salesDeducted > 0 && (
+                  <div className="flex justify-between items-center text-sm p-3 bg-amber-50 rounded-xl">
+                    <span className="text-amber-800">قيمة المرتجعات المستبعدة من المبيعات:</span>
+                    <span className="font-mono font-bold text-amber-800">- {summary.salesReturns.salesDeducted.toLocaleString()} ج.م</span>
+                  </div>
+                )}
 
                 <div className="flex justify-between items-center text-sm p-3 bg-slate-50 rounded-xl">
                   <span className="text-slate-600">تكلفة شراء القطع المباعة (COGS):</span>

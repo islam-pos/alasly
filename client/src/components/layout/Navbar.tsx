@@ -183,6 +183,7 @@ export const Navbar: React.FC = () => {
         { label: 'إعدادات المنشأة', to: '/settings?tab=company', desc: 'بيانات المركز وتصميم المستندات' },
         { label: 'الصلاحيات ومصفوفة الأدوار (RBAC)', to: '/settings?tab=roles', desc: 'صلاحيات المستخدمين والوظائف' },
         { label: 'سجل العمليات والرقابة (Audit Log)', to: '/settings?tab=audit', desc: 'تتبع كافة التعديلات والمستندات' },
+        { label: 'النسخ الاحتياطي والاستعادة', to: '/settings?tab=backups', desc: 'نسخ قاعدة البيانات ومرفقات الورشة واستعادتها' },
       ],
     },
   ];
@@ -220,7 +221,7 @@ export const Navbar: React.FC = () => {
         if (path === '/reports') return hasPermission('view_reports');
         if (path === '/profits') return hasPermission('view_profits');
         if (path === '/settings') {
-          if (params.get('tab') === 'users' || params.get('tab') === 'integrations') return user?.role === 'admin';
+          if (params.get('tab') === 'users' || params.get('tab') === 'integrations' || params.get('tab') === 'backups') return user?.role === 'admin';
           if (params.get('tab') === 'audit') return hasPermission('view_audit_logs');
           return hasPermission('manage_settings');
         }

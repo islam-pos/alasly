@@ -2,7 +2,7 @@ import { NextFunction, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthenticatedRequest } from './auth';
 
-const getRequiredPermissions = (path: string, method: string): string[] | null => {
+export const getRequiredPermissions = (path: string, method: string): string[] | null => {
   if (path.startsWith('/dashboard')) return ['view_dashboard'];
   if (path.startsWith('/items')) {
     return method === 'GET'

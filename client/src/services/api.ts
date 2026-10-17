@@ -582,6 +582,30 @@ const apiClient = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
+  importBankStatement: (bankId: string, fileName: string, csv: string) =>
+    fetch(`${BASE_URL}/financials/banks/${encodeURIComponent(bankId)}/reconciliations`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ fileName, csv }),
+    }).then((res) => handleResponse<any>(res)),
+
+  getBankReconciliation: (id: string) =>
+    fetch(`${BASE_URL}/financials/banks/reconciliations/${encodeURIComponent(id)}`, { headers: getHeaders() })
+      .then((res) => handleResponse<any>(res)),
+
+  matchBankStatementLine: (reconciliationId: string, lineId: string, transactionId: string) =>
+    fetch(`${BASE_URL}/financials/banks/reconciliations/${encodeURIComponent(reconciliationId)}/match`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ lineId, transactionId }),
+    }).then((res) => handleResponse<any>(res)),
+
+  completeBankReconciliation: (reconciliationId: string) =>
+    fetch(`${BASE_URL}/financials/banks/reconciliations/${encodeURIComponent(reconciliationId)}/complete`, {
+      method: 'POST',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<any>(res)),
+
   // Accounting
   getAccountingAccounts: () =>
     fetch(`${BASE_URL}/accounting/accounts`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
@@ -718,6 +742,32 @@ const apiClient = {
     fetch(`${BASE_URL}/settings/integrations`, { headers: getHeaders() })
       .then((res) => handleResponse<{ data: NotificationIntegrationStatus }>(res)),
 
+  getBackups: () =>
+    fetch(`${BASE_URL}/backups`, { headers: getHeaders() }).then((res) =>
+      handleResponse<{ data: { backups: { id: string; type: 'daily' | 'manual'; date: string; sizeBytes: number }[]; restorePending: boolean } }>(res)),
+
+  createManualBackup: () =>
+    fetch(`${BASE_URL}/backups`, {
+      method: 'POST',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<{ data: { backup: { id: string; type: 'daily' | 'manual'; date: string; sizeBytes: number } } }>(res)),
+
+  downloadBackup: async (id: string) => {
+    const response = await fetch(`${BASE_URL}/backups/${encodeURIComponent(id)}/download`, { headers: getHeaders() });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'تعذر تنزيل النسخة الاحتياطية' }));
+      throw new ApiError(errorData.error || `Error ${response.status}: ${response.statusText}`);
+    }
+    return response.blob();
+  },
+
+  restoreBackup: (id: string) =>
+    fetch(`${BASE_URL}/backups/${encodeURIComponent(id)}/restore`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ confirmation: 'RESTORE' }),
+    }).then((res) => handleResponse<any>(res)),
+
   getWhatsappQrStatus: () =>
     fetch(`${BASE_URL}/settings/integrations/whatsapp/qr`, { headers: getHeaders() })
       .then((res) => handleResponse<{ data: NotificationQrStatus }>(res)),
@@ -817,6 +867,10 @@ export const api = Object.assign(apiClient, {
     getCashShifts: apiClient.getCashShifts,
     closeCashShift: apiClient.closeCashShift,
     getBanks: apiClient.getBanks,
+    importBankStatement: apiClient.importBankStatement,
+    getBankReconciliation: apiClient.getBankReconciliation,
+    matchBankStatementLine: apiClient.matchBankStatementLine,
+    completeBankReconciliation: apiClient.completeBankReconciliation,
     getCashboxes: apiClient.getCashboxes,
   },
   accounting: {
@@ -860,5 +914,9 @@ export const api = Object.assign(apiClient, {
     disconnectTelegramQr: apiClient.disconnectTelegramQr,
     saveNotificationIntegrations: apiClient.saveNotificationIntegrations,
     testNotificationIntegration: apiClient.testNotificationIntegration,
+    getBackups: apiClient.getBackups,
+    createManualBackup: apiClient.createManualBackup,
+    downloadBackup: apiClient.downloadBackup,
+    restoreBackup: apiClient.restoreBackup,
   },
 });

@@ -121,12 +121,21 @@ model TelegramAuthSession {
 }
 
 model NotificationDelivery {
-  id        String   @id @default(uuid())
-  channel   String
-  eventKey  String
-  sentAt    DateTime @default(now())
+  id             String   @id @default(uuid())
+  channel        String
+  eventKey       String
+  message        String?
+  recipient      String?
+  status         String   @default("SENT")
+  attemptCount   Int      @default(0)
+  nextAttemptAt  DateTime @default(now())
+  lastError      String?
+  sentAt         DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([channel, eventKey])
+  @@index([status, nextAttemptAt])
+  @@index([status, updatedAt])
 }
 
 model Branch {
@@ -681,8 +690,10 @@ model SalesReturn {
   customer       Customer?         @relation(fields: [customerId], references: [id])
   date           DateTime          @default(now())
   subtotal       Float
+  discount       Float             @default(0)
   taxAmount      Float             @default(0)
   totalAmount    Float
+  profitBasis    String            @default("LEGACY_ESTIMATE")
   reason         String?
   status         String            @default("POSTED") // DRAFT, POSTED, CANCELLED
   createdById    String?
@@ -699,6 +710,8 @@ model SalesReturnItem {
   quantity      Int
   unitPrice     Float
   total         Float
+  costPrice     Float             @default(0)
+  costPriceIsEstimated Boolean    @default(true)
 }
 
 model RepairOrder {
@@ -990,6 +1003,7 @@ model Bank {
   active         Boolean           @default(true)
   createdAt      DateTime          @default(now())
   transactions   BankTransaction[]
+  reconciliations BankReconciliation[]
   expenses       Expense[]
   revenues       Revenue[]
 }
@@ -1004,7 +1018,47 @@ model BankTransaction {
   referenceNumber String?
   description     String?
   createdById     String?
+  reconciledAt    DateTime?
+  reconciledById  String?
+  statementReference String?
   createdAt       DateTime @default(now())
+  reconciliationLine BankStatementLine?
+
+  @@index([bankId, reconciledAt, date])
+}
+
+model BankReconciliation {
+  id             String              @id @default(uuid())
+  bankId         String
+  bank           Bank                @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  fileName       String
+  contentHash    String
+  statementStart DateTime
+  statementEnd   DateTime
+  importedById   String?
+  completedAt    DateTime?
+  createdAt      DateTime            @default(now())
+  lines          BankStatementLine[]
+
+  @@unique([bankId, contentHash])
+  @@index([bankId, createdAt])
+}
+
+model BankStatementLine {
+  id                     String             @id @default(uuid())
+  reconciliationId       String
+  reconciliation         BankReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  transactionDate        DateTime
+  amount                 Float
+  direction              String
+  referenceNumber        String?
+  description            String?
+  matchedTransactionId   String?            @unique
+  matchedTransaction     BankTransaction?   @relation(fields: [matchedTransactionId], references: [id], onDelete: SetNull)
+  matchedAt              DateTime?
+  createdAt              DateTime           @default(now())
+
+  @@index([reconciliationId, transactionDate])
 }
 
 model ExpenseCategory {

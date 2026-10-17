@@ -21,6 +21,7 @@ import searchRouter from './routes/search';
 import settingsRouter from './routes/settings';
 import publicPurchaseRequestsRouter from './routes/publicPurchaseRequests';
 import publicRepairApprovalsRouter from './routes/publicRepairApprovals';
+import backupsRouter from './routes/backups';
 import { authenticate } from './middleware/auth';
 import { authorizeApiPermission } from './middleware/permissions';
 import { migrateEgyptianLocationDefaults } from './migrations/egyptianLocationDefaults';
@@ -28,6 +29,7 @@ import { startNotificationScheduler } from './services/notifications';
 import { startWhatsappQrSessionIfPresent } from './services/whatsappQr';
 import { startTelegramQrSessionIfPresent } from './services/telegramQr';
 import { withRequestContext } from './middleware/requestContext';
+import { getRestoreMarkerPath, startBackupScheduler } from './services/backups';
 
 dotenv.config();
 
@@ -42,6 +44,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use('/api/items/import', express.json({ limit: '10mb' }));
 app.use('/api/workshop/job-cards', express.json({ limit: '5mb' }));
+app.use('/api/financials/banks', express.json({ limit: '8mb' }));
 app.use(express.json());
 
 // Request logger for audit and debugging
@@ -52,11 +55,26 @@ app.use((req, res, next) => {
 
 // Health check
 app.get('/api/health', (req, res) => {
+  if (existsSync(getRestoreMarkerPath())) {
+    return res.status(503).json({
+      status: 'restore_pending',
+      system: 'AutoCare ERP Server',
+      message: 'A backup restore is pending; restart the service to apply it.',
+      time: new Date().toISOString(),
+    });
+  }
   res.json({
     status: 'ok',
     system: 'AutoCare ERP Server',
     version: '1.0.0',
     time: new Date().toISOString(),
+  });
+});
+
+app.use('/api', (req, res, next) => {
+  if (!existsSync(getRestoreMarkerPath()) || req.path.startsWith('/backups')) return next();
+  return res.status(503).json({
+    error: 'النظام في وضع الصيانة لاستعادة نسخة احتياطية؛ أعد تشغيل الخدمة لتطبيق الاستعادة.',
   });
 });
 
@@ -68,6 +86,7 @@ app.use('/api/auth', authRouter);
 app.use('/api', authenticate);
 app.use('/api', authorizeApiPermission);
 app.use('/api', withRequestContext);
+app.use('/api/backups', backupsRouter);
 app.use('/api/accounting', accountingRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/master', masterDataRouter);
@@ -113,6 +132,7 @@ migrateEgyptianLocationDefaults()
   .then(() => {
     app.listen(PORT, () => {
       startNotificationScheduler();
+      startBackupScheduler();
       void startWhatsappQrSessionIfPresent();
       void startTelegramQrSessionIfPresent();
       console.log(`====================================================`);
