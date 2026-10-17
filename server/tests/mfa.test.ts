@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  createMfaSetupToken,
   decryptMfaSecret,
   encryptMfaSecret,
-  readMfaSetupToken,
   verifyMfaCode,
 } from '../src/services/mfa';
 
@@ -17,11 +15,8 @@ test('TOTP verification accepts RFC 6238 SHA-1 six-digit vectors and rejects inv
   assert.equal(verifyMfaCode(rfcSecret, '287082x', 59_000), false);
 });
 
-test('MFA setup tokens are purpose-scoped and secret storage is authenticated encryption', () => {
+test('MFA secret storage uses authenticated encryption', () => {
   process.env.JWT_SECRET = 'test-secret-that-is-longer-than-thirty-two-bytes';
-  const token = createMfaSetupToken('admin-id');
-  assert.equal(readMfaSetupToken(token), 'admin-id');
-  assert.equal(readMfaSetupToken('invalid-token'), null);
   const encrypted = encryptMfaSecret(rfcSecret);
   assert.equal(decryptMfaSecret(encrypted), rfcSecret);
   const tampered = Buffer.from(encrypted, 'base64');

@@ -1,6 +1,4 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto';
-import jwt from 'jsonwebtoken';
-import QRCode from 'qrcode';
 
 const getSecret = () => {
   const secret = process.env.JWT_SECRET;
@@ -12,23 +10,6 @@ const getEncryptionKey = () => {
   const configured = process.env.MFA_ENCRYPTION_KEY || getSecret();
   if (Buffer.byteLength(configured) < 32) throw new Error('MFA_ENCRYPTION_KEY must contain at least 32 bytes');
   return createHash('sha256').update(`alasly-admin-mfa:${configured}`).digest();
-};
-
-const toBase32 = (input: Buffer) => {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  let bits = 0;
-  let value = 0;
-  let output = '';
-  for (const byte of input) {
-    value = (value << 8) | byte;
-    bits += 8;
-    while (bits >= 5) {
-      output += alphabet[(value >>> (bits - 5)) & 31];
-      bits -= 5;
-    }
-  }
-  if (bits > 0) output += alphabet[(value << (5 - bits)) & 31];
-  return output;
 };
 
 const fromBase32 = (input: string) => {
@@ -47,14 +28,6 @@ const fromBase32 = (input: string) => {
     }
   }
   return Buffer.from(bytes);
-};
-
-export const createMfaSecret = () => toBase32(randomBytes(20));
-
-export const createMfaOtpAuthUrl = async (username: string, secret: string) => {
-  const label = encodeURIComponent(`Alasly ERP:${username}`);
-  const url = `otpauth://totp/${label}?secret=${secret}&issuer=Alasly%20ERP&algorithm=SHA1&digits=6&period=30`;
-  return { otpauthUrl: url, qrCodeDataUrl: await QRCode.toDataURL(url) };
 };
 
 export const verifyMfaCode = (secret: string, code: unknown, now = Date.now()) => {
@@ -90,22 +63,4 @@ export const decryptMfaSecret = (encrypted: string) => {
   const decipher = createDecipheriv('aes-256-gcm', getEncryptionKey(), data.subarray(0, 12));
   decipher.setAuthTag(data.subarray(12, 28));
   return Buffer.concat([decipher.update(data.subarray(28)), decipher.final()]).toString('utf8');
-};
-
-export const createMfaSetupToken = (userId: string) =>
-  jwt.sign({ sub: userId, purpose: 'mfa_setup' }, getSecret(), { expiresIn: '10m' });
-
-export const readMfaSetupToken = (token: unknown) => {
-  if (typeof token !== 'string') return null;
-  try {
-    const payload = jwt.verify(token, getSecret());
-    if (
-      typeof payload === 'string' ||
-      payload.purpose !== 'mfa_setup' ||
-      typeof payload.sub !== 'string'
-    ) return null;
-    return payload.sub;
-  } catch {
-    return null;
-  }
 };

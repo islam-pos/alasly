@@ -5,12 +5,8 @@ import { authenticate, generateToken, AuthenticatedRequest } from '../middleware
 import { logAudit } from '../middleware/audit';
 import { availablePermissions } from '../services/permissions';
 import {
-  createMfaOtpAuthUrl,
-  createMfaSecret,
-  createMfaSetupToken,
   decryptMfaSecret,
   encryptMfaSecret,
-  readMfaSetupToken,
   verifyMfaCode,
 } from '../services/mfa';
 
@@ -120,9 +116,6 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
     }
 
-    if (user.role.name === 'admin' && !user.mfaEnabled) {
-      return res.json({ mfaSetupRequired: true, setupToken: createMfaSetupToken(user.id) });
-    }
     if (user.role.name === 'admin' && user.mfaEnabled) {
       if (typeof req.body?.mfaCode !== 'string') return res.json({ mfaRequired: true });
       if (!user.mfaSecret || !verifyMfaCode(decryptMfaSecret(user.mfaSecret), req.body.mfaCode)) {
@@ -149,65 +142,6 @@ router.post('/login', async (req, res) => {
   } catch (error: any) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'حدث خطأ في الخادم أثناء تسجيل الدخول' });
-  }
-});
-
-router.post('/mfa/setup', async (req, res) => {
-  try {
-    const userId = readMfaSetupToken(req.body?.setupToken);
-    if (!userId) return res.status(401).json({ error: 'انتهت صلاحية جلسة إعداد المصادقة؛ سجل الدخول مجدداً' });
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { role: true },
-    });
-    if (!user?.active || user.role.name !== 'admin' || user.mfaEnabled) {
-      return res.status(403).json({ error: 'جلسة إعداد المصادقة غير صالحة لهذا الحساب' });
-    }
-    const secret = createMfaSecret();
-    const qr = await createMfaOtpAuthUrl(user.username, secret);
-    res.json({ secret, ...qr });
-  } catch (error) {
-    console.error('Failed to create MFA setup:', error);
-    res.status(500).json({ error: 'تعذر إنشاء إعداد المصادقة الثنائية' });
-  }
-});
-
-router.post('/mfa/enable', async (req, res) => {
-  try {
-    const userId = readMfaSetupToken(req.body?.setupToken);
-    const { secret, code } = req.body || {};
-    if (!userId || typeof secret !== 'string' || !/^[A-Z2-7]{32}$/.test(secret)) {
-      return res.status(400).json({ error: 'بيانات إعداد المصادقة الثنائية غير صالحة أو منتهية' });
-    }
-    if (!verifyMfaCode(secret, code)) return res.status(401).json({ error: 'رمز التطبيق غير صحيح' });
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { role: true, branch: true, employee: true },
-    });
-    if (!user?.active || user.role.name !== 'admin' || user.mfaEnabled) {
-      return res.status(403).json({ error: 'لا يمكن تفعيل المصادقة الثنائية لهذا الحساب' });
-    }
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        mfaSecret: encryptMfaSecret(secret),
-        mfaEnabled: true,
-        failedLoginAttempts: 0,
-        loginLockedUntil: null,
-      },
-    });
-    await logAudit({
-      userId: user.id,
-      action: 'MFA_ENABLED',
-      entity: 'User',
-      entityId: user.id,
-      details: 'تفعيل المصادقة الثنائية لمدير النظام',
-      ipAddress: req.ip,
-    });
-    res.json(loginResponse(user));
-  } catch (error) {
-    console.error('Failed to enable MFA:', error);
-    res.status(500).json({ error: 'تعذر تفعيل المصادقة الثنائية' });
   }
 });
 

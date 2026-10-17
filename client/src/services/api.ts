@@ -116,20 +116,6 @@ const apiClient = {
       body: JSON.stringify(credentials),
     }).then((res) => handleResponse<any>(res)),
 
-  setupMfa: (setupToken: string) =>
-    fetch(`${BASE_URL}/auth/mfa/setup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ setupToken }),
-    }).then((res) => handleResponse<any>(res)),
-
-  enableMfa: (setupToken: string, secret: string, code: string) =>
-    fetch(`${BASE_URL}/auth/mfa/enable`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ setupToken, secret, code }),
-    }).then((res) => handleResponse<any>(res)),
-
   getMe: () =>
     fetch(`${BASE_URL}/auth/me`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 
