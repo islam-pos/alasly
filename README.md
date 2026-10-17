@@ -87,3 +87,7 @@ npm --prefix client run build
 ```
 
 Client UI tests use Vitest and jsdom. They cover barcode-label selection, copy counts, search behavior, print limits, blocked print windows, and Escape navigation around text fields and dialogs.
+
+## Offline access status
+
+The PWA shell is cached for startup, and successful JSON API responses are cached locally per authenticated session for read-only access to pages and records previously loaded on that device. Cached responses expire after 30 days and are limited to the 300 most recently loaded requests per session. A user must have signed in on the device while online. Logging out clears the local API cache; protect the device's browser profile because cached business data is stored on the device. While offline, the application displays a read-only warning and rejects new writes with a message confirming that they were not saved. Offline transaction queues, server-side idempotency, and conflict review are not enabled yet; do not use this version to record business operations while disconnected.

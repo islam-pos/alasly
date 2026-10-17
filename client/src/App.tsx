@@ -25,6 +25,7 @@ import { VehicleProfile } from './pages/vehicles/VehicleProfile';
 import { SmartSearchSuggestions } from './components/layout/SmartSearchSuggestions';
 import { AccountingScreen } from './pages/accounting/AccountingScreen';
 import { EscapeNavigation } from './components/layout/EscapeNavigation';
+import { OfflineStatusBanner } from './components/layout/OfflineStatusBanner';
 
 const LoadingScreen: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50" role="status">
@@ -49,6 +50,7 @@ const ProtectedLayout: React.FC = () => {
   return (
     <div dir="rtl" className="min-h-screen bg-slate-50">
       <Navbar />
+      <OfflineStatusBanner />
       <SmartSearchSuggestions />
       <div className="mx-auto flex max-w-[1700px] items-start gap-4 px-4 py-5">
         <QuickSidebar />

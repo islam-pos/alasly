@@ -7,18 +7,24 @@ import type {
   NotificationQrStatus,
   NotificationTelegramQrStatus,
 } from '../types/notifications';
+import { getCachedResponse, getCurrentOfflineCacheScope, saveCachedResponse } from './offlineCache';
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
 class ApiError extends Error {
   response: { data: { error: string } };
+  offline: boolean;
 
-  constructor(message: string) {
+  constructor(message: string, offline = false) {
     super(message);
     this.name = 'ApiError';
     this.response = { data: { error: message } };
+    this.offline = offline;
   }
 }
+
+export const isOfflineApiError = (error: unknown): boolean =>
+  Boolean(error && typeof error === 'object' && 'offline' in error && error.offline === true);
 
 function getHeaders(): HeadersInit {
   const token = localStorage.getItem('autocare_token');
@@ -27,6 +33,66 @@ function getHeaders(): HeadersInit {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
+
+const isNetworkFailure = (error: unknown) =>
+  error instanceof TypeError || (typeof navigator !== 'undefined' && !navigator.onLine);
+
+async function fetchWithOfflineCache(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const method = (init?.method || 'GET').toUpperCase();
+  if (method !== 'GET') {
+    try {
+      return await globalThis.fetch(input, init);
+    } catch (error) {
+      if (isNetworkFailure(error)) {
+        throw new ApiError('لا يوجد اتصال بالخادم؛ لم تُحفظ العملية. أعد الاتصال بالإنترنت ثم حاول مرة أخرى.', true);
+      }
+      throw error;
+    }
+  }
+
+  let scope: string | null = null;
+  let cacheUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+  try {
+    try {
+      scope = await getCurrentOfflineCacheScope();
+    } catch (scopeError) {
+      console.warn('Could not identify the authenticated offline cache scope:', scopeError);
+    }
+    const requestUrl = new URL(cacheUrl, window.location.href);
+    cacheUrl = requestUrl.toString();
+    const response = await globalThis.fetch(input, init);
+    if (response.ok && scope && response.headers.get('content-type')?.toLocaleLowerCase().includes('application/json')) {
+      try {
+        await saveCachedResponse(scope, cacheUrl, response);
+      } catch (cacheError) {
+        console.warn('Could not cache API response for offline use:', cacheError);
+      }
+    }
+    return response;
+  } catch (error) {
+    if (!isNetworkFailure(error)) throw error;
+    if (!scope) throw new ApiError('يلزم تسجيل الدخول مسبقًا على هذا الجهاز للعرض دون اتصال.', true);
+    try {
+      const cached = await getCachedResponse(scope, cacheUrl);
+      if (!cached) throw new ApiError('لا توجد نسخة محفوظة لهذه البيانات؛ اتصل بالإنترنت وافتح الصفحة أولًا.', true);
+      window.dispatchEvent(new CustomEvent('autocare:offline-cache-hit', { detail: { storedAt: cached.storedAt } }));
+      const headers = new Headers(cached.headers);
+      headers.set('X-Offline-Cache', 'true');
+      headers.set('X-Offline-Cached-At', String(cached.storedAt));
+      return new Response(cached.body, {
+        status: cached.status,
+        statusText: cached.statusText,
+        headers,
+      });
+    } catch (cacheError) {
+      if (cacheError instanceof ApiError) throw cacheError;
+      console.error('Could not read cached API response:', cacheError);
+      throw new ApiError('تعذر الاتصال بالخادم وقراءة النسخة المحلية المحفوظة.', true);
+    }
+  }
+}
+
+const fetch = fetchWithOfflineCache;
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
