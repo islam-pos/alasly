@@ -82,5 +82,8 @@ The administrator backup screen also displays API/database status, R2 configurat
 npm --prefix server run prisma:generate
 npm --prefix server run build
 npm --prefix server test
+npm --prefix client test
 npm --prefix client run build
 ```
+
+Client UI tests use Vitest and jsdom. They cover barcode-label selection, copy counts, search behavior, print limits, blocked print windows, and Escape navigation around text fields and dialogs.
