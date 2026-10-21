@@ -75,6 +75,7 @@ export const ItemsCatalog: React.FC = () => {
   const [importing, setImporting] = useState(false);
   const [importReport, setImportReport] = useState<{
     created: number;
+    createdCategories: string[];
     duplicates: { row: number; sku: string; reason: string }[];
     errors: { row: number; sku?: string; reason: string }[];
   } | null>(null);
@@ -903,6 +904,11 @@ export const ItemsCatalog: React.FC = () => {
                 <p className="text-xs text-slate-500 mt-1">
                   تمت إضافة {importReport.created} صنف، وتخطي {importReport.duplicates.length + importReport.errors.length} صف.
                 </p>
+                {importReport.createdCategories.length > 0 && (
+                  <p className="text-xs text-slate-600 mt-1">
+                    أُنشئت تصنيفات جديدة: {importReport.createdCategories.join('، ')}
+                  </p>
+                )}
               </div>
               <button onClick={() => setImportReport(null)} aria-label="إغلاق تقرير الاستيراد" className="text-slate-400 hover:text-slate-700">
                 <X className="w-5 h-5" />

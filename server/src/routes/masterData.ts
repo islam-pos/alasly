@@ -429,7 +429,7 @@ router.put('/vehicles/:id', async (req, res) => {
   try {
     const currentVehicle = await prisma.vehicle.findUnique({
       where: { id: req.params.id },
-      select: { id: true, currentOdometer: true },
+      select: { id: true, plateNumber: true, currentOdometer: true },
     });
     if (!currentVehicle) return res.status(404).json({ error: 'السيارة غير موجودة' });
 
@@ -443,6 +443,15 @@ router.put('/vehicles/:id', async (req, res) => {
     const vehicle = await prisma.vehicle.update({
       where: { id: req.params.id },
       data,
+    });
+    await logAudit({
+      action: 'UPDATE',
+      entity: 'Vehicle',
+      entityId: vehicle.id,
+      details: `تحديث بيانات السيارة ${vehicle.plateNumber}`,
+      changes: currentVehicle.currentOdometer === vehicle.currentOdometer ? undefined : {
+        currentOdometer: { before: currentVehicle.currentOdometer, after: vehicle.currentOdometer },
+      },
     });
     res.json(vehicle);
   } catch (err: any) {

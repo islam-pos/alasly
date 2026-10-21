@@ -325,7 +325,7 @@ const apiClient = {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ rows }),
-    }).then((res) => handleResponse<{ created: number; duplicates: { row: number; sku: string; reason: string }[]; errors: { row: number; sku?: string; reason: string }[] }>(res)),
+    }).then((res) => handleResponse<{ created: number; createdCategories: string[]; duplicates: { row: number; sku: string; reason: string }[]; errors: { row: number; sku?: string; reason: string }[] }>(res)),
 
   archiveItems: (itemIds: string[]) =>
     fetch(`${BASE_URL}/items/bulk/archive`, {

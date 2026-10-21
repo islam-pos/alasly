@@ -1,13 +1,16 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
+import { AuthenticatedRequest } from '../middleware/auth';
+import { branchWhere } from '../services/branchScope';
 
 const router = Router();
 
 // --- Sales Reports ---
-router.get('/sales', async (req, res) => {
+router.get('/sales', async (req: AuthenticatedRequest, res) => {
   try {
     const { fromDate, toDate, customerId, paymentMethod, type } = req.query;
     let whereClause: any = {
+      ...branchWhere(req),
       status: { not: 'CANCELLED' },
       invoiceType: { not: 'QUOTATION' },
     };
@@ -56,7 +59,7 @@ router.get('/sales', async (req, res) => {
 });
 
 // --- Inventory Reports ---
-router.get('/inventory', async (req, res) => {
+router.get('/inventory', async (req: AuthenticatedRequest, res) => {
   try {
     const { warehouseId } = req.query;
 
@@ -67,7 +70,10 @@ router.get('/inventory', async (req, res) => {
         unit: true,
         stockBalances: {
           include: { warehouse: true },
-          where: warehouseId ? { warehouseId: String(warehouseId) } : undefined,
+          where: {
+            ...(warehouseId ? { warehouseId: String(warehouseId) } : {}),
+            ...(req.authenticatedRole === 'admin' ? {} : { warehouse: branchWhere(req) }),
+          },
         },
       },
       orderBy: { nameAr: 'asc' },
@@ -123,10 +129,10 @@ router.get('/inventory', async (req, res) => {
 });
 
 // --- Workshop Reports ---
-router.get('/workshop', async (req, res) => {
+router.get('/workshop', async (req: AuthenticatedRequest, res) => {
   try {
     const { fromDate, toDate } = req.query;
-    let whereClause: any = {};
+    let whereClause: any = branchWhere(req);
     if (fromDate || toDate) {
       whereClause.createdAt = {};
       if (fromDate) whereClause.createdAt.gte = new Date(String(fromDate));

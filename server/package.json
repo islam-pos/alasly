@@ -6,11 +6,13 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test tests/*.test.ts src/services/coreValidation.test.ts src/services/itemImport.test.ts",
     "start": "node dist/index.js",
+    "db:migrate": "tsx src/migrate.ts",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:seed:production": "tsx prisma/productionSeed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",

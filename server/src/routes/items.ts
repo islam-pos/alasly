@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { AuthenticatedRequest, authenticate, loadUserPermissions, requirePermission } from '../middleware/auth';
+import { branchWhere } from '../services/branchScope';
+import { findImportReference } from '../services/itemImportMatching';
 
 const router = Router();
 
@@ -175,11 +177,18 @@ router.post('/import', async (req, res) => {
   }
 
   try {
+    const authenticatedReq = req as AuthenticatedRequest;
+    const canManagePrices = hasPermission(authenticatedReq, 'manage_item_prices');
     const [categories, units, warehouses] = await Promise.all([
       prisma.itemCategory.findMany({ select: { id: true, name: true } }),
-      prisma.unit.findMany({ select: { id: true, name: true } }),
-      prisma.warehouse.findMany({ select: { id: true, name: true }, where: { active: true } }),
+      prisma.unit.findMany({ select: { id: true, name: true, symbol: true } }),
+      prisma.warehouse.findMany({
+        select: { id: true, name: true },
+        where: { active: true, ...branchWhere(authenticatedReq) },
+      }),
     ]);
+    const unitReferences = units.map(({ id, name, symbol }) => ({ id, name, aliases: [symbol] }));
+    const createdCategories = new Map<string, string>();
     const created: string[] = [];
     const duplicates: { row: number; sku: string; reason: string }[] = [];
     const errors: { row: number; sku?: string; reason: string }[] = [];
@@ -200,24 +209,24 @@ router.post('/import', async (req, res) => {
       const barcode = String(row.barcode || '').trim();
       const categoryValue = String(row.categoryId || row.category || '').trim();
       const unitValue = String(row.unitId || row.unit || '').trim();
-      const category = categories.find((entry) => entry.id === categoryValue || entry.name.toLocaleLowerCase() === categoryValue.toLocaleLowerCase());
-      const unit = units.find((entry) => entry.id === unitValue || entry.name.toLocaleLowerCase() === unitValue.toLocaleLowerCase());
+      const category = findImportReference(categories, categoryValue);
+      const unit = findImportReference(unitReferences, unitValue);
       const warehouseValue = String(row.initialWarehouseId || row.warehouse || '').trim();
       const warehouse = warehouseValue
-        ? warehouses.find((entry) => entry.id === warehouseValue || entry.name.toLocaleLowerCase() === warehouseValue.toLocaleLowerCase())
+        ? findImportReference(warehouses, warehouseValue)
         : undefined;
-      const purchasePrice = parseImportedNumber(row.purchasePrice, 0);
-      const sellPrice = parseImportedNumber(row.sellPrice, 0);
-      const specialSellPrice = parseImportedNumber(row.specialSellPrice, 0);
+      const purchasePrice = canManagePrices ? parseImportedNumber(row.purchasePrice, 0) : 0;
+      const sellPrice = canManagePrices ? parseImportedNumber(row.sellPrice, 0) : 0;
+      const specialSellPrice = canManagePrices ? parseImportedNumber(row.specialSellPrice, 0) : 0;
       const minStock = parseImportedNumber(row.minStock, 5);
       const maxStock = parseImportedNumber(row.maxStock, 100);
       const initialStock = parseImportedNumber(row.initialStock, 0);
 
-      if (!nameAr || !sku || !category || !unit) {
+      if (!nameAr || !sku || !categoryValue || !unit) {
         errors.push({
           row: rowNumber,
           sku: sku || undefined,
-          reason: !nameAr ? 'اسم الصنف مطلوب' : !sku ? 'كود SKU مطلوب' : !category ? 'التصنيف غير موجود؛ استخدم اسم تصنيف صحيحًا' : 'الوحدة غير موجودة؛ استخدم اسم وحدة صحيحًا',
+          reason: !nameAr ? 'اسم الصنف مطلوب' : !sku ? 'كود SKU مطلوب' : !categoryValue ? 'التصنيف مطلوب؛ أدخل اسم التصنيف في الملف' : 'الوحدة غير موجودة؛ استخدم اسم وحدة مسجلًا في النظام',
         });
         continue;
       }
@@ -233,22 +242,42 @@ router.post('/import', async (req, res) => {
 
       const skuKey = normalizeItemCode(sku);
       const barcodeKey = normalizeItemCode(barcode);
-      const nameKey = `${category.id}:${normalizeItemName(nameAr)}`;
+      const nameKey = `${normalizeItemName(category?.name || categoryValue)}:${normalizeItemName(nameAr)}`;
       const duplicateReason = seenSkus.has(skuKey)
         ? 'كود SKU مكرر داخل الملف؛ تم تخطي الصف'
         : barcode && seenBarcodes.has(barcodeKey)
           ? 'الباركود مكرر داخل الملف؛ تم تخطي الصف'
           : seenNames.has(nameKey)
             ? 'اسم الصنف مكرر داخل التصنيف داخل الملف؛ تم تخطي الصف'
-            : await findItemDuplicate(prisma, { sku, barcode, nameAr, categoryId: category.id });
+            : category
+              ? await findItemDuplicate(prisma, { sku, barcode, nameAr, categoryId: category.id })
+              : null;
       if (duplicateReason) {
         duplicates.push({ row: rowNumber, sku, reason: `${duplicateReason}؛ تم تخطي الصف` });
         continue;
       }
 
       try {
-        const item = await prisma.$transaction(async (tx) => {
-          const transactionDuplicate = await findItemDuplicate(tx, { sku, barcode, nameAr, categoryId: category.id });
+        const result = await prisma.$transaction(async (tx) => {
+          let resolvedCategory = category;
+          let newCategory: { id: string; name: string } | undefined;
+          if (!resolvedCategory) {
+            const existingCategory = await tx.itemCategory.findUnique({ where: { name: categoryValue } });
+            resolvedCategory = await tx.itemCategory.upsert({
+              where: { name: categoryValue },
+              create: { name: categoryValue },
+              update: {},
+              select: { id: true, name: true },
+            });
+            if (!existingCategory) newCategory = resolvedCategory;
+          }
+
+          const transactionDuplicate = await findItemDuplicate(tx, {
+            sku,
+            barcode,
+            nameAr,
+            categoryId: resolvedCategory.id,
+          });
           if (transactionDuplicate) throw new Error(transactionDuplicate);
           const createdItem = await tx.item.create({
             data: {
@@ -257,7 +286,7 @@ router.post('/import', async (req, res) => {
               sku,
               barcode: barcode || null,
               partNumber: String(row.partNumber || '').trim() || null,
-              categoryId: category.id,
+              categoryId: resolvedCategory.id,
               unitId: unit.id,
               manufacturer: String(row.manufacturer || '').trim() || null,
               countryOfOrigin: String(row.countryOfOrigin || '').trim() || null,
@@ -289,12 +318,23 @@ router.post('/import', async (req, res) => {
               },
             });
           }
-          return createdItem;
+          return { item: createdItem, newCategory };
         });
+        const { item, newCategory } = result;
         seenSkus.add(skuKey);
         if (barcode) seenBarcodes.add(barcodeKey);
         seenNames.add(nameKey);
         created.push(item.nameAr);
+        if (newCategory) {
+          categories.push(newCategory);
+          createdCategories.set(newCategory.id, newCategory.name);
+          await logAudit({
+            action: 'CREATE',
+            entity: 'ItemCategory',
+            entityId: newCategory.id,
+            details: `إنشاء تصنيف أثناء استيراد الأصناف: ${newCategory.name}`,
+          });
+        }
         await logAudit({ action: 'CREATE', entity: 'Item', entityId: item.id, details: `استيراد صنف: ${item.nameAr} (${item.sku})` });
       } catch (error) {
         console.error(`Failed to import item at row ${rowNumber}:`, error);
@@ -307,7 +347,7 @@ router.post('/import', async (req, res) => {
       }
     }
 
-    res.json({ created: created.length, duplicates, errors });
+    res.json({ created: created.length, createdCategories: [...createdCategories.values()], duplicates, errors });
   } catch (error) {
     console.error('Failed to import item spreadsheet:', error);
     res.status(500).json({ error: 'تعذر استيراد ملف الأصناف' });

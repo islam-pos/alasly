@@ -73,6 +73,7 @@ export const authorizeApiPermission = async (
     });
     if (!user?.active) return res.status(401).json({ error: 'المستخدم غير موجود أو الحساب معطل' });
     req.user.branchId = user.branchId || undefined;
+    req.authenticatedRole = user.role.name;
     if (user.role.name === 'admin') return next();
 
     const permissionSource = user.permissionOverrides ?? user.role.permissions;
@@ -87,6 +88,7 @@ export const authorizeApiPermission = async (
       console.error(`Invalid permissions format for user ${req.user.id}`);
       return res.status(403).json({ error: 'تعذر التحقق من صلاحيات المستخدم' });
     }
+    req.rolePermissions = permissions;
     if (!requiredPermissions.some((permission) => permissions.includes(permission))) {
       return res.status(403).json({ error: 'ليس لديك صلاحية لتنفيذ هذه العملية' });
     }

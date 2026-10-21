@@ -260,11 +260,32 @@ export const disconnectWhatsappQr = async () => {
   return getWhatsappQrStatus();
 };
 
-export const sendWhatsappQrMessage = async (phoneNumber: string, text: string) => {
-  if (!status.connected || !socket) throw new Error('WhatsApp QR account is not connected');
+const normalizeQrPhone = (phoneNumber: string) => {
   const digits = phoneNumber.replace(/\D/g, '');
   if (!/^\d{8,15}$/.test(digits)) throw new Error('WhatsApp phone number must use international digits');
+  return digits.startsWith('0') ? `20${digits.slice(1)}` : digits;
+};
+
+export const sendWhatsappQrMessage = async (phoneNumber: string, text: string) => {
+  if (!status.connected || !socket) throw new Error('WhatsApp QR account is not connected');
+  const digits = normalizeQrPhone(phoneNumber);
   await socket.sendMessage(`${digits}@s.whatsapp.net`, { text: text.slice(0, 3900) });
+};
+
+export const sendWhatsappQrDocument = async (
+  phoneNumber: string,
+  fileName: string,
+  content: Buffer,
+  caption: string,
+) => {
+  if (!status.connected || !socket) throw new Error('WhatsApp QR account is not connected');
+  const digits = normalizeQrPhone(phoneNumber);
+  await socket.sendMessage(`${digits}@s.whatsapp.net`, {
+    document: content,
+    mimetype: 'application/pdf',
+    fileName,
+    caption: caption.slice(0, 3900),
+  });
 };
 
 export const startWhatsappQrSessionIfPresent = async () => {

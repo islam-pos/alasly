@@ -460,6 +460,7 @@ model Item {
   partNumber           String?
   fitment              String?
   minStock             Int                   @default(5)
+  leadTimeDays         Int                   @default(7)
   maxStock             Int                   @default(100)
   defaultLocation      String?
   purchasePrice        Float                 @default(0)
@@ -815,9 +816,12 @@ model RepairEstimate {
   grandTotal           Float                @default(0)
   isApprovedByCustomer Boolean              @default(false)
   approvedAt           DateTime?
-  customerNotes        String?
-  approvalTokenHash     String?              @unique
+  approvalMethod       String?
+  approvalRequestedAt  DateTime?
+  approvalTokenHash    String?              @unique
   approvalTokenExpiresAt DateTime?
+  decisionByUserId     String?
+  customerNotes        String?
   status               String               @default("PENDING") // DRAFT, PENDING, APPROVED, REJECTED
   createdAt            DateTime             @default(now())
   items                RepairEstimateItem[]

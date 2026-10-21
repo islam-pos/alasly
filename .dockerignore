@@ -2,5 +2,6 @@
 **/dist
 **/*.tsbuildinfo
 .git
+server/prisma/autocare.db
 .env
 .env.*

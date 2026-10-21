@@ -11,7 +11,11 @@ WORKDIR /build/server
 COPY server/package*.json ./
 RUN npm ci
 COPY server/ ./
+RUN mkdir -p /build/seed
+ENV DATABASE_URL=file:/build/seed/autocare.db
+RUN npx prisma db push --skip-generate
 RUN npx prisma generate
+RUN npx tsx prisma/productionSeed.ts
 RUN npm run build
 RUN cp -R node_modules/.prisma /tmp/generated-prisma-client \
     && npm ci --omit=dev --ignore-scripts --legacy-peer-deps \
@@ -28,7 +32,7 @@ COPY --from=server-build /build/server/package.json ./server/package.json
 COPY --from=server-build /build/server/node_modules ./server/node_modules
 COPY --from=server-build /build/server/dist ./server/dist
 COPY --from=server-build /build/server/prisma/schema.prisma ./server/prisma/schema.prisma
-COPY --from=server-build /build/server/prisma/autocare.db ./seed/autocare.db
+COPY --from=server-build /build/seed/autocare.db ./seed/autocare.db
 COPY --from=client-build /build/client/dist ./client/dist
 COPY server/start.sh ./start.sh
 RUN chmod +x ./start.sh && mkdir -p /data

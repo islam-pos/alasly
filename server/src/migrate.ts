@@ -1,4 +1,6 @@
+import 'dotenv/config';
 import { prisma } from './lib/prisma';
+import { migrateEgyptianLocationDefaults } from './migrations/egyptianLocationDefaults';
 
 type Column = { name: string };
 
@@ -9,7 +11,7 @@ const ensureColumn = async (table: string, column: string, definition: string) =
   }
 };
 
-const migrate = async () => {
+const migrateLegacySchema = async () => {
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "NumberSequence" ("key" TEXT NOT NULL PRIMARY KEY, "lastValue" INTEGER NOT NULL DEFAULT 0)`;
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "Account" ("id" TEXT NOT NULL PRIMARY KEY, "code" TEXT NOT NULL, "nameAr" TEXT NOT NULL, "nameEn" TEXT, "type" TEXT NOT NULL, "active" BOOLEAN NOT NULL DEFAULT true, "isSystem" BOOLEAN NOT NULL DEFAULT false, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`;
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "Account_code_key" ON "Account"("code")`;
@@ -128,6 +130,13 @@ const migrate = async () => {
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "SalesInvoice_quotationId_key" ON "SalesInvoice"("quotationId")`;
   await ensureColumn('Employee', 'nationalId', 'TEXT');
   await ensureColumn('Item', 'fitment', 'TEXT');
+  await ensureColumn('Item', 'leadTimeDays', 'INTEGER NOT NULL DEFAULT 7');
+  await ensureColumn('RepairEstimate', 'approvalMethod', 'TEXT');
+  await ensureColumn('RepairEstimate', 'approvalRequestedAt', 'DATETIME');
+  await ensureColumn('RepairEstimate', 'approvalTokenHash', 'TEXT');
+  await ensureColumn('RepairEstimate', 'approvalTokenExpiresAt', 'DATETIME');
+  await ensureColumn('RepairEstimate', 'decisionByUserId', 'TEXT');
+  await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "RepairEstimate_approvalTokenHash_key" ON "RepairEstimate"("approvalTokenHash")`;
   await prisma.$executeRaw`UPDATE "Item" SET "taxRate" = 0 WHERE "taxRate" <> 0`;
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "Employee_nationalId_key" ON "Employee"("nationalId")`;
   await ensureColumn('NotificationIntegration', 'whatsappPhone', 'TEXT');
@@ -145,8 +154,6 @@ const migrate = async () => {
   await ensureColumn('RepairOrder', 'handoverChecklist', 'TEXT');
   await ensureColumn('RepairOrder', 'warrantyMonths', 'INTEGER NOT NULL DEFAULT 1');
   await ensureColumn('RepairOrder', 'warrantyTerms', 'TEXT');
-  await ensureColumn('RepairEstimate', 'approvalTokenHash', 'TEXT');
-  await ensureColumn('RepairEstimate', 'approvalTokenExpiresAt', 'DATETIME');
   await ensureColumn('RepairLabor', 'trackedMinutes', 'INTEGER NOT NULL DEFAULT 0');
   await ensureColumn('RepairLabor', 'timerStartedAt', 'DATETIME');
   await ensureColumn('RepairPart', 'requestedById', 'TEXT');
@@ -184,7 +191,6 @@ const migrate = async () => {
   await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "BankStatementLine_matchedTransactionId_key" ON "BankStatementLine"("matchedTransactionId")`;
   await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "BankStatementLine_reconciliationId_transactionDate_idx" ON "BankStatementLine"("reconciliationId", "transactionDate")`;
   await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "BankTransaction_bankId_reconciledAt_date_idx" ON "BankTransaction"("bankId", "reconciledAt", "date")`;
-  await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "RepairEstimate_approvalTokenHash_key" ON "RepairEstimate"("approvalTokenHash")`;
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "RepairAttachment" ("id" TEXT NOT NULL PRIMARY KEY, "repairOrderId" TEXT NOT NULL, "storageName" TEXT NOT NULL UNIQUE, "fileName" TEXT NOT NULL, "mimeType" TEXT NOT NULL, "byteSize" INTEGER NOT NULL, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY ("repairOrderId") REFERENCES "RepairOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE)`;
   await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "RepairAttachment_repairOrderId_createdAt_idx" ON "RepairAttachment"("repairOrderId", "createdAt")`;
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "InvoicePayment" ("id" TEXT NOT NULL PRIMARY KEY, "invoiceId" TEXT NOT NULL, "amount" REAL NOT NULL, "paymentMethod" TEXT NOT NULL, "cashboxId" TEXT, "notes" TEXT, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY ("invoiceId") REFERENCES "SalesInvoice"("id") ON DELETE CASCADE ON UPDATE CASCADE, FOREIGN KEY ("cashboxId") REFERENCES "Cashbox"("id") ON DELETE SET NULL ON UPDATE CASCADE)`;
@@ -227,9 +233,36 @@ const migrate = async () => {
   await ensureColumn('InvoicePayment', 'cashTransactionId', 'TEXT');
 };
 
-migrate()
+const migrations: { id: string; apply: () => Promise<void> }[] = [
+  { id: '0001-legacy-schema-sync', apply: migrateLegacySchema },
+  { id: '0002-egyptian-location-defaults', apply: migrateEgyptianLocationDefaults },
+];
+
+const runMigrations = async () => {
+  await prisma.$executeRaw`
+    CREATE TABLE IF NOT EXISTS "_AppMigration" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "appliedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+
+  for (const migration of migrations) {
+    const applied = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "_AppMigration" WHERE "id" = ${migration.id} LIMIT 1
+    `;
+    if (applied.length > 0) continue;
+
+    console.log(`Applying database migration ${migration.id}`);
+    await migration.apply();
+    await prisma.$executeRaw`
+      INSERT INTO "_AppMigration" ("id", "appliedAt") VALUES (${migration.id}, CURRENT_TIMESTAMP)
+    `;
+  }
+};
+
+runMigrations()
   .catch((error) => {
-    console.error('Database schema update failed:', error);
+    console.error('Database migration failed:', error);
     process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());

@@ -133,7 +133,7 @@ const readSpreadsheetXmlRows = (text: string) => {
     rows[rowIndex] = values;
     nextRow = rowIndex + 1;
   }
-  return rows.map((row) => row || []);
+  return rows.map((row) => row ? Array.from(row, (value) => value ?? '') : []);
 };
 
 const readLegacyBinaryXlsRows = async (buffer: ArrayBuffer) => {

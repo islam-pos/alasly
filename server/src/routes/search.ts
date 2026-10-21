@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
+import { AuthenticatedRequest } from '../middleware/auth';
+import { branchWhere } from '../services/branchScope';
 
 const router = Router();
 
-router.get('/suggestions', async (req, res) => {
+router.get('/suggestions', async (req: AuthenticatedRequest, res) => {
   try {
     const q = String(req.query.q || '').trim();
     if (!q) return res.json({ suggestions: [] });
@@ -19,7 +21,7 @@ router.get('/suggestions', async (req, res) => {
           take: 8,
         }),
         prisma.employee.findMany({
-          where: { OR: [{ name: { contains: q } }, { code: { contains: q } }, { phone: { contains: q } }, { email: { contains: q } }, { department: { contains: q } }] },
+          where: { ...(req.authenticatedRole === 'admin' ? {} : { branchId: req.user?.branchId || '__NO_ASSIGNED_BRANCH__' }), OR: [{ name: { contains: q } }, { code: { contains: q } }, { phone: { contains: q } }, { email: { contains: q } }, { department: { contains: q } }] },
           include: { job: true },
           take: 8,
         }),
@@ -38,23 +40,23 @@ router.get('/suggestions', async (req, res) => {
         }),
         prisma.unit.findMany({ where: { OR: [{ name: { contains: q } }, { symbol: { contains: q } }] }, take: 8 }),
         prisma.warehouse.findMany({
-          where: { OR: [{ code: { contains: q } }, { name: { contains: q } }, { location: { contains: q } }] },
+          where: { ...(req.authenticatedRole === 'admin' ? {} : branchWhere(req)), OR: [{ code: { contains: q } }, { name: { contains: q } }, { location: { contains: q } }] },
           take: 8,
         }),
         prisma.repairOrder.findMany({
-          where: { OR: [{ orderNumber: { contains: q } }, { customerComplaint: { contains: q } }, { intakeNotes: { contains: q } }, { notes: { contains: q } }] },
+          where: { ...branchWhere(req), OR: [{ orderNumber: { contains: q } }, { customerComplaint: { contains: q } }, { intakeNotes: { contains: q } }, { notes: { contains: q } }] },
           take: 8,
         }),
         prisma.salesInvoice.findMany({
-          where: { OR: [{ invoiceNumber: { contains: q } }, { notes: { contains: q } }, { status: { contains: q } }] },
+          where: { ...branchWhere(req), OR: [{ invoiceNumber: { contains: q } }, { notes: { contains: q } }, { status: { contains: q } }] },
           take: 8,
         }),
         prisma.purchaseInvoice.findMany({
-          where: { OR: [{ invoiceNumber: { contains: q } }, { supplierInvoiceNumber: { contains: q } }, { notes: { contains: q } }, { status: { contains: q } }] },
+          where: { ...branchWhere(req), OR: [{ invoiceNumber: { contains: q } }, { supplierInvoiceNumber: { contains: q } }, { notes: { contains: q } }, { status: { contains: q } }] },
           take: 8,
         }),
         prisma.cashTransaction.findMany({
-          where: { OR: [{ partyName: { contains: q } }, { description: { contains: q } }, { referenceId: { contains: q } }, { referenceType: { contains: q } }] },
+          where: { ...(req.authenticatedRole === 'admin' ? {} : { cashbox: branchWhere(req) }), OR: [{ partyName: { contains: q } }, { description: { contains: q } }, { referenceId: { contains: q } }, { referenceType: { contains: q } }] },
           take: 8,
         }),
       ]);
@@ -98,7 +100,7 @@ router.get('/suggestions', async (req, res) => {
   }
 });
 
-router.get('/', async (req, res) => {
+router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const q = String(req.query.q || '').trim();
     if (!q) {
@@ -160,11 +162,17 @@ router.get('/', async (req, res) => {
             { defaultLocation: { contains: q } },
           ],
         },
-        include: { stockBalances: { include: { warehouse: true } } },
+        include: {
+          stockBalances: {
+            include: { warehouse: true },
+            where: req.authenticatedRole === 'admin' ? undefined : { warehouse: branchWhere(req) },
+          },
+        },
         take: 5,
       }),
       prisma.repairOrder.findMany({
         where: {
+          ...branchWhere(req),
           OR: [
             { orderNumber: { contains: q } },
             { customerComplaint: { contains: q } },
@@ -176,7 +184,7 @@ router.get('/', async (req, res) => {
         take: 5,
       }),
       prisma.salesInvoice.findMany({
-        where: { OR: [{ invoiceNumber: { contains: q } }, { notes: { contains: q } }, { status: { contains: q } }] },
+        where: { ...branchWhere(req), OR: [{ invoiceNumber: { contains: q } }, { notes: { contains: q } }, { status: { contains: q } }] },
         include: { customer: true, vehicle: true },
         take: 5,
       }),

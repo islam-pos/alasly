@@ -8,6 +8,18 @@
     "dev:client": "npm --prefix client run dev",
     "build:server": "npm --prefix server run build",
     "build:client": "npm --prefix client run build",
-    "db:seed": "npm --prefix server run prisma:seed"
+    "db:seed": "npm --prefix server run prisma:seed",
+    "db:seed:production": "npm --prefix server run prisma:seed:production",
+    "db:migrate": "npm --prefix server run db:migrate",
+    "db:backup": "npm --prefix server run db:backup",
+    "db:restore": "npm --prefix server run db:restore --",
+    "lint": "eslint eslint.config.mjs client/src server/src server/prisma/productionSeed.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "typescript-eslint": "^8.72.0"
   }
 }

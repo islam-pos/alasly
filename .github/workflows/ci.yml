@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+            client/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix server
+      - run: npm ci --prefix client
+      - run: npm --prefix server run prisma:generate
+        env:
+          DATABASE_URL: file:./prisma/autocare.db
+      - run: npm --prefix server run prisma:push
+        env:
+          DATABASE_URL: file:/tmp/alasly-ci.db
+      - run: npm --prefix server run prisma:seed:production
+        env:
+          DATABASE_URL: file:/tmp/alasly-ci.db
+      - run: npm --prefix server run db:migrate
+        env:
+          DATABASE_URL: file:/tmp/alasly-ci.db
+      - run: npm run lint
+      - run: npm --prefix server test
+      - run: npm --prefix server run build
+      - run: npm --prefix client test
+      - run: npm --prefix client run build
