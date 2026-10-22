@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import path from 'node:path';
 import {
   getBackupsToPrune,
   getCairoDateKey,
@@ -12,13 +13,16 @@ const backupId = (type: 'daily' | 'manual', date: string, sequence: number) =>
   `autocare-${type}-${date}-20261017T1200${String(sequence).padStart(2, '0')}Z-00000000-0000-4000-8000-${String(sequence).padStart(12, '0')}.tar.gz`;
 
 test('resolves SQLite paths relative to the Prisma schema directory', () => {
+  const workingDirectory = path.join(path.parse(process.cwd()).root, 'app', 'server');
+  const absoluteDatabasePath = path.join(path.parse(process.cwd()).root, 'data', 'autocare.db');
+
   assert.equal(
-    resolveDatabaseFile('file:./autocare.db', 'C:\\app\\server'),
-    'C:\\app\\server\\prisma\\autocare.db',
+    resolveDatabaseFile('file:./autocare.db', workingDirectory),
+    path.join(workingDirectory, 'prisma', 'autocare.db'),
   );
   assert.equal(
-    resolveDatabaseFile('file:/data/autocare.db', 'C:\\app\\server'),
-    '\\data\\autocare.db',
+    resolveDatabaseFile(`file:${absoluteDatabasePath}`, workingDirectory),
+    absoluteDatabasePath,
   );
 });
 
