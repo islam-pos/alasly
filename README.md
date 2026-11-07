@@ -14,6 +14,35 @@ The container stops if a required secret is missing or weak, or if Railway does 
 
 Sign in as `admin` with the password entered in Railway. Other existing users remain in the database but their previous passwords are invalidated; an administrator can assign them new passwords under Settings → Users.
 
+## cPanel deployment
+
+The shared cPanel plan can run the app with its Node.js Application Manager. This deployment uses the account's home directory for the persistent SQLite database, backups, and repair photos; it does not use Docker or Railway's `/data` volume.
+
+1. Build the client and server from the repository root:
+
+   ```powershell
+   npm --prefix client ci
+   npm --prefix client run build
+   npm --prefix server ci
+   npm --prefix server run prisma:generate
+   npm --prefix server run build
+   ```
+
+2. Create the production seed database from the `server` directory:
+
+   ```powershell
+   $env:DATABASE_URL = "file:$((Resolve-Path .).Path -replace '\\', '/')/prisma/autocare.db"
+   npx prisma db push --skip-generate
+   npm run prisma:seed:production
+   Remove-Item Env:DATABASE_URL
+   ```
+
+3. Package the repository's tracked files together with `client/dist`, `server/dist`, and `server/prisma/autocare.db`. Exclude `.git`, `node_modules`, and every `.env` file. Upload and extract the package in the cPanel home directory, keeping the `client` and `server` folders side by side.
+4. In **Setup Node.js App**, create a Node.js 22 application in **Development** mode, set the application root to `autocare-erp/server`, the application URL to the domain root, and the startup file to `cpanel-start.mjs`. Run **NPM Install**, then change the application mode to **Production** and restart it.
+5. Add `JWT_SECRET` (at least 32 bytes) and `INITIAL_ADMIN_PASSWORD` (16–72 bytes) as application environment variables in cPanel. Do not put secrets in the uploaded files or Git. `cpanel-start.mjs` initializes the persistent database once, runs the server migrations, and secures the seeded `admin` account. After `/api/health` succeeds, remove `INITIAL_ADMIN_PASSWORD` from the cPanel variables.
+
+The cPanel start script sets `DATABASE_URL` and `DATA_DIR` to the persistent `~/autocare-erp-data` directory. It preserves that directory across application uploads and restarts. Keep cPanel backups of this directory; the shared plan's SQLite database is not a managed database service. Point the domain's DNS A record to the hosting account's shared IP and issue a valid SSL certificate before using the public site.
+
 ## User permissions and HR
 
 Administrators can create, update, deactivate, and delete user accounts from Settings → Users, link an account to an employee, and either inherit role permissions or set individual permissions. WhatsApp and Telegram connection settings remain restricted to active administrators. Employee records can be created, edited, or deactivated in HR; deactivation also disables the linked user account while preserving attendance and payroll history.
