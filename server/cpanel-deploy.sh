@@ -1,9 +1,9 @@
 #!/bin/bash
-set -euo pipefail
+set -eo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-application_root="${HOME}/autocare-erp"
-node_environment="${HOME}/nodevenv/autocare-erp/server/22/bin/activate"
+application_root="/home/alaslyto/autocare-erp"
+node_environment="/home/alaslyto/nodevenv/autocare-erp/server/22/bin/activate"
 
 if [[ ! -f "$node_environment" ]]; then
   echo "The cPanel Node.js 22 environment could not be found: $node_environment" >&2
@@ -17,12 +17,16 @@ fi
 
 . "$node_environment"
 
+echo "Installing server build dependencies"
 npm ci --prefix "$repository_root/server" --include=dev
+echo "Installing client build dependencies"
 npm ci --prefix "$repository_root/client" --include=dev
 
 export DATABASE_URL="file:/tmp/alasly-cpanel-prisma-generate.db"
+echo "Generating Prisma client and building server"
 npm --prefix "$repository_root/server" run prisma:generate
 npm --prefix "$repository_root/server" run build
+echo "Building client"
 npm --prefix "$repository_root/client" run build
 unset DATABASE_URL
 
