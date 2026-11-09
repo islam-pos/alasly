@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
+import { isValidPassword } from '../src/lib/passwordPolicy';
 
 const permissions = {
   admin: [
@@ -51,12 +51,9 @@ export const seedProduction = async (prisma: PrismaClient) => {
   }
 
   const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'admin' } });
-  const configuredAdminPassword = process.env.INITIAL_ADMIN_PASSWORD;
-  if (
-    configuredAdminPassword
-    && (Buffer.byteLength(configuredAdminPassword) < 16 || Buffer.byteLength(configuredAdminPassword) > 72)
-  ) {
-    throw new Error('INITIAL_ADMIN_PASSWORD must be between 16 and 72 bytes');
+  const configuredAdminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'admin';
+  if (!isValidPassword(configuredAdminPassword)) {
+    throw new Error('INITIAL_ADMIN_PASSWORD must be 4-15 alphanumeric characters');
   }
   await prisma.user.upsert({
     where: { username: 'admin' },
@@ -64,9 +61,10 @@ export const seedProduction = async (prisma: PrismaClient) => {
       username: 'admin',
       fullName: 'مدير النظام',
       passwordHash: await bcrypt.hash(
-        configuredAdminPassword || randomBytes(32).toString('base64url'),
+        configuredAdminPassword,
         12,
       ),
+      mustChangePassword: true,
       roleId: adminRole.id,
       branchId: branch.id,
     },

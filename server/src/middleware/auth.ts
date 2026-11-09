@@ -16,12 +16,13 @@ export interface AuthenticatedRequest extends Request {
     username: string;
     role: string;
     branchId?: string;
+    mustChangePassword?: boolean;
   };
   authenticatedRole?: string;
   rolePermissions?: string[];
 }
 
-export const authenticate = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const authenticate = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'غير مصرح لك بالدخول، يرجى تسجيل الدخول أولاً' });
@@ -37,12 +38,39 @@ export const authenticate = (req: AuthenticatedRequest, res: Response, next: Nex
     ) {
       return res.status(401).json({ error: 'رمز الدخول غير صالح أو منتهي الصلاحية' });
     }
+    let mustChangePassword = decoded.mustChangePassword === true;
+    if (decoded.username === 'admin' && !mustChangePassword) {
+      try {
+        const account = await prisma.user.findUnique({
+          where: { id: decoded.id },
+          select: { active: true, mustChangePassword: true },
+        });
+        if (!account?.active) {
+          return res.status(401).json({ error: 'الحساب غير موجود أو غير نشط' });
+        }
+        mustChangePassword = account.mustChangePassword;
+      } catch (error) {
+        console.error('Could not verify temporary administrator access:', error);
+        return res.status(500).json({ error: 'تعذر التحقق من حالة الحساب' });
+      }
+    }
+
     req.user = {
       id: decoded.id,
       username: decoded.username,
       role: decoded.role,
       ...(typeof decoded.branchId === 'string' ? { branchId: decoded.branchId } : {}),
+      ...(mustChangePassword ? { mustChangePassword: true } : {}),
     };
+    if (
+      req.user.mustChangePassword
+      && !(
+        (req.method === 'GET' && req.path === '/me')
+        || (req.method === 'POST' && req.path === '/change-initial-password')
+      )
+    ) {
+      return res.status(403).json({ error: 'يجب تغيير كلمة المرور المؤقتة قبل استخدام النظام' });
+    }
     return next();
   } catch {
     return res.status(401).json({ error: 'رمز الدخول غير صالح أو منتهي الصلاحية' });
@@ -86,6 +114,12 @@ export const requirePermission = (permission: string) => (
   return res.status(403).json({ error: 'ليس لديك صلاحية لتنفيذ هذا الإجراء' });
 };
 
-export const generateToken = (payload: { id: string; username: string; role: string; branchId?: string }) => {
+export const generateToken = (payload: {
+  id: string;
+  username: string;
+  role: string;
+  branchId?: string;
+  mustChangePassword?: boolean;
+}) => {
   return jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
 };

@@ -1,10 +1,8 @@
-import { execFileSync } from 'node:child_process';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDirectory = path.resolve(
   process.env.DATA_DIR || path.join(os.homedir(), 'autocare-erp-data'),
 );
@@ -12,7 +10,7 @@ const databaseFile = path.join(dataDirectory, 'autocare.db');
 const seedDatabaseFile = path.join(__dirname, 'prisma', 'autocare.db');
 const securedUsersMarker = path.join(dataDirectory, '.users-secured');
 
-const startServer = async () => {
+const startServer = () => {
   if (!process.env.JWT_SECRET || Buffer.byteLength(process.env.JWT_SECRET) < 32) {
     throw new Error('JWT_SECRET must contain at least 32 bytes before the server can start');
   }
@@ -49,10 +47,12 @@ const startServer = async () => {
   }
 
   delete process.env.INITIAL_ADMIN_PASSWORD;
-  await import('./dist/index.js');
+  require('./dist/index.js');
 };
 
-startServer().catch((error) => {
+try {
+  startServer();
+} catch (error) {
   console.error('Unable to start the cPanel application:', error);
   process.exitCode = 1;
-});
+}

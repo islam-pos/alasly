@@ -9,13 +9,14 @@
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "build:desktop": "tsc -b && vite build --mode desktop",
     "build:mobile": "tsc -b && vite build --mode mobile",
     "android:sync": "npm run build:mobile && cap sync android",
     "android:studio": "npm run android:sync && cap open android",
     "android:aab": "npm run android:sync && cd android && gradlew bundleRelease",
     "ios:sync": "npm run build:mobile && cap sync ios",
     "ios:xcode": "npm run ios:sync && cap open ios",
-    "windows:installer": "electron-builder --win nsis portable",
+    "windows:installer": "npm run build:desktop && electron-builder --win nsis portable",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -65,7 +66,8 @@
     "files": [
       "electron/main.cjs",
       "package.json",
-      "assets/icon.png"
+      "assets/icon.png",
+      "dist/**/*"
     ],
     "win": {
       "icon": "assets/icon.ico",

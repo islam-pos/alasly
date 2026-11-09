@@ -8,9 +8,26 @@ export interface CachedApiResponse {
   storedAt: number;
 }
 
+export type OfflineMutationState = 'queued' | 'needs_review' | 'syncing' | 'failed';
+
+export interface QueuedOfflineMutation {
+  id: string;
+  scope: string;
+  url: string;
+  method: string;
+  body: string | null;
+  idempotencyKey: string;
+  state: OfflineMutationState;
+  autoSync: boolean;
+  createdAt: number;
+  updatedAt: number;
+  lastError?: string;
+}
+
 const DATABASE_NAME = 'autocare-offline';
-const STORE_NAME = 'responses';
-const DATABASE_VERSION = 1;
+const RESPONSE_STORE_NAME = 'responses';
+const MUTATION_STORE_NAME = 'mutations';
+const DATABASE_VERSION = 2;
 const MAX_CACHE_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_RESPONSES_PER_SCOPE = 300;
 
@@ -30,8 +47,11 @@ const openDatabase = () => new Promise<IDBDatabase>((resolve, reject) => {
   const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
   request.onupgradeneeded = () => {
     const database = request.result;
-    if (!database.objectStoreNames.contains(STORE_NAME)) {
-      database.createObjectStore(STORE_NAME, { keyPath: 'key' });
+    if (!database.objectStoreNames.contains(RESPONSE_STORE_NAME)) {
+      database.createObjectStore(RESPONSE_STORE_NAME, { keyPath: 'key' });
+    }
+    if (!database.objectStoreNames.contains(MUTATION_STORE_NAME)) {
+      database.createObjectStore(MUTATION_STORE_NAME, { keyPath: 'id' });
     }
   };
   request.onsuccess = () => resolve(request.result);
@@ -44,8 +64,8 @@ const withStore = async <T>(
 ): Promise<T> => {
   const database = await openDatabase();
   return new Promise<T>((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, mode);
-    const request = action(transaction.objectStore(STORE_NAME));
+    const transaction = database.transaction(RESPONSE_STORE_NAME, mode);
+    const request = action(transaction.objectStore(RESPONSE_STORE_NAME));
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error('تعذر الوصول إلى التخزين المحلي'));
     transaction.oncomplete = () => database.close();
@@ -58,6 +78,89 @@ const withStore = async <T>(
       reject(transaction.error || new Error('أُلغيت معاملة التخزين المحلي'));
     };
   });
+};
+
+const withMutationStore = async <T>(
+  mode: IDBTransactionMode,
+  action: (store: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> => {
+  const database = await openDatabase();
+  return new Promise<T>((resolve, reject) => {
+    const transaction = database.transaction(MUTATION_STORE_NAME, mode);
+    const request = action(transaction.objectStore(MUTATION_STORE_NAME));
+    let result!: T;
+    request.onsuccess = () => {
+      result = request.result;
+    };
+    request.onerror = () => reject(request.error || new Error('تعذر الوصول إلى طابور المزامنة المحلي'));
+    transaction.oncomplete = () => {
+      database.close();
+      resolve(result);
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error || new Error('فشلت معاملة طابور المزامنة المحلي'));
+    };
+    transaction.onabort = () => {
+      database.close();
+      reject(transaction.error || new Error('أُلغيت معاملة طابور المزامنة المحلي'));
+    };
+  });
+};
+
+const notifyMutationQueueChanged = () => {
+  window.dispatchEvent(new CustomEvent('autocare:offline-queue-updated'));
+};
+
+export const saveQueuedMutation = async (mutation: QueuedOfflineMutation): Promise<void> => {
+  await withMutationStore('readwrite', (store) => store.put(mutation));
+  notifyMutationQueueChanged();
+};
+
+export const getQueuedMutations = async (scope?: string): Promise<QueuedOfflineMutation[]> => {
+  const mutations = await withMutationStore<QueuedOfflineMutation[]>('readonly', (store) => store.getAll());
+  return mutations
+    .filter((mutation) => !scope || mutation.scope === scope)
+    .sort((left, right) => left.createdAt - right.createdAt);
+};
+
+export const updateQueuedMutation = async (
+  id: string,
+  update: Partial<Pick<QueuedOfflineMutation, 'state' | 'updatedAt' | 'lastError'>>,
+): Promise<void> => {
+  const current = await withMutationStore<QueuedOfflineMutation | undefined>('readonly', (store) => store.get(id));
+  if (!current) return;
+  await withMutationStore('readwrite', (store) => store.put({ ...current, ...update }));
+  notifyMutationQueueChanged();
+};
+
+export const deleteQueuedMutation = async (id: string): Promise<void> => {
+  await withMutationStore('readwrite', (store) => store.delete(id));
+  notifyMutationQueueChanged();
+};
+
+export const clearQueuedMutations = async (scope?: string): Promise<void> => {
+  const mutations = await getQueuedMutations(scope);
+  if (mutations.length === 0) return;
+  const database = await openDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(MUTATION_STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(MUTATION_STORE_NAME);
+    mutations.forEach((mutation) => store.delete(mutation.id));
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error || new Error('تعذر مسح طابور المزامنة المحلي'));
+    };
+    transaction.onabort = () => {
+      database.close();
+      reject(transaction.error || new Error('أُلغيت عملية مسح طابور المزامنة المحلي'));
+    };
+  });
+  notifyMutationQueueChanged();
 };
 
 export const saveCachedResponse = async (
@@ -82,8 +185,8 @@ export const saveCachedResponse = async (
   await withStore('readwrite', (store) => store.put(record));
   const database = await openDatabase();
   await new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
+    const transaction = database.transaction(RESPONSE_STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(RESPONSE_STORE_NAME);
     const request = store.getAll();
     request.onsuccess = () => {
       const currentRecords = (request.result as CachedApiResponse[])
@@ -135,8 +238,8 @@ export const getLatestCachedResponseTime = async (scope: string): Promise<number
 export const clearCachedResponses = async (scope?: string): Promise<void> => {
   const database = await openDatabase();
   await new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
+    const transaction = database.transaction(RESPONSE_STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(RESPONSE_STORE_NAME);
     if (scope) {
       const request = store.getAllKeys();
       request.onsuccess = () => request.result

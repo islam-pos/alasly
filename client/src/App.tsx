@@ -6,6 +6,7 @@ import { Navbar } from './components/layout/Navbar';
 import { QuickSidebar } from './components/layout/QuickSidebar';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
+import { ChangeInitialPassword } from './pages/ChangeInitialPassword';
 import { CustomersVehicles } from './pages/master/CustomersVehicles';
 import { ItemsCatalog } from './pages/master/ItemsCatalog';
 import { Suppliers } from './pages/master/Suppliers';
@@ -46,6 +47,7 @@ const ProtectedLayout: React.FC = () => {
 
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace />;
 
   return (
     <div dir="rtl" className="min-h-screen bg-slate-50">
@@ -69,7 +71,17 @@ const AppRoutes: React.FC = () => {
     <Routes>
       <Route
         path="/login"
-        element={loading ? <LoadingScreen /> : user ? <Navigate to="/" replace /> : <Login />}
+        element={loading ? <LoadingScreen /> : user ? <Navigate to={user.mustChangePassword ? '/change-password' : '/'} replace /> : <Login />}
+      />
+      <Route
+        path="/change-password"
+        element={loading
+          ? <LoadingScreen />
+          : !user
+            ? <Navigate to="/login" replace />
+            : !user.mustChangePassword
+              ? <Navigate to="/" replace />
+              : <ChangeInitialPassword />}
       />
       <Route element={<ProtectedLayout />}>
         <Route index element={<PermissionGate permission="view_dashboard"><Dashboard /></PermissionGate>} />
@@ -97,15 +109,17 @@ const AppRoutes: React.FC = () => {
   );
 };
 
-const App: React.FC = () => (
-  <ToastProvider>
-    <AuthProvider>
-      <BrowserRouter>
-        <EscapeNavigation />
-        <AppRoutes />
-      </BrowserRouter>
-    </AuthProvider>
-  </ToastProvider>
-);
+const App: React.FC = () => {
+  return (
+    <ToastProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <EscapeNavigation />
+          <AppRoutes />
+        </BrowserRouter>
+      </AuthProvider>
+    </ToastProvider>
+  );
+};
 
 export default App;

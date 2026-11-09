@@ -6,12 +6,15 @@ const productionApiUrl = 'https://alasly-production.up.railway.app/api';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const apiBaseUrl = env.VITE_API_BASE_URL || (mode === 'mobile' ? productionApiUrl : undefined);
+  const apiBaseUrl = env.VITE_API_BASE_URL
+    || (mode === 'mobile' || mode === 'desktop' ? productionApiUrl : undefined);
 
   return {
+    base: mode === 'desktop' ? './' : '/',
     plugins: [
       react(),
       VitePWA({
+        disable: mode === 'desktop',
         registerType: 'autoUpdate',
         includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
         manifest: {

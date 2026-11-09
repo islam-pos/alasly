@@ -29,6 +29,7 @@ import { startNotificationScheduler } from './services/notifications';
 import { startWhatsappQrSessionIfPresent } from './services/whatsappQr';
 import { startTelegramQrSessionIfPresent } from './services/telegramQr';
 import { withRequestContext } from './middleware/requestContext';
+import { idempotencyMiddleware } from './middleware/idempotency';
 import { getRestoreMarkerPath, startBackupScheduler } from './services/backups';
 
 dotenv.config();
@@ -86,6 +87,7 @@ app.use('/api/auth', authRouter);
 app.use('/api', authenticate);
 app.use('/api', authorizeApiPermission);
 app.use('/api', withRequestContext);
+app.use('/api', idempotencyMiddleware);
 app.use('/api/backups', backupsRouter);
 app.use('/api/accounting', accountingRouter);
 app.use('/api/dashboard', dashboardRouter);

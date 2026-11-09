@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../lib/passwordPolicy';
 import { authenticate, generateToken, AuthenticatedRequest } from '../middleware/auth';
 import { logAudit } from '../middleware/audit';
 import { availablePermissions } from '../services/permissions';
@@ -67,6 +68,7 @@ const loginResponse = (user: any) => ({
     username: user.username,
     role: user.role.name,
     branchId: user.branchId || undefined,
+    ...(user.mustChangePassword ? { mustChangePassword: true } : {}),
   }),
   user: {
     id: user.id,
@@ -80,6 +82,7 @@ const loginResponse = (user: any) => ({
     allowedWarehouseId: user.allowedWarehouseId,
     branch: user.branch,
     employee: user.employee,
+    mustChangePassword: user.mustChangePassword,
   },
 });
 
@@ -212,11 +215,55 @@ router.get('/me', authenticate, async (req: AuthenticatedRequest, res) => {
         allowedWarehouseId: user.allowedWarehouseId,
         branch: user.branch,
         employee: user.employee,
+        mustChangePassword: user.mustChangePassword,
       },
     });
+
   } catch (err) {
     console.error('Failed to load current user:', err);
     res.status(500).json({ error: 'تعذر تحميل بيانات المستخدم' });
+  }
+});
+
+router.post('/change-initial-password', authenticate, async (req: AuthenticatedRequest, res) => {
+  if (!req.user?.mustChangePassword || req.user.username !== 'admin') {
+    return res.status(403).json({ error: 'لا يوجد تغيير إلزامي لكلمة المرور لهذا الحساب' });
+  }
+
+  const { password } = req.body || {};
+  if (!isValidPassword(password)) {
+    return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { role: true, branch: true, employee: true },
+    });
+    if (!user || !user.active || user.username !== 'admin') {
+      return res.status(401).json({ error: 'حساب المدير غير موجود أو غير نشط' });
+    }
+    if (await bcrypt.compare(password, user.passwordHash)) {
+      return res.status(400).json({ error: 'اختر كلمة مرور مختلفة عن كلمة المرور المؤقتة' });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: await bcrypt.hash(password, 12), mustChangePassword: false },
+      include: { role: true, branch: true, employee: true },
+    });
+    await logAudit({
+      userId: user.id,
+      action: 'PASSWORD_RESET',
+      entity: 'User',
+      entityId: user.id,
+      details: 'تم تغيير كلمة المرور المؤقتة لمدير النظام',
+      ipAddress: req.ip,
+    });
+    return res.json(loginResponse(updatedUser));
+  } catch (error) {
+    console.error('Failed to change temporary admin password:', error);
+    return res.status(500).json({ error: 'تعذر تغيير كلمة المرور' });
   }
 });
 
@@ -267,9 +314,8 @@ router.post('/users', authenticate, async (req: AuthenticatedRequest, res) => {
   ) {
     return res.status(400).json({ error: 'بيانات المستخدم أو الصلاحيات غير صالحة' });
   }
-  const passwordBytes = Buffer.byteLength(password);
-  if (passwordBytes < 16 || passwordBytes > 72) {
-    return res.status(400).json({ error: 'يجب أن تكون كلمة المرور بين 16 و72 بايت' });
+  if (!isValidPassword(password)) {
+    return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
   }
 
   try {
@@ -412,9 +458,8 @@ router.patch('/users/:id/password', authenticate, async (req: AuthenticatedReque
   if (!await requireAdmin(req, res)) return;
 
   const { password } = req.body;
-  const passwordBytes = typeof password === 'string' ? Buffer.byteLength(password) : 0;
-  if (passwordBytes < 16 || passwordBytes > 72) {
-    return res.status(400).json({ error: 'يجب أن تكون كلمة المرور بين 16 و72 بايت' });
+  if (!isValidPassword(password)) {
+    return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
   }
 
   try {

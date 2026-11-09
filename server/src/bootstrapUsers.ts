@@ -1,15 +1,12 @@
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from './lib/prisma';
+import { isValidPassword } from './lib/passwordPolicy';
 
 const initializeUserPasswords = async () => {
   const adminPassword = process.env.INITIAL_ADMIN_PASSWORD;
-  if (
-    typeof adminPassword !== 'string' ||
-    Buffer.byteLength(adminPassword) < 16 ||
-    Buffer.byteLength(adminPassword) > 72
-  ) {
-    throw new Error('INITIAL_ADMIN_PASSWORD must be between 16 and 72 bytes');
+  if (!isValidPassword(adminPassword)) {
+    throw new Error('INITIAL_ADMIN_PASSWORD must be 4-15 alphanumeric characters');
   }
 
   const users = await prisma.user.findMany({ select: { id: true, username: true } });
@@ -24,6 +21,7 @@ const initializeUserPasswords = async () => {
           user.id === admin.id ? adminPassword : randomBytes(32).toString('base64url'),
           12,
         ),
+        ...(user.id === admin.id ? { mustChangePassword: true } : {}),
       },
     })),
   );

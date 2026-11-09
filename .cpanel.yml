@@ -1,4 +1,4 @@
 ---
 deployment:
   tasks:
-    - /bin/cp -f server/cpanel-start.mjs /home/alaslyto/autocare-erp/server/cpanel-start.mjs
+    - /bin/cp -f server/cpanel-start.cjs /home/alaslyto/autocare-erp/server/cpanel-start.cjs

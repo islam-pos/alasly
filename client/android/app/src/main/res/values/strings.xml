@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">المحترف AutoCare</string>
+    <string name="title_activity_main">المحترف AutoCare</string>
+    <string name="package_name">com.alasly.autocare</string>
+    <string name="custom_url_scheme">com.alasly.autocare</string>
+</resources>

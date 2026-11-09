@@ -225,6 +225,7 @@ const migrateLegacySchema = async () => {
   await ensureColumn('User', 'loginLockedUntil', 'DATETIME');
   await ensureColumn('User', 'mfaSecret', 'TEXT');
   await ensureColumn('User', 'mfaEnabled', 'BOOLEAN NOT NULL DEFAULT false');
+  await ensureColumn('User', 'mustChangePassword', 'BOOLEAN NOT NULL DEFAULT false');
   await ensureColumn('PurchaseInvoice', 'approvedById', 'TEXT');
   await ensureColumn('PurchaseInvoice', 'approvedAt', 'DATETIME');
   await ensureColumn('InventoryCount', 'reviewedById', 'TEXT');
@@ -236,6 +237,38 @@ const migrateLegacySchema = async () => {
 const migrations: { id: string; apply: () => Promise<void> }[] = [
   { id: '0001-legacy-schema-sync', apply: migrateLegacySchema },
   { id: '0002-egyptian-location-defaults', apply: migrateEgyptianLocationDefaults },
+  {
+    id: '0003-temporary-admin-password',
+    apply: async () => {
+      await ensureColumn('User', 'mustChangePassword', 'BOOLEAN NOT NULL DEFAULT false');
+    },
+  },
+  {
+    id: '0004-offline-mutation-receipts',
+    apply: async () => {
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "OfflineMutationReceipt" (
+          "id" TEXT NOT NULL PRIMARY KEY,
+          "userId" TEXT NOT NULL,
+          "key" TEXT NOT NULL,
+          "requestHash" TEXT NOT NULL,
+          "status" TEXT NOT NULL DEFAULT 'PROCESSING',
+          "responseStatus" INTEGER,
+          "responseBody" TEXT,
+          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `;
+      await prisma.$executeRaw`
+        CREATE UNIQUE INDEX IF NOT EXISTS "OfflineMutationReceipt_userId_key_key"
+        ON "OfflineMutationReceipt"("userId", "key")
+      `;
+      await prisma.$executeRaw`
+        CREATE INDEX IF NOT EXISTS "OfflineMutationReceipt_createdAt_idx"
+        ON "OfflineMutationReceipt"("createdAt")
+      `;
+    },
+  },
 ];
 
 const runMigrations = async () => {

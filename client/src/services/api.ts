@@ -8,6 +8,7 @@ import type {
   NotificationTelegramQrStatus,
 } from '../types/notifications';
 import { getCachedResponse, getCurrentOfflineCacheScope, saveCachedResponse } from './offlineCache';
+import { queueOfflineMutation } from './offlineSync';
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
@@ -40,11 +41,40 @@ const isNetworkFailure = (error: unknown) =>
 async function fetchWithOfflineCache(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const method = (init?.method || 'GET').toUpperCase();
   if (method !== 'GET') {
+    const requestUrl = typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : input.url;
+    const url = new URL(requestUrl, window.location.href);
+    const isAuthRequest = url.pathname.includes('/auth/');
+    const idempotencyKey = !isAuthRequest ? crypto.randomUUID() : null;
+    const headers = new Headers(init?.headers);
+    if (idempotencyKey) headers.set('Idempotency-Key', idempotencyKey);
+    const requestInit = { ...init, headers };
     try {
-      return await globalThis.fetch(input, init);
+      return await globalThis.fetch(input, requestInit);
     } catch (error) {
       if (isNetworkFailure(error)) {
-        throw new ApiError('لا يوجد اتصال بالخادم؛ لم تُحفظ العملية. أعد الاتصال بالإنترنت ثم حاول مرة أخرى.', true);
+        if (isAuthRequest || !idempotencyKey) {
+          throw new ApiError('لا يوجد اتصال بالخادم؛ لم تُحفظ العملية. أعد الاتصال بالإنترنت ثم حاول مرة أخرى.', true);
+        }
+        try {
+          const mutation = await queueOfflineMutation(requestUrl, requestInit, method, idempotencyKey);
+          throw new ApiError(
+            mutation.autoSync
+              ? 'لا يوجد اتصال بالخادم. حُفظ طلب الإنشاء على هذا الجهاز وسيُرسل تلقائياً عند عودة الاتصال.'
+              : 'لا يوجد اتصال بالخادم. حُفظت العملية على هذا الجهاز، لكنها لم تُرسل؛ راجعها وتحقق من بيانات الخادم قبل مزامنتها.',
+            true,
+          );
+        } catch (queueError) {
+          if (queueError instanceof ApiError) throw queueError;
+          console.error('Could not queue offline API mutation:', queueError);
+          const message = queueError instanceof Error
+            ? queueError.message
+            : 'تعذر حفظ العملية في طابور المزامنة المحلي.';
+          throw new ApiError(message, true);
+        }
       }
       throw error;
     }
@@ -118,6 +148,13 @@ const apiClient = {
 
   getMe: () =>
     fetch(`${BASE_URL}/auth/me`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+
+  changeInitialPassword: (password: string) =>
+    fetch(`${BASE_URL}/auth/change-initial-password`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ password }),
+    }).then((res) => handleResponse<any>(res)),
 
   getUsers: () =>
     fetch(`${BASE_URL}/auth/users`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),

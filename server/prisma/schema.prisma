@@ -7,6 +7,21 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model OfflineMutationReceipt {
+  id             String   @id @default(uuid())
+  userId         String
+  key            String
+  requestHash    String
+  status         String   @default("PROCESSING")
+  responseStatus Int?
+  responseBody   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@index([createdAt])
+}
+
 model CompanySetting {
   id                 String   @id @default(uuid())
   name               String   @default("مركز المحترف لصيانة السيارات وقطع الغيار")
@@ -183,6 +198,7 @@ model User {
   allowedCashboxId   String?
   permissionOverrides String?
   active             Boolean   @default(true)
+  mustChangePassword Boolean   @default(false)
   failedLoginAttempts Int      @default(0)
   loginLockedUntil   DateTime?
   mfaSecret          String?

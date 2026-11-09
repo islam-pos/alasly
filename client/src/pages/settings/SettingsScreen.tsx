@@ -944,7 +944,7 @@ export const SettingsScreen: React.FC = () => {
       {activeTab === 'users' && user?.role === 'admin' && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6 space-y-4">
           <p className="text-sm text-slate-600">
-            أنشئ الحسابات، اربطها بالموظفين، وحدد الصلاحيات الفردية أو استخدم صلاحيات الدور. كلمات المرور لا تقل عن 16 بايت.
+            أنشئ الحسابات، اربطها بالموظفين، وحدد الصلاحيات الفردية أو استخدم صلاحيات الدور. كلمة المرور من 4 إلى 15 خانة، أحرف إنجليزية وأرقام فقط.
           </p>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
             <div>
@@ -1007,12 +1007,13 @@ export const SettingsScreen: React.FC = () => {
                         <input
                           type="password"
                           required
-                          minLength={16}
-                          maxLength={72}
+                          minLength={4}
+                          maxLength={15}
+                          pattern="[A-Za-z0-9]{4,15}"
                           autoComplete="new-password"
                           value={userPasswords[account.id] || ''}
                           onChange={(e) => setUserPasswords((current) => ({ ...current, [account.id]: e.target.value }))}
-                          placeholder="16 حرفًا على الأقل"
+                          placeholder="4 إلى 15 خانة"
                           className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-xs"
                           dir="ltr"
                         />
@@ -1236,8 +1237,8 @@ export const SettingsScreen: React.FC = () => {
               </label>
               {!editingUserId && (
                 <label className="space-y-1 text-xs font-semibold text-slate-700">
-                  كلمة المرور (16 إلى 72 بايت)
-                  <input required minLength={16} maxLength={72} autoComplete="new-password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-sm" dir="ltr" />
+                  كلمة المرور (4 إلى 15 خانة، أحرف إنجليزية وأرقام فقط)
+                  <input required minLength={4} maxLength={15} pattern="[A-Za-z0-9]{4,15}" autoComplete="new-password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-sm" dir="ltr" />
                 </label>
               )}
               <label className="space-y-1 text-xs font-semibold text-slate-700">

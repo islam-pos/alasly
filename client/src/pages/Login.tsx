@@ -32,8 +32,12 @@ export const Login: React.FC = () => {
         setMfaRequired(true);
         setMfaCode('');
       } else if (response.token) {
-        success('تم تسجيل الدخول بنجاح');
-        navigate('/');
+        if (response.user?.mustChangePassword) {
+          navigate('/change-password');
+        } else {
+          success('تم تسجيل الدخول بنجاح');
+          navigate('/');
+        }
       } else {
         throw new Error('استجابة تسجيل الدخول غير مكتملة');
       }
@@ -58,6 +62,9 @@ export const Login: React.FC = () => {
           <h1 className="text-2xl font-black text-slate-900">نظام المحترف AutoCare</h1>
           <p className="text-xs text-slate-500 mt-1 font-medium">
             ERP إدارة مركز صيانة السيارات ومبيعات قطع الغيار
+          </p>
+          <p className="mt-3 text-xs font-semibold text-amber-700">
+            الدخول الأول: اسم المستخدم admin وكلمة المرور admin، وسيُطلب تغييرها فورًا
           </p>
         </div>
 

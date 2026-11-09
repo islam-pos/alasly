@@ -19,12 +19,13 @@ export DATABASE_URL="file:/data/autocare.db"
 node /app/server/dist/restoreBackup.js
 node /app/server/dist/migrate.js
 if [ ! -f /data/.users-secured ]; then
-  if [ -z "${INITIAL_ADMIN_PASSWORD:-}" ]; then
-    echo "Set INITIAL_ADMIN_PASSWORD (16-72 bytes) before the first deployment."
-    exit 1
-  fi
+  export INITIAL_ADMIN_PASSWORD=admin
   node /app/server/dist/bootstrapUsers.js
   touch /data/.users-secured
+fi
+if [ ! -f /data/.default-admin-credentials-set ]; then
+  node /app/server/dist/setInitialAdminCredentials.js
+  touch /data/.default-admin-credentials-set
 fi
 unset INITIAL_ADMIN_PASSWORD
 exec node /app/server/dist/index.js
