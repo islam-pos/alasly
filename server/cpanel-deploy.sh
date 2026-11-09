@@ -17,14 +17,28 @@ fi
 
 . "$node_environment"
 
-echo "Installing server build dependencies"
-npm ci --prefix "$repository_root/server" --include=dev
-echo "Installing client build dependencies"
-npm ci --prefix "$repository_root/client" --include=dev
+install_dependencies() {
+  local project_root="$1"
+  local installed_lock="$project_root/node_modules/.package-lock.json"
+
+  if [[ -f "$installed_lock" \
+    && ! "$project_root/package.json" -nt "$installed_lock" \
+    && ! "$project_root/package-lock.json" -nt "$installed_lock" ]]; then
+    echo "Reusing installed dependencies for $project_root"
+    return
+  fi
+
+  echo "Installing build dependencies for $project_root"
+  npm ci --prefix "$project_root" --include=dev
+}
+
+install_dependencies "$repository_root/server"
+install_dependencies "$repository_root/client"
 
 export DATABASE_URL="file:/tmp/alasly-cpanel-prisma-generate.db"
 echo "Generating Prisma client and building server"
-npm --prefix "$repository_root/server" run prisma:generate
+NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=512" \
+  npm --prefix "$repository_root/server" run prisma:generate
 npm --prefix "$repository_root/server" run build
 echo "Building client"
 npm --prefix "$repository_root/client" run build
