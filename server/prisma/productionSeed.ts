@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../generated/prisma';
 import { isValidPassword } from '../src/lib/passwordPolicy';
 
 const permissions = {

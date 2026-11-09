@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '../lib/prisma-client';
 
 export const approveRepairEstimate = async (
   tx: Prisma.TransactionClient,

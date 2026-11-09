@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from './lib/prisma-client';
 import { extract } from 'tar';
 import {
   getBackupArchivePath,

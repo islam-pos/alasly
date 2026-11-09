@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { NextFunction, Response } from 'express';
-import type { OfflineMutationReceipt } from '@prisma/client';
+import type { OfflineMutationReceipt } from '../lib/prisma-client';
 import { AuthenticatedRequest } from './auth';
 import { prisma } from '../lib/prisma';
 

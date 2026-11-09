@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../lib/prisma-client';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 

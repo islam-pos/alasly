@@ -35,23 +35,27 @@ install_dependencies() {
 install_dependencies "$repository_root/server"
 install_dependencies "$repository_root/client"
 
-export DATABASE_URL="file:/tmp/alasly-cpanel-prisma-generate.db"
-echo "Generating Prisma client and building server"
-NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=256" \
-  npm --prefix "$repository_root/server" run prisma:generate
+if [[ ! -f "$repository_root/server/generated/prisma/index.js" \
+  || ! -f "$repository_root/server/generated/prisma/libquery_engine-debian-openssl-1.0.x.so.node" ]]; then
+  echo "The committed Prisma client or its cPanel Linux engine is missing; regenerate and commit it before deploying." >&2
+  exit 1
+fi
+
+echo "Building server with the committed Prisma client"
 npm --prefix "$repository_root/server" run build
 echo "Building client"
 npm --prefix "$repository_root/client" run build
-unset DATABASE_URL
 
 mkdir -p \
   "$application_root/server/src" \
   "$application_root/server/dist" \
+  "$application_root/server/generated/prisma" \
   "$application_root/server/prisma" \
   "$application_root/client/dist"
 
 cp -a "$repository_root/server/src/." "$application_root/server/src/"
 cp -a "$repository_root/server/dist/." "$application_root/server/dist/"
+cp -a "$repository_root/server/generated/prisma/." "$application_root/server/generated/prisma/"
 cp -a "$repository_root/client/dist/." "$application_root/client/dist/"
 cp -f "$repository_root/server/cpanel-start.cjs" "$application_root/server/cpanel-start.cjs"
 cp -f "$repository_root/server/package.json" "$application_root/server/package.json"
