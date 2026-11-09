@@ -42,4 +42,3 @@ jobs:
       - run: npm --prefix server run build
       - run: npm --prefix client test
       - run: npm --prefix client run build
-      - run: bash -n server/cpanel-deploy.sh
