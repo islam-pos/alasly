@@ -17,7 +17,7 @@ Sign in as `admin` / `admin` and immediately choose a new password. Other existi
 
 The shared cPanel plan can run the app with its Node.js Application Manager. This deployment uses the account's home directory for the persistent SQLite database, backups, and repair photos; it does not use Docker or Railway's `/data` volume.
 
-1. Build the client and server from the repository root:
+1. For the initial application setup, build the client and server from the repository root:
 
    ```powershell
    npm --prefix client ci
@@ -36,9 +36,11 @@ The shared cPanel plan can run the app with its Node.js Application Manager. Thi
    Remove-Item Env:DATABASE_URL
    ```
 
-3. Package the repository's tracked files together with `client/dist`, `server/dist`, and `server/prisma/autocare.db`. Exclude `.git`, `node_modules`, and every `.env` file. Upload and extract the package in the cPanel home directory, keeping the `client` and `server` folders side by side.
+3. For the initial setup only, package the tracked files together with `client/dist`, `server/dist`, and `server/prisma/autocare.db`. Exclude `.git`, `node_modules`, and every `.env` file. Upload and extract the package in the cPanel home directory, keeping the `client` and `server` folders side by side.
 4. In **Setup Node.js App**, create or edit a Node.js 22 application in **Development** mode, set the application root to `autocare-erp/server`, the application URL to the domain root, and the startup file to `cpanel-start.cjs`. Run **NPM Install**, then change the application mode to **Production** and restart it.
 5. Add `JWT_SECRET` (at least 32 bytes) and, for the first startup only, `INITIAL_ADMIN_PASSWORD` (4–15 English letters and digits) as application environment variables in cPanel. Do not put secrets in uploaded files or Git. On first startup, `cpanel-start.cjs` copies the existing database to the persistent data directory, runs migrations, sets the administrator password to `INITIAL_ADMIN_PASSWORD`, and replaces other users' password hashes with random values. After `/api/health` succeeds, remove `INITIAL_ADMIN_PASSWORD` from the cPanel variables, sign in as `admin` with that temporary password, and change it immediately. The one-time marker prevents password initialization from running again.
+
+For updates after the initial setup, use **Git Version Control** to update the repository from `origin/main`, then deploy the checked-out HEAD commit. The repository's `.cpanel.yml` runs `server/cpanel-deploy.sh`, which builds the server and client and copies only application source, compiled output, package manifests, the Prisma schema, and the Passenger startup file into `~/autocare-erp`. It does not copy `.env` files, `node_modules`, the seed database, or anything in `~/autocare-erp-data`. After deployment, run **NPM Install** in **Setup Node.js App** and restart the application.
 
 The cPanel start script sets `DATABASE_URL` and `DATA_DIR` to the persistent `~/autocare-erp-data` directory. It preserves that directory across application uploads and restarts. Keep cPanel backups of this directory; the shared plan's SQLite database is not a managed database service. Point the domain's DNS A record to the hosting account's shared IP and issue a valid SSL certificate before using the public site.
 
