@@ -37,7 +37,7 @@ install_dependencies "$repository_root/client"
 
 export DATABASE_URL="file:/tmp/alasly-cpanel-prisma-generate.db"
 echo "Generating Prisma client and building server"
-NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=512" \
+NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=256" \
   npm --prefix "$repository_root/server" run prisma:generate
 npm --prefix "$repository_root/server" run build
 echo "Building client"
