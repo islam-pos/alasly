@@ -1,4 +1,4 @@
 ---
 deployment:
   tasks:
-    - /bin/bash /home/alaslyto/repositories/alasly-deploy-8298007/server/cpanel-deploy.sh
+    - /bin/bash server/cpanel-deploy.sh

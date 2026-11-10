@@ -2,8 +2,9 @@
 set -eo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-application_root="/home/alaslyto/autocare-erp"
-node_environment="/home/alaslyto/nodevenv/autocare-erp/server/22/bin/activate"
+home_directory="${HOME:?cPanel HOME is not set}"
+application_root="$home_directory/autocare-erp"
+node_environment="$home_directory/nodevenv/autocare-erp/server/22/bin/activate"
 
 if [[ ! -f "$node_environment" ]]; then
   echo "The cPanel Node.js 22 environment could not be found: $node_environment" >&2
