@@ -40,6 +40,20 @@ The shared cPanel plan can run the app with its Node.js Application Manager. Thi
 4. In **Setup Node.js App**, create or edit a Node.js 22 application in **Development** mode, set the application root to `autocare-erp/server`, the application URL to the domain root, and the startup file to `cpanel-start.cjs`. Run **NPM Install**, then change the application mode to **Production** and restart it.
 5. Add `JWT_SECRET` (at least 32 bytes) and, for the first startup only, `INITIAL_ADMIN_PASSWORD` (4–15 English letters and digits) as application environment variables in cPanel. Do not put secrets in uploaded files or Git. On first startup, `cpanel-start.cjs` copies the existing database to the persistent data directory, runs migrations, sets the administrator password to `INITIAL_ADMIN_PASSWORD`, and replaces other users' password hashes with random values. After `/api/health` succeeds, remove `INITIAL_ADMIN_PASSWORD` from the cPanel variables, sign in as `admin` with that temporary password, and change it immediately. The one-time marker prevents password initialization from running again.
 
+If the administrator password is lost, do not delete or recreate the application or `~/autocare-erp-data`. After deploying the current server build, run this from the cPanel Node.js 22 environment in `~/autocare-erp/server`; it updates only the `admin` password hash and login lock fields, and requires a new temporary password:
+
+```bash
+set -e
+trap 'unset ADMIN_RESET_PASSWORD DATABASE_URL' EXIT
+read -rsp "Temporary admin password (4-15 English letters/digits): " ADMIN_RESET_PASSWORD
+echo
+export ADMIN_RESET_PASSWORD
+export DATABASE_URL="file:$HOME/autocare-erp-data/autocare.db"
+node dist/resetAdminPassword.js
+```
+
+Sign in as `admin` with that temporary password and change it immediately. The login page does not assume the temporary password is `admin`.
+
 For updates after the initial setup, use **Git Version Control** to update the repository from `origin/main`, then deploy the checked-out HEAD commit. The repository's `.cpanel.yml` runs `server/cpanel-deploy.sh` from the repository root. The script derives the cPanel home directory from `HOME`, builds the server and client, and copies only application source, compiled output, the committed Prisma Client, package manifests, the Prisma schema, and the Passenger startup file into `~/autocare-erp`. The generated client includes the cPanel Linux engine so the constrained host does not need to run Prisma generation. When changing the Prisma schema or Prisma version, regenerate and commit `server/generated/prisma` before deploying. The script reuses build dependencies while their lockfiles are unchanged. It does not copy `.env` files, `node_modules`, the seed database, or anything in `~/autocare-erp-data`. After deployment, run **NPM Install** in **Setup Node.js App** and restart the application.
 
 The cPanel start script sets `DATABASE_URL` and `DATA_DIR` to the persistent `~/autocare-erp-data` directory. It preserves that directory across application uploads and restarts. Keep cPanel backups of this directory; the shared plan's SQLite database is not a managed database service. Point the domain's DNS A record to the hosting account's shared IP and issue a valid SSL certificate before using the public site.
