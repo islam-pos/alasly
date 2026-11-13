@@ -29,3 +29,5 @@ client/ios/App/Pods/
 client/ios/App/build/
 client/ios/DerivedData/
 client/tsconfig.tsbuildinfo
+!/client/dist/
+!/client/dist/**

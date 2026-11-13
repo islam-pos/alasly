@@ -44,8 +44,11 @@ fi
 
 echo "Building server with the committed Prisma client"
 npm --prefix "$repository_root/server" run build
-echo "Building client"
-NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=512" npm --prefix "$repository_root/client" run build
+if [[ ! -f "$repository_root/client/dist/index.html" ]]; then
+  echo "The prebuilt client is missing; build it locally and commit client/dist before deploying." >&2
+  exit 1
+fi
+echo "Using the prebuilt client from $repository_root/client/dist"
 
 mkdir -p \
   "$application_root/server/src" \
