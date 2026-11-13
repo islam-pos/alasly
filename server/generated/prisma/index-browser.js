@@ -288,6 +288,19 @@ exports.Prisma.UserScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.PasswordResetRequestScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  status: 'status',
+  approvalTokenHash: 'approvalTokenHash',
+  resetTokenHash: 'resetTokenHash',
+  expiresAt: 'expiresAt',
+  resetExpiresAt: 'resetExpiresAt',
+  approvedAt: 'approvedAt',
+  usedAt: 'usedAt',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.AuditLogScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -1070,6 +1083,7 @@ exports.Prisma.ModelName = {
   Branch: 'Branch',
   Role: 'Role',
   User: 'User',
+  PasswordResetRequest: 'PasswordResetRequest',
   AuditLog: 'AuditLog',
   JobTitle: 'JobTitle',
   Employee: 'Employee',

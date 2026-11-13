@@ -6,6 +6,15 @@ import { authenticate, generateToken, AuthenticatedRequest } from '../middleware
 import { logAudit } from '../middleware/audit';
 import { availablePermissions } from '../services/permissions';
 import {
+  createPasswordResetToken,
+  hashPasswordResetToken,
+  isPasswordResetEmailConfigured,
+  isValidPasswordReset,
+  PASSWORD_RESET_POLICY_MESSAGE,
+  sendPasswordResetApprovalEmail,
+  sendPasswordResetLinkEmail,
+} from '../services/passwordReset';
+import {
   decryptMfaSecret,
   encryptMfaSecret,
   verifyMfaCode,
@@ -231,8 +240,8 @@ router.post('/change-initial-password', authenticate, async (req: AuthenticatedR
   }
 
   const { password } = req.body || {};
-  if (!isValidPassword(password)) {
-    return res.status(400).json({ error: PASSWORD_POLICY_MESSAGE });
+  if (!isValidPasswordReset(password)) {
+    return res.status(400).json({ error: PASSWORD_RESET_POLICY_MESSAGE });
   }
 
   try {
@@ -264,6 +273,200 @@ router.post('/change-initial-password', authenticate, async (req: AuthenticatedR
   } catch (error) {
     console.error('Failed to change temporary admin password:', error);
     return res.status(500).json({ error: 'تعذر تغيير كلمة المرور' });
+  }
+});
+
+const passwordResetRequestMessage = 'إذا كان البريد مرتبطًا بحساب نشط، سيصل طلب موافقة إلى مدير النظام. لن تُرسل رسالة إعادة التعيين إلا بعد الموافقة.';
+
+router.post('/password-reset/request', async (req, res) => {
+  if (!isPasswordResetEmailConfigured()) {
+    return res.status(503).json({ error: 'استعادة كلمة المرور بالبريد غير مفعلة؛ يرجى التواصل مع مدير النظام' });
+  }
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().slice(0, 254) : '';
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(202).json({ message: passwordResetRequestMessage });
+  }
+
+  try {
+    const users = await prisma.$queryRaw<{ id: string; username: string; email: string | null }[]>`
+      SELECT "id", "username", "email" FROM "User"
+      WHERE LOWER("email") = LOWER(${email}) AND "active" = 1
+      LIMIT 1
+    `;
+    const user = users[0];
+    const now = new Date();
+    const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const recentRequestCount = await prisma.passwordResetRequest.count({
+      where: { createdAt: { gt: hourAgo } },
+    });
+
+    if (user?.email && recentRequestCount < 20) {
+      const recentPendingRequest = await prisma.passwordResetRequest.findFirst({
+        where: {
+          userId: user.id,
+          status: 'PENDING',
+          createdAt: { gt: new Date(now.getTime() - 15 * 60 * 1000) },
+        },
+        select: { id: true },
+      });
+      if (!recentPendingRequest) {
+        await prisma.passwordResetRequest.updateMany({
+          where: { userId: user.id, status: { in: ['PENDING', 'APPROVED'] } },
+          data: { status: 'SUPERSEDED', approvalTokenHash: null, resetTokenHash: null },
+        });
+        const approvalToken = createPasswordResetToken();
+        const request = await prisma.passwordResetRequest.create({
+          data: {
+            userId: user.id,
+            approvalTokenHash: hashPasswordResetToken(approvalToken),
+            expiresAt: new Date(now.getTime() + 30 * 60 * 1000),
+          },
+          select: { id: true },
+        });
+        try {
+          await sendPasswordResetApprovalEmail(user.username, approvalToken);
+        } catch (error) {
+          await prisma.passwordResetRequest.delete({ where: { id: request.id } });
+          throw error;
+        }
+      }
+    }
+    return res.status(202).json({ message: passwordResetRequestMessage });
+  } catch (error) {
+    console.error('Password reset request failed:', error);
+    return res.status(500).json({ error: 'تعذر إرسال طلب الاستعادة الآن؛ حاول لاحقًا' });
+  }
+});
+
+router.post('/password-reset/decision', async (req, res) => {
+  const { token, decision } = req.body || {};
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token) || !['approve', 'reject'].includes(decision)) {
+    return res.status(400).json({ error: 'بيانات الموافقة غير صالحة' });
+  }
+
+  try {
+    const tokenHash = hashPasswordResetToken(token);
+    const request = await prisma.passwordResetRequest.findFirst({
+      where: {
+        approvalTokenHash: tokenHash,
+        status: 'PENDING',
+        expiresAt: { gt: new Date() },
+      },
+      include: { user: { select: { id: true, username: true, email: true } } },
+    });
+    if (!request) return res.status(404).json({ error: 'انتهت صلاحية الطلب أو تم استخدامه' });
+
+    if (decision === 'reject') {
+      const rejected = await prisma.passwordResetRequest.updateMany({
+        where: { id: request.id, status: 'PENDING', approvalTokenHash: tokenHash, expiresAt: { gt: new Date() } },
+        data: { status: 'REJECTED', approvalTokenHash: null },
+      });
+      if (!rejected.count) return res.status(404).json({ error: 'انتهت صلاحية الطلب أو تم استخدامه' });
+      await logAudit({
+        userId: request.userId,
+        action: 'PASSWORD_RESET_REJECTED',
+        entity: 'PasswordResetRequest',
+        entityId: request.id,
+        ipAddress: req.ip,
+      });
+      return res.json({ message: 'تم رفض طلب إعادة تعيين كلمة المرور.' });
+    }
+
+    if (!request.user.email) return res.status(409).json({ error: 'لا يوجد بريد إلكتروني مسجل لهذا الحساب' });
+    const resetToken = createPasswordResetToken();
+    const approvedAt = new Date();
+    const approved = await prisma.passwordResetRequest.updateMany({
+      where: { id: request.id, status: 'PENDING', approvalTokenHash: tokenHash, expiresAt: { gt: approvedAt } },
+      data: {
+        status: 'APPROVED',
+        approvalTokenHash: null,
+        resetTokenHash: hashPasswordResetToken(resetToken),
+        approvedAt,
+        resetExpiresAt: new Date(approvedAt.getTime() + 20 * 60 * 1000),
+      },
+    });
+    if (!approved.count) return res.status(404).json({ error: 'انتهت صلاحية الطلب أو تم استخدامه' });
+
+    try {
+      await sendPasswordResetLinkEmail(request.user.email, request.user.username, resetToken);
+    } catch (error) {
+      await prisma.passwordResetRequest.updateMany({
+        where: { id: request.id, status: 'APPROVED' },
+        data: { status: 'EMAIL_FAILED', resetTokenHash: null },
+      });
+      throw error;
+    }
+    await logAudit({
+      userId: request.userId,
+      action: 'PASSWORD_RESET_APPROVED',
+      entity: 'PasswordResetRequest',
+      entityId: request.id,
+      ipAddress: req.ip,
+    });
+    return res.json({ message: 'تم اعتماد الطلب وإرسال رابط إعادة التعيين إلى البريد المسجل.' });
+  } catch (error) {
+    console.error('Password reset decision failed:', error);
+    return res.status(500).json({ error: 'تعذر معالجة الموافقة الآن؛ حاول لاحقًا' });
+  }
+});
+
+router.post('/password-reset/complete', async (req, res) => {
+  const { token, password } = req.body || {};
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
+    return res.status(400).json({ error: 'رابط إعادة التعيين غير صالح أو منتهي الصلاحية' });
+  }
+  if (!isValidPasswordReset(password)) {
+    return res.status(400).json({ error: PASSWORD_RESET_POLICY_MESSAGE });
+  }
+
+  try {
+    const tokenHash = hashPasswordResetToken(token);
+    const now = new Date();
+    const passwordHash = await bcrypt.hash(password, 12);
+    const reset = await prisma.$transaction(async (tx) => {
+      const request = await tx.passwordResetRequest.findFirst({
+        where: {
+          resetTokenHash: tokenHash,
+          status: 'APPROVED',
+          usedAt: null,
+          resetExpiresAt: { gt: now },
+        },
+        select: { id: true, userId: true },
+      });
+      if (!request) return null;
+
+      const claimed = await tx.passwordResetRequest.updateMany({
+        where: {
+          id: request.id,
+          resetTokenHash: tokenHash,
+          status: 'APPROVED',
+          usedAt: null,
+          resetExpiresAt: { gt: now },
+        },
+        data: { status: 'COMPLETED', resetTokenHash: null, usedAt: now },
+      });
+      if (!claimed.count) return null;
+
+      await tx.user.update({
+        where: { id: request.userId },
+        data: { passwordHash, mustChangePassword: false, failedLoginAttempts: 0, loginLockedUntil: null },
+      });
+      return request;
+    });
+    if (!reset) return res.status(400).json({ error: 'رابط إعادة التعيين غير صالح أو منتهي الصلاحية أو مستخدم' });
+
+    await logAudit({
+      userId: reset.userId,
+      action: 'PASSWORD_RESET',
+      entity: 'User',
+      entityId: reset.userId,
+      details: 'تمت إعادة تعيين كلمة المرور بعد موافقة مدير النظام',
+      ipAddress: req.ip,
+    });
+    return res.json({ message: 'تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن.' });
+  } catch (error) {
+    console.error('Password reset completion failed:', error);
+    return res.status(500).json({ error: 'تعذر تغيير كلمة المرور الآن؛ حاول لاحقًا' });
   }
 });
 

@@ -269,6 +269,31 @@ const migrations: { id: string; apply: () => Promise<void> }[] = [
       `;
     },
   },
+  {
+    id: '0005-password-reset-approval',
+    apply: async () => {
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "PasswordResetRequest" (
+          "id" TEXT NOT NULL PRIMARY KEY,
+          "userId" TEXT NOT NULL,
+          "status" TEXT NOT NULL DEFAULT 'PENDING',
+          "approvalTokenHash" TEXT,
+          "resetTokenHash" TEXT,
+          "expiresAt" DATETIME NOT NULL,
+          "resetExpiresAt" DATETIME,
+          "approvedAt" DATETIME,
+          "usedAt" DATETIME,
+          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "PasswordResetRequest_userId_fkey"
+            FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+        )
+      `;
+      await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "PasswordResetRequest_approvalTokenHash_key" ON "PasswordResetRequest"("approvalTokenHash")`;
+      await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "PasswordResetRequest_resetTokenHash_key" ON "PasswordResetRequest"("resetTokenHash")`;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "PasswordResetRequest_userId_status_idx" ON "PasswordResetRequest"("userId", "status")`;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "PasswordResetRequest_status_expiresAt_idx" ON "PasswordResetRequest"("status", "expiresAt")`;
+    },
+  },
 ];
 
 const runMigrations = async () => {

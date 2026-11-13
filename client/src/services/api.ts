@@ -156,6 +156,27 @@ const apiClient = {
       body: JSON.stringify({ password }),
     }).then((res) => handleResponse<any>(res)),
 
+  requestPasswordReset: (email: string) =>
+    fetch(`${BASE_URL}/auth/password-reset/request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    }).then((res) => handleResponse<{ message: string }>(res)),
+
+  decidePasswordReset: (token: string, decision: 'approve' | 'reject') =>
+    fetch(`${BASE_URL}/auth/password-reset/decision`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, decision }),
+    }).then((res) => handleResponse<{ message: string }>(res)),
+
+  completePasswordReset: (token: string, password: string) =>
+    fetch(`${BASE_URL}/auth/password-reset/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password }),
+    }).then((res) => handleResponse<{ message: string }>(res)),
+
   getUsers: () =>
     fetch(`${BASE_URL}/auth/users`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
 

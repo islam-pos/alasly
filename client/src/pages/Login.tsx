@@ -129,6 +129,13 @@ export const Login: React.FC = () => {
               </>
             )}
           </button>
+          {!mfaRequired && (
+            <div className="text-center">
+              <a href="/password-reset" className="text-sm font-semibold text-brand-700 hover:text-brand-800">
+                نسيت كلمة المرور؟
+              </a>
+            </div>
+          )}
         </form>
 
       </div>

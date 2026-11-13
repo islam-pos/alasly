@@ -1,4 +1,5 @@
 const { execFileSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -37,13 +38,34 @@ const startServer = () => {
 
   runServerScript('restoreBackup.js');
   runServerScript('migrate.js');
-
   if (!fs.existsSync(securedUsersMarker)) {
     if (!process.env.INITIAL_ADMIN_PASSWORD) {
       throw new Error('Set INITIAL_ADMIN_PASSWORD before the first cPanel startup');
     }
     runServerScript('bootstrapUsers.js');
     fs.writeFileSync(securedUsersMarker, new Date().toISOString(), { flag: 'wx' });
+  }
+
+  const resetPassword = process.env.ADMIN_RESET_PASSWORD;
+  const resetKey = process.env.ADMIN_RESET_ONCE_KEY;
+  if (resetPassword || resetKey) {
+    try {
+      if (!resetPassword || !resetKey || !/^[A-Za-z0-9_-]{32,128}$/.test(resetKey)) {
+        throw new Error('Set both ADMIN_RESET_PASSWORD and a random 32-128 character ADMIN_RESET_ONCE_KEY');
+      }
+      const resetMarker = path.join(
+        dataDirectory,
+        `.admin-password-reset-${createHash('sha256').update(resetKey).digest('hex')}.done`,
+      );
+      if (!fs.existsSync(resetMarker)) {
+        runServerScript('resetAdminPassword.js');
+        fs.writeFileSync(resetMarker, new Date().toISOString(), { flag: 'wx' });
+        console.info('One-time administrator password reset completed. Remove reset variables from cPanel.');
+      }
+    } finally {
+      delete process.env.ADMIN_RESET_PASSWORD;
+      delete process.env.ADMIN_RESET_ONCE_KEY;
+    }
   }
 
   delete process.env.INITIAL_ADMIN_PASSWORD;

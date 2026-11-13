@@ -40,7 +40,7 @@ export const ChangeInitialPassword: React.FC = () => {
       <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
         <h1 className="text-xl font-black text-slate-900">غيّر كلمة المرور المؤقتة</h1>
         <p className="mt-2 text-sm text-slate-600">
-          يجب تعيين كلمة مرور جديدة قبل استخدام النظام. استخدم من 4 إلى 15 خانة من الأحرف الإنجليزية والأرقام، واختر أطول كلمة ممكنة.
+          يجب تعيين كلمة مرور جديدة قبل استخدام النظام. استخدم من 12 إلى 15 خانة من الأحرف الإنجليزية والأرقام، ولا تستخدم كلمة admin.
         </p>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <label className="block space-y-1.5 text-sm font-bold text-slate-700">
@@ -48,9 +48,9 @@ export const ChangeInitialPassword: React.FC = () => {
             <input
               type="password"
               required
-              minLength={4}
+              minLength={12}
               maxLength={15}
-              pattern="[A-Za-z0-9]{4,15}"
+              pattern="[A-Za-z0-9]{12,15}"
               autoComplete="new-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -63,9 +63,9 @@ export const ChangeInitialPassword: React.FC = () => {
             <input
               type="password"
               required
-              minLength={4}
+              minLength={12}
               maxLength={15}
-              pattern="[A-Za-z0-9]{4,15}"
+              pattern="[A-Za-z0-9]{12,15}"
               autoComplete="new-password"
               value={confirmation}
               onChange={(event) => setConfirmation(event.target.value)}

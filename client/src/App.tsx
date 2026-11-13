@@ -6,6 +6,8 @@ import { Navbar } from './components/layout/Navbar';
 import { QuickSidebar } from './components/layout/QuickSidebar';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
+import { PasswordReset } from './pages/PasswordReset';
+import { PasswordResetApproval } from './pages/PasswordResetApproval';
 import { ChangeInitialPassword } from './pages/ChangeInitialPassword';
 import { CustomersVehicles } from './pages/master/CustomersVehicles';
 import { ItemsCatalog } from './pages/master/ItemsCatalog';
@@ -83,6 +85,8 @@ const AppRoutes: React.FC = () => {
               ? <Navigate to="/" replace />
               : <ChangeInitialPassword />}
       />
+                  <Route path="/password-reset" element={<PasswordReset />} />
+                  <Route path="/password-reset/approval" element={<PasswordResetApproval />} />
       <Route element={<ProtectedLayout />}>
         <Route index element={<PermissionGate permission="view_dashboard"><Dashboard /></PermissionGate>} />
         <Route path="items" element={<PermissionGate permission="manage_items"><ItemsCatalog /></PermissionGate>} />

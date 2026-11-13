@@ -184,30 +184,48 @@ model Role {
 }
 
 model User {
-  id                  String     @id @default(uuid())
-  username            String     @unique
-  passwordHash        String
-  fullName            String
-  email               String?
-  phone               String?
-  roleId              String
-  role                Role       @relation(fields: [roleId], references: [id])
-  branchId            String?
-  branch              Branch?    @relation(fields: [branchId], references: [id])
-  employeeId          String?    @unique
-  employee            Employee?  @relation(fields: [employeeId], references: [id])
-  allowedWarehouseId  String?
-  allowedCashboxId    String?
-  permissionOverrides String?
-  active              Boolean    @default(true)
-  mustChangePassword  Boolean    @default(false)
-  failedLoginAttempts Int        @default(0)
-  loginLockedUntil    DateTime?
-  mfaSecret           String?
-  mfaEnabled          Boolean    @default(false)
-  createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
-  auditLogs           AuditLog[]
+  id                    String                 @id @default(uuid())
+  username              String                 @unique
+  passwordHash          String
+  fullName              String
+  email                 String?
+  phone                 String?
+  roleId                String
+  role                  Role                   @relation(fields: [roleId], references: [id])
+  branchId              String?
+  branch                Branch?                @relation(fields: [branchId], references: [id])
+  employeeId            String?                @unique
+  employee              Employee?              @relation(fields: [employeeId], references: [id])
+  allowedWarehouseId    String?
+  allowedCashboxId      String?
+  permissionOverrides   String?
+  active                Boolean                @default(true)
+  mustChangePassword    Boolean                @default(false)
+  failedLoginAttempts   Int                    @default(0)
+  loginLockedUntil      DateTime?
+  mfaSecret             String?
+  mfaEnabled            Boolean                @default(false)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  auditLogs             AuditLog[]
+  passwordResetRequests PasswordResetRequest[]
+}
+
+model PasswordResetRequest {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status            String    @default("PENDING")
+  approvalTokenHash String?   @unique
+  resetTokenHash    String?   @unique
+  expiresAt         DateTime
+  resetExpiresAt    DateTime?
+  approvedAt        DateTime?
+  usedAt            DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
 }
 
 model AuditLog {

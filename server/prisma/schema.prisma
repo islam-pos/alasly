@@ -208,6 +208,24 @@ model User {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   auditLogs          AuditLog[]
+  passwordResetRequests PasswordResetRequest[]
+}
+
+model PasswordResetRequest {
+  id                 String   @id @default(uuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status             String   @default("PENDING")
+  approvalTokenHash  String?  @unique
+  resetTokenHash     String?  @unique
+  expiresAt          DateTime
+  resetExpiresAt     DateTime?
+  approvedAt         DateTime?
+  usedAt             DateTime?
+  createdAt          DateTime @default(now())
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
 }
 
 model AuditLog {

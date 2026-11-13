@@ -1,12 +1,12 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { prisma } from './lib/prisma';
-import { isValidPassword } from './lib/passwordPolicy';
+import { isValidPasswordReset, PASSWORD_RESET_POLICY_MESSAGE } from './services/passwordReset';
 
 const resetAdminPassword = async () => {
   const password = process.env.ADMIN_RESET_PASSWORD;
-  if (!isValidPassword(password)) {
-    throw new Error('ADMIN_RESET_PASSWORD must be 4-15 alphanumeric characters');
+  if (!isValidPasswordReset(password)) {
+    throw new Error(`ADMIN_RESET_PASSWORD: ${PASSWORD_RESET_POLICY_MESSAGE}`);
   }
 
   const admin = await prisma.user.findUnique({
