@@ -45,7 +45,7 @@ fi
 echo "Building server with the committed Prisma client"
 npm --prefix "$repository_root/server" run build
 echo "Building client"
-npm --prefix "$repository_root/client" run build
+NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=512" npm --prefix "$repository_root/client" run build
 
 mkdir -p \
   "$application_root/server/src" \
