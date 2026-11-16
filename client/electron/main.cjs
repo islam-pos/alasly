@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const productionUrl = 'https://alasly-production.up.railway.app';
+const productionUrl = 'https://alasly.top';
 const appOrigin = 'autocare://app';
 const appDirectory = path.resolve(__dirname, '../dist');
 const appFile = path.join(appDirectory, 'index.html');

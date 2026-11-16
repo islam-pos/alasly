@@ -15,8 +15,7 @@ const backupNamePattern = /^autocare-(daily|manual)-(\d{4}-\d{2}-\d{2})-(\d{8}T\
 let backupInProgress = false;
 
 const getDataDirectory = () => path.resolve(
-  process.env.RAILWAY_VOLUME_MOUNT_PATH
-    || process.env.DATA_DIR
+  process.env.DATA_DIR
     || (process.env.NODE_ENV === 'production' ? '/data' : path.resolve(process.cwd(), 'data')),
 );
 

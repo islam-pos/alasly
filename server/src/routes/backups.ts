@@ -114,7 +114,7 @@ router.post('/:id/restore', async (req, res) => {
     });
     res.status(202).json({
       restorePending: true,
-      message: 'تم تجهيز طلب الاستعادة. أعد تشغيل خدمة Railway لتطبيقه؛ ستدخل واجهات النظام وضع الصيانة حتى اكتمال الاستعادة.',
+      message: 'تم تجهيز طلب الاستعادة. أعد تشغيل تطبيق cPanel لتطبيقه؛ ستدخل واجهات النظام وضع الصيانة حتى اكتمال الاستعادة.',
     });
   } catch (error) {
     console.error('Failed to queue backup restore:', error);

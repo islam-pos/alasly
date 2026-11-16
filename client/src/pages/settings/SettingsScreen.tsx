@@ -292,14 +292,14 @@ export const SettingsScreen: React.FC = () => {
 
   const handleRestoreBackup = async (id: string) => {
     const confirmed = window.confirm(
-      `تحذير: ستُستبدل قاعدة البيانات الحالية والمرفقات ببيانات النسخة المختارة. ستدخل الخدمة وضع الصيانة ويلزم إعادة تشغيل Railway. هل تريد المتابعة؟`,
+      `تحذير: ستُستبدل قاعدة البيانات الحالية والمرفقات ببيانات النسخة المختارة. ستدخل الخدمة وضع الصيانة ويلزم إعادة تشغيل تطبيق cPanel. هل تريد المتابعة؟`,
     );
     if (!confirmed) return;
     setBackupBusy(true);
     try {
       await api.settings.restoreBackup(id);
       setRestorePending(true);
-      showToast('تم تجهيز الاستعادة. أعد تشغيل خدمة Railway لتطبيقها.', 'success');
+      showToast('تم تجهيز الاستعادة. أعد تشغيل تطبيق cPanel لتطبيقها.', 'success');
     } catch (err: any) {
       showToast(err.response?.data?.error || err.message || 'تعذر تجهيز استعادة النسخة', 'error');
     } finally {
@@ -1153,11 +1153,11 @@ export const SettingsScreen: React.FC = () => {
           <div className={`rounded-xl border p-4 text-sm ${offsiteStatus?.configured ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="font-bold">النسخ خارج Railway — Cloudflare R2</div>
+                <div className="font-bold">النسخ خارج الموقع — Cloudflare R2</div>
                 <p className="mt-1">
                   {offsiteStatus?.configured
                     ? `الاتصال مضبوط${offsiteStatus.bucket ? ` إلى ${offsiteStatus.bucket}` : ''}؛ الملفات مشفرة محليًا قبل الرفع.`
-                    : 'لم يتم إعداد R2 بعد. أضف R2_ACCOUNT_ID وR2_BUCKET وR2_ACCESS_KEY_ID وR2_SECRET_ACCESS_KEY وBACKUP_ENCRYPTION_KEY إلى متغيرات Railway.'}
+                    : 'لم يتم إعداد R2 بعد. أضف R2_ACCOUNT_ID وR2_BUCKET وR2_ACCESS_KEY_ID وR2_SECRET_ACCESS_KEY وBACKUP_ENCRYPTION_KEY إلى متغيرات تطبيق cPanel.'}
                 </p>
                 {!offsiteStatus?.configured && <p className="mt-1">أنشئ مفتاح تشفير عشوائيًا بطول 32 بايت واحتفظ بنسخة آمنة منه؛ فقدانه يمنع استعادة النسخ الخارجية.</p>}
               </div>
@@ -1168,7 +1168,7 @@ export const SettingsScreen: React.FC = () => {
           </div>
           {restorePending && (
             <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800">
-              توجد استعادة معلقة. واجهات النظام متوقفة حتى إعادة تشغيل خدمة Railway وتطبيق النسخة.
+              توجد استعادة معلقة. واجهات النظام متوقفة حتى إعادة تشغيل تطبيق cPanel وتطبيق النسخة.
             </div>
           )}
           <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -1218,7 +1218,7 @@ export const SettingsScreen: React.FC = () => {
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-slate-500">تُحتفظ بآخر 30 نسخة يومية و10 نسخ يدوية. الاستعادة تستبدل قاعدة البيانات والمرفقات، وتتطلب إعادة تشغيل خدمة Railway.</p>
+          <p className="text-xs text-slate-500">تُحتفظ بآخر 30 نسخة يومية و10 نسخ يدوية. الاستعادة تستبدل قاعدة البيانات والمرفقات، وتتطلب إعادة تشغيل تطبيق cPanel.</p>
         </section>
       )}
 

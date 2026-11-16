@@ -13,7 +13,7 @@ import { approveRepairEstimate } from '../services/repairEstimates';
 
 const router = Router();
 const attachmentDirectory = path.join(
-  process.env.RAILWAY_VOLUME_MOUNT_PATH || process.env.DATA_DIR || (process.env.NODE_ENV === 'production' ? '/data' : path.resolve(process.cwd(), 'data')),
+  process.env.DATA_DIR || (process.env.NODE_ENV === 'production' ? '/data' : path.resolve(process.cwd(), 'data')),
   'repair-attachments',
 );
 

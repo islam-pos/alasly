@@ -1,11 +1,6 @@
 #!/bin/sh
 set -eu
 
-if [ -n "${RAILWAY_PROJECT_ID:-}" ] && [ "${RAILWAY_VOLUME_MOUNT_PATH:-}" != "/data" ]; then
-  echo "A Railway persistent volume must be mounted at /data."
-  exit 1
-fi
-
 if [ ! -d /data ] || [ ! -w /data ]; then
   echo "The persistent data directory /data is missing or not writable."
   exit 1

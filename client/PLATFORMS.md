@@ -1,6 +1,6 @@
 # Desktop and mobile apps
 
-The app can be installed as a PWA, packaged as a Windows desktop app, or built as Android/iOS apps with Capacitor. All versions use the same production API at `https://alasly-production.up.railway.app` and the same user accounts as the web app. Sign in and load the records needed on each device while online before relying on offline access.
+The app can be installed as a PWA, packaged as a Windows desktop app, or built as Android/iOS apps with Capacitor. All versions use the production API at `https://alasly.top/api` and the same user accounts as the web app. Sign in and load the records needed on each device while online before relying on offline access.
 
 ## Install the PWA
 

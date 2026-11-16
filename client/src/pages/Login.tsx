@@ -64,7 +64,7 @@ export const Login: React.FC = () => {
             ERP إدارة مركز صيانة السيارات ومبيعات قطع الغيار
           </p>
           <p className="mt-3 text-xs font-semibold text-amber-700">
-            الدخول الأول: اسم المستخدم admin وكلمة المرور المؤقتة التي تم ضبطها عند إعداد النظام
+            اسم المستخدم: admin
           </p>
         </div>
 
