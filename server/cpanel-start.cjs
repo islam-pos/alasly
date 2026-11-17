@@ -15,6 +15,9 @@ const startServer = () => {
   if (!process.env.JWT_SECRET || Buffer.byteLength(process.env.JWT_SECRET) < 32) {
     throw new Error('JWT_SECRET must contain at least 32 bytes before the server can start');
   }
+  if (!fs.existsSync(securedUsersMarker) && !/^[A-Za-z0-9]{4,15}$/.test(process.env.INITIAL_ADMIN_PASSWORD || '')) {
+    throw new Error('Set a valid INITIAL_ADMIN_PASSWORD before the first cPanel startup');
+  }
 
   fs.mkdirSync(dataDirectory, { recursive: true });
   process.env.DATA_DIR = dataDirectory;
@@ -39,9 +42,6 @@ const startServer = () => {
   runServerScript('restoreBackup.js');
   runServerScript('migrate.js');
   if (!fs.existsSync(securedUsersMarker)) {
-    if (!process.env.INITIAL_ADMIN_PASSWORD) {
-      throw new Error('Set INITIAL_ADMIN_PASSWORD before the first cPanel startup');
-    }
     runServerScript('bootstrapUsers.js');
     fs.writeFileSync(securedUsersMarker, new Date().toISOString(), { flag: 'wx' });
   }

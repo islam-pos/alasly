@@ -15,7 +15,7 @@ RUN mkdir -p /build/seed
 ENV DATABASE_URL=file:/build/seed/autocare.db
 RUN npx prisma db push --skip-generate
 RUN npx prisma generate
-RUN npx tsx prisma/productionSeed.ts
+RUN INITIAL_ADMIN_PASSWORD="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(8).toString("hex").slice(0, 15))')" npx tsx prisma/productionSeed.ts
 RUN npm run build
 RUN cp -R node_modules/.prisma /tmp/generated-prisma-client \
     && npm ci --omit=dev --ignore-scripts --legacy-peer-deps \

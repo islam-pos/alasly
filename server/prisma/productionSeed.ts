@@ -27,6 +27,11 @@ const permissions = {
 } satisfies Record<string, string[]>;
 
 export const seedProduction = async (prisma: PrismaClient) => {
+  const configuredAdminPassword = process.env.INITIAL_ADMIN_PASSWORD;
+  if (!isValidPassword(configuredAdminPassword)) {
+    throw new Error('INITIAL_ADMIN_PASSWORD must be 4-15 alphanumeric characters');
+  }
+
   const branch = await prisma.branch.upsert({
     where: { code: 'BR-01' },
     create: {
@@ -51,24 +56,25 @@ export const seedProduction = async (prisma: PrismaClient) => {
   }
 
   const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'admin' } });
-  const configuredAdminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'admin';
-  if (!isValidPassword(configuredAdminPassword)) {
-    throw new Error('INITIAL_ADMIN_PASSWORD must be 4-15 alphanumeric characters');
-  }
+  const adminPasswordHash = await bcrypt.hash(configuredAdminPassword, 12);
   await prisma.user.upsert({
     where: { username: 'admin' },
     create: {
       username: 'admin',
       fullName: 'مدير النظام',
-      passwordHash: await bcrypt.hash(
-        configuredAdminPassword,
-        12,
-      ),
+      passwordHash: adminPasswordHash,
       mustChangePassword: true,
+      failedLoginAttempts: 0,
+      loginLockedUntil: null,
       roleId: adminRole.id,
       branchId: branch.id,
     },
-    update: {},
+    update: {
+      passwordHash: adminPasswordHash,
+      mustChangePassword: true,
+      failedLoginAttempts: 0,
+      loginLockedUntil: null,
+    },
   });
 
   if (!(await prisma.companySetting.findFirst())) {

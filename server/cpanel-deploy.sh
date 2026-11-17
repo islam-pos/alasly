@@ -42,6 +42,26 @@ if [[ ! -f "$repository_root/server/generated/prisma/index.js" \
   exit 1
 fi
 
+seed_database=""
+seed_destination_tmp=""
+cleanup_seed_database() {
+  if [[ -n "$seed_database" ]]; then
+    rm -f -- "$seed_database" "$seed_database-journal" "$seed_database-wal" "$seed_database-shm"
+  fi
+  if [[ -n "$seed_destination_tmp" ]]; then
+    rm -f -- "$seed_destination_tmp"
+  fi
+}
+trap cleanup_seed_database EXIT
+
+seed_database="$(mktemp "${TMPDIR:-/tmp}/alasly-cpanel-seed.XXXXXX")"
+seed_admin_password="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(8).toString("hex").slice(0, 15))')"
+echo "Creating a clean starter database"
+DATABASE_URL="file:$seed_database" npm --prefix "$repository_root/server" run prisma:push -- --skip-generate
+DATABASE_URL="file:$seed_database" INITIAL_ADMIN_PASSWORD="$seed_admin_password" \
+  npm --prefix "$repository_root/server" run prisma:seed:production
+unset seed_admin_password
+
 echo "Building server with the committed Prisma client"
 npm --prefix "$repository_root/server" run build
 if [[ ! -f "$repository_root/client/dist/index.html" ]]; then
@@ -66,5 +86,10 @@ cp -f "$repository_root/server/package.json" "$application_root/server/package.j
 cp -f "$repository_root/server/package-lock.json" "$application_root/server/package-lock.json"
 cp -f "$repository_root/server/tsconfig.json" "$application_root/server/tsconfig.json"
 cp -f "$repository_root/server/prisma/schema.prisma" "$application_root/server/prisma/schema.prisma"
+seed_destination_tmp="$application_root/server/prisma/autocare.db.tmp.$$"
+cp "$seed_database" "$seed_destination_tmp"
+chmod 600 "$seed_destination_tmp"
+mv -f "$seed_destination_tmp" "$application_root/server/prisma/autocare.db"
+seed_destination_tmp=""
 
 echo "Built application files deployed from $repository_root to $application_root"

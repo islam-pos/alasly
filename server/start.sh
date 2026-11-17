@@ -6,6 +6,12 @@ if [ ! -d /data ] || [ ! -w /data ]; then
   exit 1
 fi
 
+if { [ ! -f /data/.users-secured ] || [ ! -f /data/.default-admin-credentials-set ]; } \
+  && ! printf '%s' "${INITIAL_ADMIN_PASSWORD:-}" | grep -Eq '^[A-Za-z0-9]{4,15}$'; then
+  echo "Set a valid INITIAL_ADMIN_PASSWORD before the first startup."
+  exit 1
+fi
+
 if [ ! -f /data/autocare.db ]; then
   cp /app/seed/autocare.db /data/autocare.db
 fi
@@ -14,7 +20,6 @@ export DATABASE_URL="file:/data/autocare.db"
 node /app/server/dist/restoreBackup.js
 node /app/server/dist/migrate.js
 if [ ! -f /data/.users-secured ]; then
-  export INITIAL_ADMIN_PASSWORD=admin
   node /app/server/dist/bootstrapUsers.js
   touch /data/.users-secured
 fi

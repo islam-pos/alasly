@@ -1,9 +1,16 @@
+import 'dotenv/config';
 import { PrismaClient } from '../generated/prisma';
 import bcrypt from 'bcryptjs';
+import { isValidPassword } from '../src/lib/passwordPolicy';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const initialAdminPassword = process.env.INITIAL_ADMIN_PASSWORD;
+  if (!isValidPassword(initialAdminPassword)) {
+    throw new Error('INITIAL_ADMIN_PASSWORD must be 4-15 alphanumeric characters');
+  }
+
   console.log('🌱 Starting AutoCare ERP Database Seeding...');
 
   // 0. Clean all tables in reverse dependency order
@@ -224,9 +231,10 @@ async function main() {
     empMap[ed.code] = emp.id;
   }
 
-  // 6. Users (5 System Users with secure password 'admin123')
+  // 6. Users: admin uses the configured login password; other demo users keep admin123
   await prisma.user.deleteMany({});
   const salt = await bcrypt.genSalt(10);
+  const adminPasswordHash = await bcrypt.hash(initialAdminPassword, salt);
   const defaultPasswordHash = await bcrypt.hash('admin123', salt);
 
   const usersData = [
@@ -241,12 +249,13 @@ async function main() {
     await prisma.user.create({
       data: {
         username: u.username,
-        passwordHash: defaultPasswordHash,
+        passwordHash: u.username === 'admin' ? adminPasswordHash : defaultPasswordHash,
         fullName: u.name,
         roleId: u.roleId,
         branchId: branchRiyadh.id,
         employeeId: u.empCode ? empMap[u.empCode] : null,
         active: true,
+        mustChangePassword: false,
       },
     });
   }
