@@ -93,6 +93,7 @@ export const Navbar: React.FC = () => {
       icon: Receipt,
       items: [
         { label: 'شاشة كاشير قطع الغيار (POS)', to: '/pos', desc: 'نقاط البيع السريعة والباركود' },
+        { label: 'الحجوزات والعمليات المتقدمة', to: '/operations', desc: 'المواعيد، CRM، الحملات، الأصول والضريبة' },
         { label: 'فتح أمر إصلاح (Job Card)', to: '/workshop/job-cards', desc: 'استقبال سيارة وتحديد المشكلة' },
         { label: 'تقديرات الورشة', to: '/workshop/job-cards', desc: 'تسعير الإصلاح وموافقة العميل' },
         { label: 'طلب وصرف قطع الورشة', to: '/workshop/parts', desc: 'طلب القطع ومتابعة صرفها لأوامر الإصلاح' },

@@ -29,6 +29,8 @@ import { SmartSearchSuggestions } from './components/layout/SmartSearchSuggestio
 import { AccountingScreen } from './pages/accounting/AccountingScreen';
 import { EscapeNavigation } from './components/layout/EscapeNavigation';
 import { OfflineStatusBanner } from './components/layout/OfflineStatusBanner';
+import { OperationalHub } from './pages/OperationalHub';
+import { CustomerPortal } from './pages/CustomerPortal';
 
 const LoadingScreen: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50" role="status">
@@ -87,6 +89,7 @@ const AppRoutes: React.FC = () => {
       />
                   <Route path="/password-reset" element={<PasswordReset />} />
                   <Route path="/password-reset/approval" element={<PasswordResetApproval />} />
+      <Route path="/customer-portal/:token" element={<CustomerPortal />} />
       <Route element={<ProtectedLayout />}>
         <Route index element={<PermissionGate permission="view_dashboard"><Dashboard /></PermissionGate>} />
         <Route path="items" element={<PermissionGate permission="manage_items"><ItemsCatalog /></PermissionGate>} />
@@ -107,6 +110,7 @@ const AppRoutes: React.FC = () => {
         <Route path="workshop/parts" element={<PermissionGate permission={['manage_workshop', 'manage_jobcards', 'issue_parts', 'manage_inventory']}><WorkshopParts /></PermissionGate>} />
         <Route path="workshop/job-cards" element={<PermissionGate permission="manage_workshop"><JobCardsList /></PermissionGate>} />
         <Route path="workshop/job-cards/:id" element={<PermissionGate permission="manage_workshop"><JobCardDetail /></PermissionGate>} />
+        <Route path="operations" element={<PermissionGate permission={['manage_settings', 'manage_workshop', 'manage_sales']}><OperationalHub /></PermissionGate>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

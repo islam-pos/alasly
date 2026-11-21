@@ -465,6 +465,109 @@ exports.Prisma.MaintenanceReminderScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.AppointmentScalarFieldEnum = {
+  id: 'id',
+  appointmentNumber: 'appointmentNumber',
+  customerId: 'customerId',
+  vehicleId: 'vehicleId',
+  branchId: 'branchId',
+  startsAt: 'startsAt',
+  endsAt: 'endsAt',
+  serviceName: 'serviceName',
+  status: 'status',
+  notes: 'notes',
+  repairOrderId: 'repairOrderId',
+  reminderSentAt: 'reminderSentAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.LeadScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  phone: 'phone',
+  source: 'source',
+  status: 'status',
+  interest: 'interest',
+  notes: 'notes',
+  assignedToId: 'assignedToId',
+  nextFollowUp: 'nextFollowUp',
+  convertedCustomerId: 'convertedCustomerId',
+  convertedVehicleId: 'convertedVehicleId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.CampaignScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  channel: 'channel',
+  segment: 'segment',
+  message: 'message',
+  status: 'status',
+  scheduledAt: 'scheduledAt',
+  sentCount: 'sentCount',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.FixedAssetScalarFieldEnum = {
+  id: 'id',
+  assetCode: 'assetCode',
+  name: 'name',
+  category: 'category',
+  purchaseDate: 'purchaseDate',
+  purchaseCost: 'purchaseCost',
+  salvageValue: 'salvageValue',
+  usefulLifeMonths: 'usefulLifeMonths',
+  location: 'location',
+  serialNumber: 'serialNumber',
+  status: 'status',
+  accumulatedDepreciation: 'accumulatedDepreciation',
+  lastDepreciationAt: 'lastDepreciationAt',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.TaxSettingScalarFieldEnum = {
+  id: 'id',
+  enabled: 'enabled',
+  provider: 'provider',
+  environment: 'environment',
+  taxpayerRin: 'taxpayerRin',
+  activityCode: 'activityCode',
+  branchId: 'branchId',
+  clientId: 'clientId',
+  clientSecret: 'clientSecret',
+  certificate: 'certificate',
+  privateKey: 'privateKey',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.EtaDocumentScalarFieldEnum = {
+  id: 'id',
+  documentType: 'documentType',
+  documentId: 'documentId',
+  status: 'status',
+  submissionUuid: 'submissionUuid',
+  responseStatus: 'responseStatus',
+  responsePayload: 'responsePayload',
+  errorMessage: 'errorMessage',
+  submittedAt: 'submittedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.CustomerPortalLinkScalarFieldEnum = {
+  id: 'id',
+  customerId: 'customerId',
+  tokenHash: 'tokenHash',
+  expiresAt: 'expiresAt',
+  lastUsedAt: 'lastUsedAt',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.ItemCategoryScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -1095,6 +1198,13 @@ exports.Prisma.ModelName = {
   Customer: 'Customer',
   Vehicle: 'Vehicle',
   MaintenanceReminder: 'MaintenanceReminder',
+  Appointment: 'Appointment',
+  Lead: 'Lead',
+  Campaign: 'Campaign',
+  FixedAsset: 'FixedAsset',
+  TaxSetting: 'TaxSetting',
+  EtaDocument: 'EtaDocument',
+  CustomerPortalLink: 'CustomerPortalLink',
   ItemCategory: 'ItemCategory',
   Unit: 'Unit',
   Warehouse: 'Warehouse',

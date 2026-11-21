@@ -171,6 +171,7 @@ model Branch {
   repairOrders RepairOrder[]
   salesInvoices SalesInvoice[]
   purchaseInvoices PurchaseInvoice[]
+  appointments Appointment[]
 }
 
 model Role {
@@ -386,6 +387,8 @@ model Customer {
   salesInvoices  SalesInvoice[]
   salesReturns   SalesReturn[]
   cashTransactions CashTransaction[] @relation("CustomerCashTransactions")
+  appointments Appointment[]
+  portalLinks CustomerPortalLink[]
 }
 
 model Vehicle {
@@ -408,6 +411,7 @@ model Vehicle {
   repairOrders    RepairOrder[]
   salesInvoices   SalesInvoice[]
   maintenanceReminders MaintenanceReminder[]
+  appointments Appointment[]
 }
 
 model MaintenanceReminder {
@@ -426,6 +430,128 @@ model MaintenanceReminder {
 
   @@index([status, dueDate])
   @@index([vehicleId, status])
+}
+
+model Appointment {
+  id             String   @id @default(uuid())
+  appointmentNumber String @unique
+  customerId     String
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  vehicleId      String
+  vehicle        Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  branchId       String?
+  branch         Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  startsAt       DateTime
+  endsAt         DateTime
+  serviceName    String
+  status         String   @default("SCHEDULED")
+  notes          String?
+  repairOrderId  String?
+  reminderSentAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([startsAt, status])
+  @@index([customerId, startsAt])
+  @@index([vehicleId, startsAt])
+}
+
+model Lead {
+  id          String   @id @default(uuid())
+  name        String
+  phone       String
+  source      String   @default("MANUAL")
+  status      String   @default("NEW")
+  interest    String?
+  notes       String?
+  assignedToId String?
+  nextFollowUp DateTime?
+  convertedCustomerId String?
+  convertedVehicleId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, nextFollowUp])
+}
+
+model Campaign {
+  id          String   @id @default(uuid())
+  name        String
+  channel     String   @default("WHATSAPP")
+  segment     String   @default("ALL")
+  message     String
+  status      String   @default("DRAFT")
+  scheduledAt DateTime?
+  sentCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, scheduledAt])
+}
+
+model FixedAsset {
+  id             String   @id @default(uuid())
+  assetCode      String   @unique
+  name           String
+  category       String
+  purchaseDate   DateTime
+  purchaseCost   Float
+  salvageValue   Float    @default(0)
+  usefulLifeMonths Int
+  location       String?
+  serialNumber   String?
+  status         String   @default("ACTIVE")
+  accumulatedDepreciation Float @default(0)
+  lastDepreciationAt DateTime?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, category])
+}
+
+model TaxSetting {
+  id             Int      @id @default(1)
+  enabled        Boolean  @default(false)
+  provider       String   @default("ETA")
+  environment    String   @default("SANDBOX")
+  taxpayerRin    String?
+  activityCode   String?
+  branchId       String?
+  clientId       String?
+  clientSecret   String?
+  certificate    String?
+  privateKey     String?
+  updatedAt      DateTime @updatedAt
+}
+
+model EtaDocument {
+  id             String   @id @default(uuid())
+  documentType   String
+  documentId     String
+  status         String   @default("PENDING")
+  submissionUuid String?
+  responseStatus String?
+  responsePayload String?
+  errorMessage   String?
+  submittedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([documentType, documentId])
+  @@index([status, createdAt])
+}
+
+model CustomerPortalLink {
+  id             String   @id @default(uuid())
+  customerId     String
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tokenHash      String   @unique
+  expiresAt      DateTime
+  lastUsedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([customerId, expiresAt])
 }
 
 model ItemCategory {

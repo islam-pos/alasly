@@ -1016,6 +1016,40 @@ const apiClient = {
 };
 
 export const api = Object.assign(apiClient, {
+  operational: {
+    getAppointments: (params: Record<string, string> = {}) =>
+      fetch(`${BASE_URL}/operational/appointments${new URLSearchParams(params).toString() ? `?${new URLSearchParams(params)}` : ''}`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+    createAppointment: (data: any) =>
+      fetch(`${BASE_URL}/operational/appointments`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) }).then((res) => handleResponse<any>(res)),
+    updateAppointment: (id: string, data: any) =>
+      fetch(`${BASE_URL}/operational/appointments/${encodeURIComponent(id)}`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data) }).then((res) => handleResponse<any>(res)),
+    createRepairFromAppointment: (id: string) =>
+      fetch(`${BASE_URL}/operational/appointments/${encodeURIComponent(id)}/create-repair`, { method: 'POST', headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+    getLeads: () => fetch(`${BASE_URL}/operational/leads`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+    createLead: (data: any) =>
+      fetch(`${BASE_URL}/operational/leads`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) }).then((res) => handleResponse<any>(res)),
+    updateLead: (id: string, data: any) =>
+      fetch(`${BASE_URL}/operational/leads/${encodeURIComponent(id)}`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data) }).then((res) => handleResponse<any>(res)),
+    getCampaigns: () => fetch(`${BASE_URL}/operational/campaigns`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+    createCampaign: (data: any) =>
+      fetch(`${BASE_URL}/operational/campaigns`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) }).then((res) => handleResponse<any>(res)),
+    sendCampaign: (id: string) =>
+      fetch(`${BASE_URL}/operational/campaigns/${encodeURIComponent(id)}/send`, { method: 'POST', headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+    getAssets: () => fetch(`${BASE_URL}/operational/assets`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+    createAsset: (data: any) =>
+      fetch(`${BASE_URL}/operational/assets`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) }).then((res) => handleResponse<any>(res)),
+    updateAsset: (id: string, data: any) =>
+      fetch(`${BASE_URL}/operational/assets/${encodeURIComponent(id)}`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data) }).then((res) => handleResponse<any>(res)),
+    depreciateAssets: () =>
+      fetch(`${BASE_URL}/operational/assets/depreciate`, { method: 'POST', headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+    getTaxSetting: () => fetch(`${BASE_URL}/operational/tax`, { headers: getHeaders() }).then((res) => handleResponse<any>(res)),
+    updateTaxSetting: (data: any) =>
+      fetch(`${BASE_URL}/operational/tax`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(data) }).then((res) => handleResponse<any>(res)),
+    createPortalLink: (customerId: string) =>
+      fetch(`${BASE_URL}/operational/portal-links`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ customerId }) }).then((res) => handleResponse<any>(res)),
+  },
+  getPublicCustomerPortal: (token: string) =>
+    fetch(`/api/public/customer-portal/${encodeURIComponent(token)}`, { headers: { 'Content-Type': 'application/json' } }).then((res) => handleResponse<any>(res)),
   master: {
     getCompany: apiClient.getCompany,
     updateCompany: apiClient.updateCompany,
