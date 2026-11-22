@@ -232,6 +232,11 @@ const migrateLegacySchema = async () => {
   await ensureColumn('InventoryCount', 'reviewedAt', 'DATETIME');
   await ensureColumn('InventoryCount', 'rejectionReason', 'TEXT');
   await ensureColumn('InvoicePayment', 'cashTransactionId', 'TEXT');
+  await ensureColumn('Attendance', 'checkInPhotoUrl', 'TEXT');
+  await ensureColumn('Attendance', 'checkOutPhotoUrl', 'TEXT');
+  await ensureColumn('Attendance', 'checkInDevice', 'TEXT');
+  await ensureColumn('Attendance', 'checkOutDevice', 'TEXT');
+  await ensureColumn('PurchaseRequest', 'requestType', "TEXT NOT NULL DEFAULT 'SHORTAGE'");
   await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "Appointment" ("id" TEXT NOT NULL PRIMARY KEY, "appointmentNumber" TEXT NOT NULL UNIQUE, "customerId" TEXT NOT NULL, "vehicleId" TEXT NOT NULL, "branchId" TEXT, "startsAt" DATETIME NOT NULL, "endsAt" DATETIME NOT NULL, "serviceName" TEXT NOT NULL, "status" TEXT NOT NULL DEFAULT 'SCHEDULED', "notes" TEXT, "repairOrderId" TEXT, "reminderSentAt" DATETIME, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE CASCADE ON UPDATE CASCADE, FOREIGN KEY ("vehicleId") REFERENCES "Vehicle"("id") ON DELETE CASCADE ON UPDATE CASCADE, FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE SET NULL ON UPDATE CASCADE)`;
   await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "Appointment_startsAt_status_idx" ON "Appointment"("startsAt", "status")`;
   await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "Appointment_customerId_startsAt_idx" ON "Appointment"("customerId", "startsAt")`;

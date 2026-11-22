@@ -30538,6 +30538,10 @@ export namespace Prisma {
     date: Date | null
     checkIn: Date | null
     checkOut: Date | null
+    checkInPhotoUrl: string | null
+    checkOutPhotoUrl: string | null
+    checkInDevice: string | null
+    checkOutDevice: string | null
     workHours: number | null
     workMinutes: number | null
     delayMinutes: number | null
@@ -30553,6 +30557,10 @@ export namespace Prisma {
     date: Date | null
     checkIn: Date | null
     checkOut: Date | null
+    checkInPhotoUrl: string | null
+    checkOutPhotoUrl: string | null
+    checkInDevice: string | null
+    checkOutDevice: string | null
     workHours: number | null
     workMinutes: number | null
     delayMinutes: number | null
@@ -30568,6 +30576,10 @@ export namespace Prisma {
     date: number
     checkIn: number
     checkOut: number
+    checkInPhotoUrl: number
+    checkOutPhotoUrl: number
+    checkInDevice: number
+    checkOutDevice: number
     workHours: number
     workMinutes: number
     delayMinutes: number
@@ -30599,6 +30611,10 @@ export namespace Prisma {
     date?: true
     checkIn?: true
     checkOut?: true
+    checkInPhotoUrl?: true
+    checkOutPhotoUrl?: true
+    checkInDevice?: true
+    checkOutDevice?: true
     workHours?: true
     workMinutes?: true
     delayMinutes?: true
@@ -30614,6 +30630,10 @@ export namespace Prisma {
     date?: true
     checkIn?: true
     checkOut?: true
+    checkInPhotoUrl?: true
+    checkOutPhotoUrl?: true
+    checkInDevice?: true
+    checkOutDevice?: true
     workHours?: true
     workMinutes?: true
     delayMinutes?: true
@@ -30629,6 +30649,10 @@ export namespace Prisma {
     date?: true
     checkIn?: true
     checkOut?: true
+    checkInPhotoUrl?: true
+    checkOutPhotoUrl?: true
+    checkInDevice?: true
+    checkOutDevice?: true
     workHours?: true
     workMinutes?: true
     delayMinutes?: true
@@ -30731,6 +30755,10 @@ export namespace Prisma {
     date: Date
     checkIn: Date | null
     checkOut: Date | null
+    checkInPhotoUrl: string | null
+    checkOutPhotoUrl: string | null
+    checkInDevice: string | null
+    checkOutDevice: string | null
     workHours: number
     workMinutes: number | null
     delayMinutes: number
@@ -30765,6 +30793,10 @@ export namespace Prisma {
     date?: boolean
     checkIn?: boolean
     checkOut?: boolean
+    checkInPhotoUrl?: boolean
+    checkOutPhotoUrl?: boolean
+    checkInDevice?: boolean
+    checkOutDevice?: boolean
     workHours?: boolean
     workMinutes?: boolean
     delayMinutes?: boolean
@@ -30781,6 +30813,10 @@ export namespace Prisma {
     date?: boolean
     checkIn?: boolean
     checkOut?: boolean
+    checkInPhotoUrl?: boolean
+    checkOutPhotoUrl?: boolean
+    checkInDevice?: boolean
+    checkOutDevice?: boolean
     workHours?: boolean
     workMinutes?: boolean
     delayMinutes?: boolean
@@ -30797,6 +30833,10 @@ export namespace Prisma {
     date?: boolean
     checkIn?: boolean
     checkOut?: boolean
+    checkInPhotoUrl?: boolean
+    checkOutPhotoUrl?: boolean
+    checkInDevice?: boolean
+    checkOutDevice?: boolean
     workHours?: boolean
     workMinutes?: boolean
     delayMinutes?: boolean
@@ -30813,6 +30853,10 @@ export namespace Prisma {
     date?: boolean
     checkIn?: boolean
     checkOut?: boolean
+    checkInPhotoUrl?: boolean
+    checkOutPhotoUrl?: boolean
+    checkInDevice?: boolean
+    checkOutDevice?: boolean
     workHours?: boolean
     workMinutes?: boolean
     delayMinutes?: boolean
@@ -30822,7 +30866,7 @@ export namespace Prisma {
     createdAt?: boolean
   }
 
-  export type AttendanceOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "employeeId" | "date" | "checkIn" | "checkOut" | "workHours" | "workMinutes" | "delayMinutes" | "overtimeMinutes" | "status" | "notes" | "createdAt", ExtArgs["result"]["attendance"]>
+  export type AttendanceOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "employeeId" | "date" | "checkIn" | "checkOut" | "checkInPhotoUrl" | "checkOutPhotoUrl" | "checkInDevice" | "checkOutDevice" | "workHours" | "workMinutes" | "delayMinutes" | "overtimeMinutes" | "status" | "notes" | "createdAt", ExtArgs["result"]["attendance"]>
   export type AttendanceInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     employee?: boolean | EmployeeDefaultArgs<ExtArgs>
   }
@@ -30844,6 +30888,10 @@ export namespace Prisma {
       date: Date
       checkIn: Date | null
       checkOut: Date | null
+      checkInPhotoUrl: string | null
+      checkOutPhotoUrl: string | null
+      checkInDevice: string | null
+      checkOutDevice: string | null
       workHours: number
       workMinutes: number | null
       delayMinutes: number
@@ -31280,6 +31328,10 @@ export namespace Prisma {
     readonly date: FieldRef<"Attendance", 'DateTime'>
     readonly checkIn: FieldRef<"Attendance", 'DateTime'>
     readonly checkOut: FieldRef<"Attendance", 'DateTime'>
+    readonly checkInPhotoUrl: FieldRef<"Attendance", 'String'>
+    readonly checkOutPhotoUrl: FieldRef<"Attendance", 'String'>
+    readonly checkInDevice: FieldRef<"Attendance", 'String'>
+    readonly checkOutDevice: FieldRef<"Attendance", 'String'>
     readonly workHours: FieldRef<"Attendance", 'Float'>
     readonly workMinutes: FieldRef<"Attendance", 'Int'>
     readonly delayMinutes: FieldRef<"Attendance", 'Int'>
@@ -56109,6 +56161,7 @@ export namespace Prisma {
   export type PurchaseRequestMinAggregateOutputType = {
     id: string | null
     requestNumber: string | null
+    requestType: string | null
     supplierId: string | null
     warehouseId: string | null
     date: Date | null
@@ -56125,6 +56178,7 @@ export namespace Prisma {
   export type PurchaseRequestMaxAggregateOutputType = {
     id: string | null
     requestNumber: string | null
+    requestType: string | null
     supplierId: string | null
     warehouseId: string | null
     date: Date | null
@@ -56141,6 +56195,7 @@ export namespace Prisma {
   export type PurchaseRequestCountAggregateOutputType = {
     id: number
     requestNumber: number
+    requestType: number
     supplierId: number
     warehouseId: number
     date: number
@@ -56159,6 +56214,7 @@ export namespace Prisma {
   export type PurchaseRequestMinAggregateInputType = {
     id?: true
     requestNumber?: true
+    requestType?: true
     supplierId?: true
     warehouseId?: true
     date?: true
@@ -56175,6 +56231,7 @@ export namespace Prisma {
   export type PurchaseRequestMaxAggregateInputType = {
     id?: true
     requestNumber?: true
+    requestType?: true
     supplierId?: true
     warehouseId?: true
     date?: true
@@ -56191,6 +56248,7 @@ export namespace Prisma {
   export type PurchaseRequestCountAggregateInputType = {
     id?: true
     requestNumber?: true
+    requestType?: true
     supplierId?: true
     warehouseId?: true
     date?: true
@@ -56280,6 +56338,7 @@ export namespace Prisma {
   export type PurchaseRequestGroupByOutputType = {
     id: string
     requestNumber: string
+    requestType: string
     supplierId: string | null
     warehouseId: string
     date: Date
@@ -56313,6 +56372,7 @@ export namespace Prisma {
   export type PurchaseRequestSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     requestNumber?: boolean
+    requestType?: boolean
     supplierId?: boolean
     warehouseId?: boolean
     date?: boolean
@@ -56333,6 +56393,7 @@ export namespace Prisma {
   export type PurchaseRequestSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     requestNumber?: boolean
+    requestType?: boolean
     supplierId?: boolean
     warehouseId?: boolean
     date?: boolean
@@ -56351,6 +56412,7 @@ export namespace Prisma {
   export type PurchaseRequestSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     requestNumber?: boolean
+    requestType?: boolean
     supplierId?: boolean
     warehouseId?: boolean
     date?: boolean
@@ -56369,6 +56431,7 @@ export namespace Prisma {
   export type PurchaseRequestSelectScalar = {
     id?: boolean
     requestNumber?: boolean
+    requestType?: boolean
     supplierId?: boolean
     warehouseId?: boolean
     date?: boolean
@@ -56382,7 +56445,7 @@ export namespace Prisma {
     createdAt?: boolean
   }
 
-  export type PurchaseRequestOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "requestNumber" | "supplierId" | "warehouseId" | "date" | "reason" | "status" | "notes" | "publicTokenHash" | "publicTokenExpiresAt" | "supplierResponse" | "createdById" | "createdAt", ExtArgs["result"]["purchaseRequest"]>
+  export type PurchaseRequestOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "requestNumber" | "requestType" | "supplierId" | "warehouseId" | "date" | "reason" | "status" | "notes" | "publicTokenHash" | "publicTokenExpiresAt" | "supplierResponse" | "createdById" | "createdAt", ExtArgs["result"]["purchaseRequest"]>
   export type PurchaseRequestInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     supplier?: boolean | PurchaseRequest$supplierArgs<ExtArgs>
     warehouse?: boolean | WarehouseDefaultArgs<ExtArgs>
@@ -56408,6 +56471,7 @@ export namespace Prisma {
     scalars: $Extensions.GetPayloadResult<{
       id: string
       requestNumber: string
+      requestType: string
       supplierId: string | null
       warehouseId: string
       date: Date
@@ -56847,6 +56911,7 @@ export namespace Prisma {
   interface PurchaseRequestFieldRefs {
     readonly id: FieldRef<"PurchaseRequest", 'String'>
     readonly requestNumber: FieldRef<"PurchaseRequest", 'String'>
+    readonly requestType: FieldRef<"PurchaseRequest", 'String'>
     readonly supplierId: FieldRef<"PurchaseRequest", 'String'>
     readonly warehouseId: FieldRef<"PurchaseRequest", 'String'>
     readonly date: FieldRef<"PurchaseRequest", 'DateTime'>
@@ -98273,6 +98338,10 @@ export namespace Prisma {
     date: 'date',
     checkIn: 'checkIn',
     checkOut: 'checkOut',
+    checkInPhotoUrl: 'checkInPhotoUrl',
+    checkOutPhotoUrl: 'checkOutPhotoUrl',
+    checkInDevice: 'checkInDevice',
+    checkOutDevice: 'checkOutDevice',
     workHours: 'workHours',
     workMinutes: 'workMinutes',
     delayMinutes: 'delayMinutes',
@@ -98644,6 +98713,7 @@ export namespace Prisma {
   export const PurchaseRequestScalarFieldEnum: {
     id: 'id',
     requestNumber: 'requestNumber',
+    requestType: 'requestType',
     supplierId: 'supplierId',
     warehouseId: 'warehouseId',
     date: 'date',
@@ -100789,6 +100859,10 @@ export namespace Prisma {
     date?: DateTimeFilter<"Attendance"> | Date | string
     checkIn?: DateTimeNullableFilter<"Attendance"> | Date | string | null
     checkOut?: DateTimeNullableFilter<"Attendance"> | Date | string | null
+    checkInPhotoUrl?: StringNullableFilter<"Attendance"> | string | null
+    checkOutPhotoUrl?: StringNullableFilter<"Attendance"> | string | null
+    checkInDevice?: StringNullableFilter<"Attendance"> | string | null
+    checkOutDevice?: StringNullableFilter<"Attendance"> | string | null
     workHours?: FloatFilter<"Attendance"> | number
     workMinutes?: IntNullableFilter<"Attendance"> | number | null
     delayMinutes?: IntFilter<"Attendance"> | number
@@ -100805,6 +100879,10 @@ export namespace Prisma {
     date?: SortOrder
     checkIn?: SortOrderInput | SortOrder
     checkOut?: SortOrderInput | SortOrder
+    checkInPhotoUrl?: SortOrderInput | SortOrder
+    checkOutPhotoUrl?: SortOrderInput | SortOrder
+    checkInDevice?: SortOrderInput | SortOrder
+    checkOutDevice?: SortOrderInput | SortOrder
     workHours?: SortOrder
     workMinutes?: SortOrderInput | SortOrder
     delayMinutes?: SortOrder
@@ -100824,6 +100902,10 @@ export namespace Prisma {
     date?: DateTimeFilter<"Attendance"> | Date | string
     checkIn?: DateTimeNullableFilter<"Attendance"> | Date | string | null
     checkOut?: DateTimeNullableFilter<"Attendance"> | Date | string | null
+    checkInPhotoUrl?: StringNullableFilter<"Attendance"> | string | null
+    checkOutPhotoUrl?: StringNullableFilter<"Attendance"> | string | null
+    checkInDevice?: StringNullableFilter<"Attendance"> | string | null
+    checkOutDevice?: StringNullableFilter<"Attendance"> | string | null
     workHours?: FloatFilter<"Attendance"> | number
     workMinutes?: IntNullableFilter<"Attendance"> | number | null
     delayMinutes?: IntFilter<"Attendance"> | number
@@ -100840,6 +100922,10 @@ export namespace Prisma {
     date?: SortOrder
     checkIn?: SortOrderInput | SortOrder
     checkOut?: SortOrderInput | SortOrder
+    checkInPhotoUrl?: SortOrderInput | SortOrder
+    checkOutPhotoUrl?: SortOrderInput | SortOrder
+    checkInDevice?: SortOrderInput | SortOrder
+    checkOutDevice?: SortOrderInput | SortOrder
     workHours?: SortOrder
     workMinutes?: SortOrderInput | SortOrder
     delayMinutes?: SortOrder
@@ -100863,6 +100949,10 @@ export namespace Prisma {
     date?: DateTimeWithAggregatesFilter<"Attendance"> | Date | string
     checkIn?: DateTimeNullableWithAggregatesFilter<"Attendance"> | Date | string | null
     checkOut?: DateTimeNullableWithAggregatesFilter<"Attendance"> | Date | string | null
+    checkInPhotoUrl?: StringNullableWithAggregatesFilter<"Attendance"> | string | null
+    checkOutPhotoUrl?: StringNullableWithAggregatesFilter<"Attendance"> | string | null
+    checkInDevice?: StringNullableWithAggregatesFilter<"Attendance"> | string | null
+    checkOutDevice?: StringNullableWithAggregatesFilter<"Attendance"> | string | null
     workHours?: FloatWithAggregatesFilter<"Attendance"> | number
     workMinutes?: IntNullableWithAggregatesFilter<"Attendance"> | number | null
     delayMinutes?: IntWithAggregatesFilter<"Attendance"> | number
@@ -102807,6 +102897,7 @@ export namespace Prisma {
     NOT?: PurchaseRequestWhereInput | PurchaseRequestWhereInput[]
     id?: StringFilter<"PurchaseRequest"> | string
     requestNumber?: StringFilter<"PurchaseRequest"> | string
+    requestType?: StringFilter<"PurchaseRequest"> | string
     supplierId?: StringNullableFilter<"PurchaseRequest"> | string | null
     warehouseId?: StringFilter<"PurchaseRequest"> | string
     date?: DateTimeFilter<"PurchaseRequest"> | Date | string
@@ -102826,6 +102917,7 @@ export namespace Prisma {
   export type PurchaseRequestOrderByWithRelationInput = {
     id?: SortOrder
     requestNumber?: SortOrder
+    requestType?: SortOrder
     supplierId?: SortOrderInput | SortOrder
     warehouseId?: SortOrder
     date?: SortOrder
@@ -102849,6 +102941,7 @@ export namespace Prisma {
     AND?: PurchaseRequestWhereInput | PurchaseRequestWhereInput[]
     OR?: PurchaseRequestWhereInput[]
     NOT?: PurchaseRequestWhereInput | PurchaseRequestWhereInput[]
+    requestType?: StringFilter<"PurchaseRequest"> | string
     supplierId?: StringNullableFilter<"PurchaseRequest"> | string | null
     warehouseId?: StringFilter<"PurchaseRequest"> | string
     date?: DateTimeFilter<"PurchaseRequest"> | Date | string
@@ -102867,6 +102960,7 @@ export namespace Prisma {
   export type PurchaseRequestOrderByWithAggregationInput = {
     id?: SortOrder
     requestNumber?: SortOrder
+    requestType?: SortOrder
     supplierId?: SortOrderInput | SortOrder
     warehouseId?: SortOrder
     date?: SortOrder
@@ -102889,6 +102983,7 @@ export namespace Prisma {
     NOT?: PurchaseRequestScalarWhereWithAggregatesInput | PurchaseRequestScalarWhereWithAggregatesInput[]
     id?: StringWithAggregatesFilter<"PurchaseRequest"> | string
     requestNumber?: StringWithAggregatesFilter<"PurchaseRequest"> | string
+    requestType?: StringWithAggregatesFilter<"PurchaseRequest"> | string
     supplierId?: StringNullableWithAggregatesFilter<"PurchaseRequest"> | string | null
     warehouseId?: StringWithAggregatesFilter<"PurchaseRequest"> | string
     date?: DateTimeWithAggregatesFilter<"PurchaseRequest"> | Date | string
@@ -107758,6 +107853,10 @@ export namespace Prisma {
     date: Date | string
     checkIn?: Date | string | null
     checkOut?: Date | string | null
+    checkInPhotoUrl?: string | null
+    checkOutPhotoUrl?: string | null
+    checkInDevice?: string | null
+    checkOutDevice?: string | null
     workHours?: number
     workMinutes?: number | null
     delayMinutes?: number
@@ -107774,6 +107873,10 @@ export namespace Prisma {
     date: Date | string
     checkIn?: Date | string | null
     checkOut?: Date | string | null
+    checkInPhotoUrl?: string | null
+    checkOutPhotoUrl?: string | null
+    checkInDevice?: string | null
+    checkOutDevice?: string | null
     workHours?: number
     workMinutes?: number | null
     delayMinutes?: number
@@ -107788,6 +107891,10 @@ export namespace Prisma {
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     checkIn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     checkOut?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkInPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkInDevice?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutDevice?: NullableStringFieldUpdateOperationsInput | string | null
     workHours?: FloatFieldUpdateOperationsInput | number
     workMinutes?: NullableIntFieldUpdateOperationsInput | number | null
     delayMinutes?: IntFieldUpdateOperationsInput | number
@@ -107804,6 +107911,10 @@ export namespace Prisma {
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     checkIn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     checkOut?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkInPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkInDevice?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutDevice?: NullableStringFieldUpdateOperationsInput | string | null
     workHours?: FloatFieldUpdateOperationsInput | number
     workMinutes?: NullableIntFieldUpdateOperationsInput | number | null
     delayMinutes?: IntFieldUpdateOperationsInput | number
@@ -107819,6 +107930,10 @@ export namespace Prisma {
     date: Date | string
     checkIn?: Date | string | null
     checkOut?: Date | string | null
+    checkInPhotoUrl?: string | null
+    checkOutPhotoUrl?: string | null
+    checkInDevice?: string | null
+    checkOutDevice?: string | null
     workHours?: number
     workMinutes?: number | null
     delayMinutes?: number
@@ -107833,6 +107948,10 @@ export namespace Prisma {
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     checkIn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     checkOut?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkInPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkInDevice?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutDevice?: NullableStringFieldUpdateOperationsInput | string | null
     workHours?: FloatFieldUpdateOperationsInput | number
     workMinutes?: NullableIntFieldUpdateOperationsInput | number | null
     delayMinutes?: IntFieldUpdateOperationsInput | number
@@ -107848,6 +107967,10 @@ export namespace Prisma {
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     checkIn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     checkOut?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkInPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkInDevice?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutDevice?: NullableStringFieldUpdateOperationsInput | string | null
     workHours?: FloatFieldUpdateOperationsInput | number
     workMinutes?: NullableIntFieldUpdateOperationsInput | number | null
     delayMinutes?: IntFieldUpdateOperationsInput | number
@@ -110081,6 +110204,7 @@ export namespace Prisma {
   export type PurchaseRequestCreateInput = {
     id?: string
     requestNumber: string
+    requestType?: string
     date?: Date | string
     reason?: string | null
     status?: string
@@ -110098,6 +110222,7 @@ export namespace Prisma {
   export type PurchaseRequestUncheckedCreateInput = {
     id?: string
     requestNumber: string
+    requestType?: string
     supplierId?: string | null
     warehouseId: string
     date?: Date | string
@@ -110115,6 +110240,7 @@ export namespace Prisma {
   export type PurchaseRequestUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
     requestNumber?: StringFieldUpdateOperationsInput | string
+    requestType?: StringFieldUpdateOperationsInput | string
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     reason?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
@@ -110132,6 +110258,7 @@ export namespace Prisma {
   export type PurchaseRequestUncheckedUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
     requestNumber?: StringFieldUpdateOperationsInput | string
+    requestType?: StringFieldUpdateOperationsInput | string
     supplierId?: NullableStringFieldUpdateOperationsInput | string | null
     warehouseId?: StringFieldUpdateOperationsInput | string
     date?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -110149,6 +110276,7 @@ export namespace Prisma {
   export type PurchaseRequestCreateManyInput = {
     id?: string
     requestNumber: string
+    requestType?: string
     supplierId?: string | null
     warehouseId: string
     date?: Date | string
@@ -110165,6 +110293,7 @@ export namespace Prisma {
   export type PurchaseRequestUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
     requestNumber?: StringFieldUpdateOperationsInput | string
+    requestType?: StringFieldUpdateOperationsInput | string
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     reason?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
@@ -110179,6 +110308,7 @@ export namespace Prisma {
   export type PurchaseRequestUncheckedUpdateManyInput = {
     id?: StringFieldUpdateOperationsInput | string
     requestNumber?: StringFieldUpdateOperationsInput | string
+    requestType?: StringFieldUpdateOperationsInput | string
     supplierId?: NullableStringFieldUpdateOperationsInput | string | null
     warehouseId?: StringFieldUpdateOperationsInput | string
     date?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -114891,6 +115021,10 @@ export namespace Prisma {
     date?: SortOrder
     checkIn?: SortOrder
     checkOut?: SortOrder
+    checkInPhotoUrl?: SortOrder
+    checkOutPhotoUrl?: SortOrder
+    checkInDevice?: SortOrder
+    checkOutDevice?: SortOrder
     workHours?: SortOrder
     workMinutes?: SortOrder
     delayMinutes?: SortOrder
@@ -114913,6 +115047,10 @@ export namespace Prisma {
     date?: SortOrder
     checkIn?: SortOrder
     checkOut?: SortOrder
+    checkInPhotoUrl?: SortOrder
+    checkOutPhotoUrl?: SortOrder
+    checkInDevice?: SortOrder
+    checkOutDevice?: SortOrder
     workHours?: SortOrder
     workMinutes?: SortOrder
     delayMinutes?: SortOrder
@@ -114928,6 +115066,10 @@ export namespace Prisma {
     date?: SortOrder
     checkIn?: SortOrder
     checkOut?: SortOrder
+    checkInPhotoUrl?: SortOrder
+    checkOutPhotoUrl?: SortOrder
+    checkInDevice?: SortOrder
+    checkOutDevice?: SortOrder
     workHours?: SortOrder
     workMinutes?: SortOrder
     delayMinutes?: SortOrder
@@ -116321,6 +116463,7 @@ export namespace Prisma {
   export type PurchaseRequestCountOrderByAggregateInput = {
     id?: SortOrder
     requestNumber?: SortOrder
+    requestType?: SortOrder
     supplierId?: SortOrder
     warehouseId?: SortOrder
     date?: SortOrder
@@ -116337,6 +116480,7 @@ export namespace Prisma {
   export type PurchaseRequestMaxOrderByAggregateInput = {
     id?: SortOrder
     requestNumber?: SortOrder
+    requestType?: SortOrder
     supplierId?: SortOrder
     warehouseId?: SortOrder
     date?: SortOrder
@@ -116353,6 +116497,7 @@ export namespace Prisma {
   export type PurchaseRequestMinOrderByAggregateInput = {
     id?: SortOrder
     requestNumber?: SortOrder
+    requestType?: SortOrder
     supplierId?: SortOrder
     warehouseId?: SortOrder
     date?: SortOrder
@@ -126223,6 +126368,10 @@ export namespace Prisma {
     date: Date | string
     checkIn?: Date | string | null
     checkOut?: Date | string | null
+    checkInPhotoUrl?: string | null
+    checkOutPhotoUrl?: string | null
+    checkInDevice?: string | null
+    checkOutDevice?: string | null
     workHours?: number
     workMinutes?: number | null
     delayMinutes?: number
@@ -126237,6 +126386,10 @@ export namespace Prisma {
     date: Date | string
     checkIn?: Date | string | null
     checkOut?: Date | string | null
+    checkInPhotoUrl?: string | null
+    checkOutPhotoUrl?: string | null
+    checkInDevice?: string | null
+    checkOutDevice?: string | null
     workHours?: number
     workMinutes?: number | null
     delayMinutes?: number
@@ -126714,6 +126867,10 @@ export namespace Prisma {
     date?: DateTimeFilter<"Attendance"> | Date | string
     checkIn?: DateTimeNullableFilter<"Attendance"> | Date | string | null
     checkOut?: DateTimeNullableFilter<"Attendance"> | Date | string | null
+    checkInPhotoUrl?: StringNullableFilter<"Attendance"> | string | null
+    checkOutPhotoUrl?: StringNullableFilter<"Attendance"> | string | null
+    checkInDevice?: StringNullableFilter<"Attendance"> | string | null
+    checkOutDevice?: StringNullableFilter<"Attendance"> | string | null
     workHours?: FloatFilter<"Attendance"> | number
     workMinutes?: IntNullableFilter<"Attendance"> | number | null
     delayMinutes?: IntFilter<"Attendance"> | number
@@ -127440,6 +127597,7 @@ export namespace Prisma {
   export type PurchaseRequestCreateWithoutSupplierInput = {
     id?: string
     requestNumber: string
+    requestType?: string
     date?: Date | string
     reason?: string | null
     status?: string
@@ -127456,6 +127614,7 @@ export namespace Prisma {
   export type PurchaseRequestUncheckedCreateWithoutSupplierInput = {
     id?: string
     requestNumber: string
+    requestType?: string
     warehouseId: string
     date?: Date | string
     reason?: string | null
@@ -127706,6 +127865,7 @@ export namespace Prisma {
     NOT?: PurchaseRequestScalarWhereInput | PurchaseRequestScalarWhereInput[]
     id?: StringFilter<"PurchaseRequest"> | string
     requestNumber?: StringFilter<"PurchaseRequest"> | string
+    requestType?: StringFilter<"PurchaseRequest"> | string
     supplierId?: StringNullableFilter<"PurchaseRequest"> | string | null
     warehouseId?: StringFilter<"PurchaseRequest"> | string
     date?: DateTimeFilter<"PurchaseRequest"> | Date | string
@@ -129895,6 +130055,7 @@ export namespace Prisma {
   export type PurchaseRequestCreateWithoutWarehouseInput = {
     id?: string
     requestNumber: string
+    requestType?: string
     date?: Date | string
     reason?: string | null
     status?: string
@@ -129911,6 +130072,7 @@ export namespace Prisma {
   export type PurchaseRequestUncheckedCreateWithoutWarehouseInput = {
     id?: string
     requestNumber: string
+    requestType?: string
     supplierId?: string | null
     date?: Date | string
     reason?: string | null
@@ -132242,6 +132404,7 @@ export namespace Prisma {
   export type PurchaseRequestCreateWithoutItemsInput = {
     id?: string
     requestNumber: string
+    requestType?: string
     date?: Date | string
     reason?: string | null
     status?: string
@@ -132258,6 +132421,7 @@ export namespace Prisma {
   export type PurchaseRequestUncheckedCreateWithoutItemsInput = {
     id?: string
     requestNumber: string
+    requestType?: string
     supplierId?: string | null
     warehouseId: string
     date?: Date | string
@@ -132369,6 +132533,7 @@ export namespace Prisma {
   export type PurchaseRequestUpdateWithoutItemsInput = {
     id?: StringFieldUpdateOperationsInput | string
     requestNumber?: StringFieldUpdateOperationsInput | string
+    requestType?: StringFieldUpdateOperationsInput | string
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     reason?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
@@ -132385,6 +132550,7 @@ export namespace Prisma {
   export type PurchaseRequestUncheckedUpdateWithoutItemsInput = {
     id?: StringFieldUpdateOperationsInput | string
     requestNumber?: StringFieldUpdateOperationsInput | string
+    requestType?: StringFieldUpdateOperationsInput | string
     supplierId?: NullableStringFieldUpdateOperationsInput | string | null
     warehouseId?: StringFieldUpdateOperationsInput | string
     date?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -142793,6 +142959,10 @@ export namespace Prisma {
     date: Date | string
     checkIn?: Date | string | null
     checkOut?: Date | string | null
+    checkInPhotoUrl?: string | null
+    checkOutPhotoUrl?: string | null
+    checkInDevice?: string | null
+    checkOutDevice?: string | null
     workHours?: number
     workMinutes?: number | null
     delayMinutes?: number
@@ -142922,6 +143092,10 @@ export namespace Prisma {
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     checkIn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     checkOut?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkInPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkInDevice?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutDevice?: NullableStringFieldUpdateOperationsInput | string | null
     workHours?: FloatFieldUpdateOperationsInput | number
     workMinutes?: NullableIntFieldUpdateOperationsInput | number | null
     delayMinutes?: IntFieldUpdateOperationsInput | number
@@ -142936,6 +143110,10 @@ export namespace Prisma {
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     checkIn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     checkOut?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkInPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkInDevice?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutDevice?: NullableStringFieldUpdateOperationsInput | string | null
     workHours?: FloatFieldUpdateOperationsInput | number
     workMinutes?: NullableIntFieldUpdateOperationsInput | number | null
     delayMinutes?: IntFieldUpdateOperationsInput | number
@@ -142950,6 +143128,10 @@ export namespace Prisma {
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     checkIn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     checkOut?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkInPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutPhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    checkInDevice?: NullableStringFieldUpdateOperationsInput | string | null
+    checkOutDevice?: NullableStringFieldUpdateOperationsInput | string | null
     workHours?: FloatFieldUpdateOperationsInput | number
     workMinutes?: NullableIntFieldUpdateOperationsInput | number | null
     delayMinutes?: IntFieldUpdateOperationsInput | number
@@ -143335,6 +143517,7 @@ export namespace Prisma {
   export type PurchaseRequestCreateManySupplierInput = {
     id?: string
     requestNumber: string
+    requestType?: string
     warehouseId: string
     date?: Date | string
     reason?: string | null
@@ -143403,6 +143586,7 @@ export namespace Prisma {
   export type PurchaseRequestUpdateWithoutSupplierInput = {
     id?: StringFieldUpdateOperationsInput | string
     requestNumber?: StringFieldUpdateOperationsInput | string
+    requestType?: StringFieldUpdateOperationsInput | string
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     reason?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
@@ -143419,6 +143603,7 @@ export namespace Prisma {
   export type PurchaseRequestUncheckedUpdateWithoutSupplierInput = {
     id?: StringFieldUpdateOperationsInput | string
     requestNumber?: StringFieldUpdateOperationsInput | string
+    requestType?: StringFieldUpdateOperationsInput | string
     warehouseId?: StringFieldUpdateOperationsInput | string
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     reason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -143435,6 +143620,7 @@ export namespace Prisma {
   export type PurchaseRequestUncheckedUpdateManyWithoutSupplierInput = {
     id?: StringFieldUpdateOperationsInput | string
     requestNumber?: StringFieldUpdateOperationsInput | string
+    requestType?: StringFieldUpdateOperationsInput | string
     warehouseId?: StringFieldUpdateOperationsInput | string
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     reason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -144871,6 +145057,7 @@ export namespace Prisma {
   export type PurchaseRequestCreateManyWarehouseInput = {
     id?: string
     requestNumber: string
+    requestType?: string
     supplierId?: string | null
     date?: Date | string
     reason?: string | null
@@ -145102,6 +145289,7 @@ export namespace Prisma {
   export type PurchaseRequestUpdateWithoutWarehouseInput = {
     id?: StringFieldUpdateOperationsInput | string
     requestNumber?: StringFieldUpdateOperationsInput | string
+    requestType?: StringFieldUpdateOperationsInput | string
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     reason?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
@@ -145118,6 +145306,7 @@ export namespace Prisma {
   export type PurchaseRequestUncheckedUpdateWithoutWarehouseInput = {
     id?: StringFieldUpdateOperationsInput | string
     requestNumber?: StringFieldUpdateOperationsInput | string
+    requestType?: StringFieldUpdateOperationsInput | string
     supplierId?: NullableStringFieldUpdateOperationsInput | string | null
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     reason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -145134,6 +145323,7 @@ export namespace Prisma {
   export type PurchaseRequestUncheckedUpdateManyWithoutWarehouseInput = {
     id?: StringFieldUpdateOperationsInput | string
     requestNumber?: StringFieldUpdateOperationsInput | string
+    requestType?: StringFieldUpdateOperationsInput | string
     supplierId?: NullableStringFieldUpdateOperationsInput | string | null
     date?: DateTimeFieldUpdateOperationsInput | Date | string
     reason?: NullableStringFieldUpdateOperationsInput | string | null

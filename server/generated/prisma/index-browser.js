@@ -349,6 +349,10 @@ exports.Prisma.AttendanceScalarFieldEnum = {
   date: 'date',
   checkIn: 'checkIn',
   checkOut: 'checkOut',
+  checkInPhotoUrl: 'checkInPhotoUrl',
+  checkOutPhotoUrl: 'checkOutPhotoUrl',
+  checkInDevice: 'checkInDevice',
+  checkOutDevice: 'checkOutDevice',
   workHours: 'workHours',
   workMinutes: 'workMinutes',
   delayMinutes: 'delayMinutes',
@@ -657,6 +661,7 @@ exports.Prisma.StockTransactionScalarFieldEnum = {
 exports.Prisma.PurchaseRequestScalarFieldEnum = {
   id: 'id',
   requestNumber: 'requestNumber',
+  requestType: 'requestType',
   supplierId: 'supplierId',
   warehouseId: 'warehouseId',
   date: 'date',

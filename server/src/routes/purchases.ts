@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logAudit } from '../middleware/audit';
 import { sendInvoicePdf, sendShortageRequest } from '../services/whatsapp';
+import { getWhatsappQrStatus, sendWhatsappQrMessage } from '../services/whatsappQr';
 import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentNumbers';
 import { postJournalEntry } from '../services/accounting';
 import { AuthenticatedRequest } from '../middleware/auth';
@@ -69,12 +70,20 @@ router.get('/requests', async (req, res) => {
 router.post('/requests', async (req, res) => {
   try {
     const { items, ...data } = req.body;
+    const requestType = data.requestType === 'PURCHASE' ? 'PURCHASE' : 'SHORTAGE';
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'أضف صنفًا واحدًا على الأقل إلى الطلب' });
+    }
+    if (items.some((item: any) => !item.itemId || !Number.isInteger(Number(item.quantity)) || Number(item.quantity) <= 0)) {
+      return res.status(400).json({ error: 'بيانات أصناف طلب النواقص غير صالحة' });
+    }
     const count = await prisma.purchaseRequest.count();
     const requestNumber = `PR-${new Date().getFullYear()}-${String(count + 1).padStart(3, '0')}`;
 
     const request = await prisma.purchaseRequest.create({
       data: {
         ...data,
+        requestType,
         requestNumber,
         items: {
           create: items.map((i: any) => ({
@@ -89,6 +98,19 @@ router.post('/requests', async (req, res) => {
     });
 
     await logAudit({ action: 'CREATE', entity: 'PurchaseRequest', entityId: request.id, details: `إنشاء طلب شراء ${requestNumber}` });
+
+    try {
+      const integration = await prisma.notificationIntegration.findUnique({ where: { id: 1 } });
+      const whatsapp = await getWhatsappQrStatus();
+      if (integration?.whatsappPhone && whatsapp.connected) {
+        await sendWhatsappQrMessage(
+          integration.whatsappPhone,
+          `تنبيه من نظام Alasly: تم إنشاء ${requestType === 'PURCHASE' ? 'طلب شراء' : 'طلب نواقص'} ${request.requestNumber} بواسطة المستخدم الحالي. عدد الأصناف: ${request.items.length}. افتح قسم المشتريات للمراجعة.`,
+        );
+      }
+    } catch (notificationError: any) {
+      console.error('Manager purchase request WhatsApp notification failed:', notificationError);
+    }
 
     let whatsappNotification: { sent: boolean; reason?: string } | { sent: false; error: string } = {
       sent: false,

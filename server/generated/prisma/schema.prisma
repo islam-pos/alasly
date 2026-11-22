@@ -283,19 +283,23 @@ model HrSetting {
 }
 
 model Attendance {
-  id              String    @id @default(uuid())
-  employeeId      String
-  employee        Employee  @relation(fields: [employeeId], references: [id])
-  date            DateTime
-  checkIn         DateTime?
-  checkOut        DateTime?
-  workHours       Float     @default(0)
-  workMinutes     Int?
-  delayMinutes    Int       @default(0)
-  overtimeMinutes Int       @default(0)
-  status          String    @default("PRESENT") // PRESENT, ABSENT, LEAVE, HOLIDAY
-  notes           String?
-  createdAt       DateTime  @default(now())
+  id               String    @id @default(uuid())
+  employeeId       String
+  employee         Employee  @relation(fields: [employeeId], references: [id])
+  date             DateTime
+  checkIn          DateTime?
+  checkOut         DateTime?
+  checkInPhotoUrl  String?
+  checkOutPhotoUrl String?
+  checkInDevice    String?
+  checkOutDevice   String?
+  workHours        Float     @default(0)
+  workMinutes      Int?
+  delayMinutes     Int       @default(0)
+  overtimeMinutes  Int       @default(0)
+  status           String    @default("PRESENT") // PRESENT, ABSENT, LEAVE, HOLIDAY
+  notes            String?
+  createdAt        DateTime  @default(now())
 }
 
 model Commission {
@@ -680,6 +684,7 @@ model StockTransaction {
 model PurchaseRequest {
   id                   String                @id @default(uuid())
   requestNumber        String                @unique
+  requestType          String                @default("SHORTAGE") // SHORTAGE, PURCHASE
   supplierId           String?
   supplier             Supplier?             @relation(fields: [supplierId], references: [id])
   warehouseId          String

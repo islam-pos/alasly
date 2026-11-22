@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Users, UserCheck, Award, FileSpreadsheet, Plus, 
   Clock, CheckCircle2, DollarSign, Calendar, Search, 
-  Briefcase, Phone, Mail, ShieldAlert, Pencil, UserX
+  Briefcase, Phone, Mail, ShieldAlert, Pencil, UserX, Camera
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -58,6 +58,12 @@ export const EmployeesScreen: React.FC = () => {
     employeeId: '',
     notes: ''
   });
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const [capturedFace, setCapturedFace] = useState('');
+  const [pendingCheckOutId, setPendingCheckOutId] = useState('');
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const [payrollForm, setPayrollForm] = useState({
     month: new Date().getMonth() + 1,
@@ -174,14 +180,80 @@ export const EmployeesScreen: React.FC = () => {
     }
   };
 
+  const stopCamera = () => {
+    cameraStream?.getTracks().forEach((track) => track.stop());
+    setCameraStream(null);
+  };
+
+  const openCamera = async () => {
+    setCameraError('');
+    setCapturedFace('');
+    setCameraOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      setCameraStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+    } catch {
+      setCameraError('تعذر فتح الكاميرا. اسمح بصلاحية الكاميرا ثم حاول مرة أخرى.');
+    }
+  };
+
+  const captureFace = () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      setCameraError('الكاميرا لم تصبح جاهزة بعد');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      setCameraError('تعذر تجهيز الصورة');
+      return;
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const faceImage = canvas.toDataURL('image/jpeg', 0.72);
+    setCapturedFace(faceImage);
+    if (pendingCheckOutId) {
+      void api.hr.checkOut({
+        attendanceId: pendingCheckOutId,
+        faceImage,
+        deviceName: navigator.userAgent,
+      }).then(() => {
+        showToast('تم تسجيل الانصراف وحساب ساعات العمل', 'success');
+        setPendingCheckOutId('');
+        stopCamera();
+        setCapturedFace('');
+        setCameraOpen(false);
+        loadData();
+      }).catch((error: any) => {
+        showToast(error.response?.data?.error || 'فشل تسجيل الانصراف', 'error');
+      });
+    }
+  };
+
   // Handle Check-in
   const handleCheckIn = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.hr.checkIn(checkInForm);
+      if (!capturedFace) throw new Error('التقط صورة الوجه قبل بدء الوردية');
+      await api.hr.checkIn({
+        ...checkInForm,
+        faceImage: capturedFace,
+        deviceName: navigator.userAgent,
+      });
       showToast('تم تسجيل حضور الموظف بنجاح', 'success');
       setIsCheckInModalOpen(false);
       setCheckInForm({ employeeId: '', notes: '' });
+      stopCamera();
+      setCapturedFace('');
       loadData();
     } catch (err: any) {
       showToast(err.response?.data?.error || 'فشل تسجيل الحضور', 'error');
@@ -191,8 +263,19 @@ export const EmployeesScreen: React.FC = () => {
   // Handle Check-out
   const handleCheckOut = async (attendanceId: string) => {
     try {
-      await api.hr.checkOut({ attendanceId });
+      if (!capturedFace) {
+        setCameraOpen(true);
+        showToast('التقط صورة الوجه لإنهاء الوردية', 'error');
+        return;
+      }
+      await api.hr.checkOut({
+        attendanceId,
+        faceImage: capturedFace,
+        deviceName: navigator.userAgent,
+      });
       showToast('تم تسجيل الانصراف وحساب ساعات العمل', 'success');
+      stopCamera();
+      setCapturedFace('');
       loadData();
     } catch (err: any) {
       showToast(err.response?.data?.error || 'فشل تسجيل الانصراف', 'error');
@@ -471,6 +554,24 @@ export const EmployeesScreen: React.FC = () => {
       {/* Tab 2: Attendance */}
       {activeTab === 'attendance' && canManageEmployees && (
         <div className="bg-white rounded-b-2xl border border-slate-200 border-t-0 p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <div>
+              <h3 className="font-black text-emerald-900">وردية الموظف</h3>
+              <p className="mt-1 text-xs text-emerald-700">ابدأ الوردية بالكاميرا، وأمنع الانصراف بدون صورة وجه جديدة.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setCheckInForm({ employeeId: checkInForm.employeeId, notes: '' });
+                setCapturedFace('');
+                setIsCheckInModalOpen(true);
+                void openCamera();
+              }}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow"
+            >
+              <Camera className="h-5 w-5" /> بدء وردية الموظف
+            </button>
+          </div>
           <div className="overflow-x-auto border rounded-xl">
             <table className="w-full text-right text-sm">
               <thead className="bg-slate-50 text-slate-700 font-bold border-b text-xs">
@@ -502,7 +603,12 @@ export const EmployeesScreen: React.FC = () => {
                     <td className="py-3 px-4 text-center">
                       {!att.checkOut ? (
                         <button
-                          onClick={() => handleCheckOut(att.id)}
+                          onClick={() => {
+                            setCapturedFace('');
+                            setCameraOpen(true);
+                            setPendingCheckOutId(att.id);
+                            void openCamera();
+                          }}
                           className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold px-3 py-1 rounded-lg transition"
                         >
                           تسجيل انصراف
@@ -849,6 +955,28 @@ export const EmployeesScreen: React.FC = () => {
                   placeholder="ملاحظات الحضور..."
                   className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
                 />
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700">صورة الوجه لبدء الوردية *</span>
+                  <button type="button" onClick={openCamera} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">
+                    <Camera className="h-4 w-4" /> فتح الكاميرا
+                  </button>
+                </div>
+                {cameraOpen && (
+                  <div className="space-y-2">
+                    <video ref={videoRef} muted playsInline className="aspect-video w-full rounded-xl bg-slate-900 object-cover" />
+                    {cameraError && <p className="text-xs font-bold text-rose-600">{cameraError}</p>}
+                    <button type="button" onClick={captureFace} className="w-full rounded-xl bg-brand-600 py-2 text-xs font-bold text-white">التقاط صورة الوجه</button>
+                  </div>
+                )}
+                {capturedFace && (
+                  <div className="flex items-center gap-3">
+                    <img src={capturedFace} alt="صورة حضور الوردية" className="h-16 w-16 rounded-xl object-cover" />
+                    <span className="text-xs font-bold text-emerald-700">تم الالتقاط وجاهز للتسجيل</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t">

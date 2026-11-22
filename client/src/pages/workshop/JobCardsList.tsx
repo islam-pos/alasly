@@ -31,6 +31,12 @@ export const JobCardsList: React.FC = () => {
   const [employees, setEmployees] = useState<any[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [vehicleSearch, setVehicleSearch] = useState('');
+  const [manualCustomerOpen, setManualCustomerOpen] = useState(false);
+  const [manualVehicleOpen, setManualVehicleOpen] = useState(false);
+  const [manualCustomer, setManualCustomer] = useState({ name: '', phone: '', mobile: '' });
+  const [manualVehicle, setManualVehicle] = useState({ plateNumber: '', make: '', model: '', year: String(new Date().getFullYear()), vin: '', currentOdometer: '0', color: '' });
   const [odometer, setOdometer] = useState<number>(0);
   const [fuelLevel, setFuelLevel] = useState('50%');
   const [technicianId, setTechnicianId] = useState('');
@@ -89,6 +95,63 @@ export const JobCardsList: React.FC = () => {
     } else {
       setSelectedVehicleId('');
       setOdometer(0);
+    }
+  };
+
+  const createManualCustomer = async () => {
+    if (!manualCustomer.name.trim() || !manualCustomer.phone.trim()) {
+      error('اسم العميل ورقم الهاتف مطلوبان');
+      return;
+    }
+    try {
+      const res = await api.createCustomer({
+        name: manualCustomer.name.trim(),
+        phone: manualCustomer.phone.trim(),
+        mobile: manualCustomer.mobile.trim() || null,
+        customerType: 'INDIVIDUAL',
+      });
+      const customer = res.data?.id ? res.data : res;
+      setCustomers((current) => [customer, ...current]);
+      setSelectedCustomerId(customer.id);
+      setManualCustomerOpen(false);
+      setManualCustomer({ name: '', phone: '', mobile: '' });
+      setCustomerSearch(`${customer.name} ${customer.phone}`);
+      success('تمت إضافة العميل بنجاح');
+    } catch (err: any) {
+      error(err.message || 'تعذر إضافة العميل');
+    }
+  };
+
+  const createManualVehicle = async () => {
+    if (!selectedCustomerId) {
+      error('اختر العميل أو أضف عميلًا أولاً');
+      return;
+    }
+    if (!manualVehicle.plateNumber.trim() || !manualVehicle.make.trim() || !manualVehicle.model.trim()) {
+      error('رقم اللوحة والماركة والموديل مطلوبة');
+      return;
+    }
+    try {
+      const res = await api.createVehicle({
+        customerId: selectedCustomerId,
+        plateNumber: manualVehicle.plateNumber.trim(),
+        make: manualVehicle.make.trim(),
+        model: manualVehicle.model.trim(),
+        year: Number(manualVehicle.year) || new Date().getFullYear(),
+        vin: manualVehicle.vin.trim() || null,
+        currentOdometer: parseInt(manualVehicle.currentOdometer) || 0,
+        color: manualVehicle.color.trim() || null,
+      });
+      const vehicle = res.data?.id ? res.data : res;
+      setVehicles((current) => [vehicle, ...current]);
+      setSelectedVehicleId(vehicle.id);
+      setOdometer(vehicle.currentOdometer || 0);
+      setManualVehicleOpen(false);
+      setManualVehicle({ plateNumber: '', make: '', model: '', year: String(new Date().getFullYear()), vin: '', currentOdometer: '0', color: '' });
+      setVehicleSearch(`${vehicle.plateNumber} ${vehicle.make} ${vehicle.model}`);
+      success('تمت إضافة السيارة واختيارها للأمر');
+    } catch (err: any) {
+      error(err.message || 'تعذر إضافة السيارة');
     }
   };
 
@@ -201,6 +264,10 @@ export const JobCardsList: React.FC = () => {
       jc.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       jc.customer?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       jc.vehicle?.plateNumber.includes(searchQuery) ||
+      jc.vehicle?.vin?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      jc.technician?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      jc.serviceAdvisor?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      `${jc.vehicle?.make || ''} ${jc.vehicle?.model || ''}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       jc.customerComplaint.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesStatus && matchesQuery;
   });
@@ -371,28 +438,75 @@ export const JobCardsList: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreateJobCard} className="space-y-4 text-xs">
+              {manualCustomerOpen && (
+                <div className="grid grid-cols-1 gap-2 rounded-2xl border border-brand-200 bg-brand-50 p-4 md:grid-cols-3">
+                  <input value={manualCustomer.name} onChange={(e) => setManualCustomer({ ...manualCustomer, name: e.target.value })} placeholder="اسم العميل *" className="rounded-xl border p-2.5" />
+                  <input value={manualCustomer.phone} onChange={(e) => setManualCustomer({ ...manualCustomer, phone: e.target.value })} placeholder="رقم الهاتف *" className="rounded-xl border p-2.5" />
+                  <input value={manualCustomer.mobile} onChange={(e) => setManualCustomer({ ...manualCustomer, mobile: e.target.value })} placeholder="رقم موبايل إضافي" className="rounded-xl border p-2.5" />
+                  <div className="flex gap-2 md:col-span-3">
+                    <button type="button" onClick={() => setManualCustomerOpen(false)} className="rounded-xl border px-4 py-2">إلغاء</button>
+                    <button type="button" onClick={createManualCustomer} className="rounded-xl bg-brand-600 px-4 py-2 font-bold text-white">حفظ العميل واختياره</button>
+                  </div>
+                </div>
+              )}
+              {manualVehicleOpen && (
+                <div className="grid grid-cols-2 gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 md:grid-cols-3">
+                  <input value={manualVehicle.plateNumber} onChange={(e) => setManualVehicle({ ...manualVehicle, plateNumber: e.target.value })} placeholder="رقم اللوحة *" className="rounded-xl border p-2.5" />
+                  <input value={manualVehicle.make} onChange={(e) => setManualVehicle({ ...manualVehicle, make: e.target.value })} placeholder="الماركة *" className="rounded-xl border p-2.5" />
+                  <input value={manualVehicle.model} onChange={(e) => setManualVehicle({ ...manualVehicle, model: e.target.value })} placeholder="الموديل *" className="rounded-xl border p-2.5" />
+                  <input type="number" value={manualVehicle.year} onChange={(e) => setManualVehicle({ ...manualVehicle, year: e.target.value })} placeholder="سنة الصنع" className="rounded-xl border p-2.5" />
+                  <input value={manualVehicle.vin} onChange={(e) => setManualVehicle({ ...manualVehicle, vin: e.target.value })} placeholder="رقم الشاسيه VIN" className="rounded-xl border p-2.5" />
+                  <input type="number" value={manualVehicle.currentOdometer} onChange={(e) => setManualVehicle({ ...manualVehicle, currentOdometer: e.target.value })} placeholder="قراءة العداد" className="rounded-xl border p-2.5" />
+                  <input value={manualVehicle.color} onChange={(e) => setManualVehicle({ ...manualVehicle, color: e.target.value })} placeholder="اللون" className="rounded-xl border p-2.5" />
+                  <div className="flex gap-2 md:col-span-2">
+                    <button type="button" onClick={() => setManualVehicleOpen(false)} className="rounded-xl border px-4 py-2">إلغاء</button>
+                    <button type="button" onClick={createManualVehicle} className="rounded-xl bg-amber-600 px-4 py-2 font-bold text-white">حفظ السيارة واختيارها</button>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Customer */}
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">العميل *</label>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block font-bold text-slate-700">العميل *</label>
+                    <button type="button" onClick={() => setManualCustomerOpen(true)} className="text-[11px] font-black text-brand-700">+ إضافة عميل يدويًا</button>
+                  </div>
+                  <input
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                    placeholder="ابحث بالاسم أو رقم الهاتف"
+                    className="mb-2 w-full rounded-xl border border-slate-200 bg-white p-2.5"
+                  />
                   <select
                     value={selectedCustomerId}
-                    onChange={(e) => handleCustomerChange(e.target.value)}
+                    onChange={(e) => {
+                      handleCustomerChange(e.target.value);
+                      setVehicleSearch('');
+                    }}
                     required
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
                   >
                     <option value="">-- اختر العميل --</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.phone})
-                      </option>
-                    ))}
+                    {customers
+                      .filter((c) => !customerSearch.trim() || `${c.name} ${c.phone} ${c.mobile || ''}`.toLowerCase().includes(customerSearch.trim().toLowerCase()))
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>
+                      ))}
                   </select>
                 </div>
 
                 {/* Vehicle */}
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">السيارة *</label>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block font-bold text-slate-700">السيارة *</label>
+                    <button type="button" disabled={!selectedCustomerId} onClick={() => setManualVehicleOpen(true)} className="text-[11px] font-black text-brand-700 disabled:text-slate-300">+ إضافة سيارة يدويًا</button>
+                  </div>
+                  <input
+                    value={vehicleSearch}
+                    onChange={(e) => setVehicleSearch(e.target.value)}
+                    placeholder="ابحث باللوحة أو الماركة أو الموديل أو VIN"
+                    className="mb-2 w-full rounded-xl border border-slate-200 bg-white p-2.5"
+                  />
                   <select
                     value={selectedVehicleId}
                     onChange={(e) => {
@@ -407,6 +521,7 @@ export const JobCardsList: React.FC = () => {
                     {(selectedCustomerId
                       ? vehicles.filter((v) => v.customerId === selectedCustomerId)
                       : vehicles
+                    ).filter((v) => !vehicleSearch.trim() || `${v.plateNumber} ${v.make} ${v.model} ${v.year} ${v.vin || ''}`.toLowerCase().includes(vehicleSearch.trim().toLowerCase())
                     ).map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.plateNumber} - {v.make} {v.model} ({v.year})

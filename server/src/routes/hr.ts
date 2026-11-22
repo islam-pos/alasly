@@ -6,6 +6,25 @@ import { logAudit } from '../middleware/audit';
 const router = Router();
 const CAIRO_TIME_ZONE = 'Africa/Cairo';
 const DEFAULT_STANDARD_MONTHLY_HOURS = 208;
+const fs = require('fs');
+const path = require('path');
+
+const saveAttendanceFaceImage = (employeeId: string, kind: 'check-in' | 'check-out', dataUrl: string) => {
+  const match = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(dataUrl);
+  if (!match) throw new Error('صيغة صورة الوردية غير مدعومة');
+  const extension = match[1] === 'jpeg' ? 'jpg' : match[1];
+  const buffer = Buffer.from(match[2], 'base64');
+  if (!buffer.length || buffer.length > 4 * 1024 * 1024) throw new Error('صورة الوردية غير صالحة');
+  const dataDirectory = process.env.DATA_DIR
+    ? path.resolve(process.env.DATA_DIR)
+    : path.resolve(require('os').homedir(), 'autocare-erp-data');
+  const directory = path.join(dataDirectory, 'attendance-faces');
+  fs.mkdirSync(directory, { recursive: true });
+  const fileName = `${kind}-${employeeId}-${Date.now()}.${extension}`;
+  const filePath = path.join(directory, fileName);
+  fs.writeFileSync(filePath, buffer, { mode: 0o600 });
+  return path.relative(dataDirectory, filePath).replace(/\\/g, '/');
+};
 
 const cairoParts = (date: Date) => {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -185,6 +204,18 @@ router.post('/attendance/check-in', async (req, res) => {
   try {
     const employeeId = typeof req.body?.employeeId === 'string' ? req.body.employeeId.trim() : '';
     if (!employeeId) return res.status(400).json({ error: 'يجب اختيار موظف صالح' });
+    const faceImage = typeof req.body?.faceImage === 'string' ? req.body.faceImage : '';
+    if (!faceImage || !faceImage.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'يجب فتح الكاميرا والتقاط صورة الوجه لبدء الوردية' });
+    }
+    if (faceImage.length > 6_000_000) {
+      return res.status(400).json({ error: 'صورة الوردية كبيرة جدًا' });
+    }
+    const employeeRecord = await prisma.employee.findFirst({
+      where: { id: employeeId, active: true },
+      select: { id: true, name: true },
+    });
+    if (!employeeRecord) return res.status(404).json({ error: 'الموظف غير موجود أو غير نشط' });
     const employee = await prisma.employee.findFirst({ where: { id: employeeId, active: true }, select: { id: true } });
     if (!employee) return res.status(404).json({ error: 'الموظف غير موجود أو غير نشط' });
 
@@ -200,11 +231,14 @@ router.post('/attendance/check-in', async (req, res) => {
     if (existingToday) return res.status(409).json({ error: 'تم تسجيل حضور هذا الموظف بالفعل اليوم' });
 
     const notes = typeof req.body?.notes === 'string' ? req.body.notes.trim() : '';
+    const checkInPhotoUrl = saveAttendanceFaceImage(employeeId, 'check-in', faceImage);
     const record = await prisma.attendance.create({
       data: {
         employeeId,
         date: now,
         checkIn: now,
+        checkInPhotoUrl,
+        checkInDevice: typeof req.body?.deviceName === 'string' ? req.body.deviceName.trim().slice(0, 200) : null,
         status: 'PRESENT',
         notes: notes || null,
       },
@@ -221,6 +255,10 @@ router.post('/attendance/check-out', async (req, res) => {
   try {
     const attendanceId = typeof req.body?.attendanceId === 'string' ? req.body.attendanceId.trim() : '';
     if (!attendanceId) return res.status(400).json({ error: 'معرّف سجل الحضور مطلوب' });
+    const faceImage = typeof req.body?.faceImage === 'string' ? req.body.faceImage : '';
+    if (!faceImage || !faceImage.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'يجب فتح الكاميرا والتقاط صورة الوجه لإنهاء الوردية' });
+    }
     const record = await prisma.attendance.findUnique({ where: { id: attendanceId } });
     if (!record || !record.checkIn) return res.status(404).json({ error: 'سجل الحضور غير موجود' });
     if (record.checkOut) return res.status(409).json({ error: 'تم تسجيل الانصراف لهذا السجل بالفعل' });
@@ -228,9 +266,16 @@ router.post('/attendance/check-out', async (req, res) => {
     const now = new Date();
     const workMinutes = Math.floor((now.getTime() - record.checkIn.getTime()) / 60_000);
     if (workMinutes <= 0) return res.status(400).json({ error: 'وقت الانصراف يجب أن يكون بعد وقت الحضور بدقيقة واحدة على الأقل' });
+    const checkOutPhotoUrl = saveAttendanceFaceImage(record.employeeId, 'check-out', faceImage);
     const result = await prisma.attendance.updateMany({
       where: { id: attendanceId, checkOut: null, checkIn: { lte: now } },
-      data: { checkOut: now, workMinutes, workHours: workMinutes / 60 },
+      data: {
+        checkOut: now,
+        workMinutes,
+        workHours: workMinutes / 60,
+        checkOutPhotoUrl,
+        checkOutDevice: typeof req.body?.deviceName === 'string' ? req.body.deviceName.trim().slice(0, 200) : null,
+      },
     });
     if (!result.count) return res.status(409).json({ error: 'تم إغلاق الوردية بالفعل أو أن سجل الحضور غير صالح' });
     return res.json(await prisma.attendance.findUnique({ where: { id: attendanceId } }));

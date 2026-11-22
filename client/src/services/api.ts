@@ -836,14 +836,14 @@ const apiClient = {
     return fetch(`${BASE_URL}/hr/attendance?${query.toString()}`, { headers: getHeaders() }).then((res) => handleResponse<any>(res));
   },
 
-  checkIn: (data: { employeeId: string; notes?: string }) =>
+  checkIn: (data: { employeeId: string; notes?: string; faceImage: string; deviceName?: string }) =>
     fetch(`${BASE_URL}/hr/attendance/check-in`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
-  checkOut: (data: { attendanceId: string }) =>
+  checkOut: (data: { attendanceId: string; faceImage: string; deviceName?: string }) =>
     fetch(`${BASE_URL}/hr/attendance/check-out`, {
       method: 'POST',
       headers: getHeaders(),
