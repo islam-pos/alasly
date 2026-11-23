@@ -59,9 +59,13 @@ export const printBarcodeLabels = (
   }).join('');
   const barcodeSettings = settings.barcode;
   const presetSizes = [
-    { value: '40x30', label: '40×30 مم (صغير)' },
+    ...labelPaperSizes.map(({ value, label, width, height }) => ({
+      value: `${width}x${height}`,
+      label,
+    })),
+    { value: '58x33', label: '58×33 مم (حراري 58)' },
+    { value: '80x38', label: '80×38 مم (حراري 80)' },
     { value: '58x40', label: '58×40 مم' },
-    { value: '50x30', label: '50×30 مم' },
     { value: '57x32', label: '57×32 مم' },
   ];
   const defaultLabelSize = labelPaperSizes.find(({ value }) => value === barcodeSettings.paperSize);
@@ -141,7 +145,7 @@ export const printBarcodeLabels = (
             <section class="group">
               <h2>إعدادات الطباعة</h2>
               <div class="field"><label for="copies">عدد النسخ لكل صنف</label><input id="copies" type="number" min="1" max="1000" value="1"></div>
-              <div class="field"><label for="preset">مقاسات جاهزة</label><select id="preset"><option value="">اختر مقاسًا...</option>${presetSizes.map((preset) => `<option value="${preset.value}">${preset.label}</option>`).join('')}</select></div>
+              <div class="field"><label for="preset">مقاسات جاهزة</label><select id="preset"><option value="" ${presetSizes.some(({ value }) => value === `${defaultWidth}x${defaultHeight}`) ? '' : 'selected'}>اختر مقاسًا...</option>${presetSizes.map((preset) => `<option value="${preset.value}" ${preset.value === `${defaultWidth}x${defaultHeight}` ? 'selected' : ''}>${preset.label}</option>`).join('')}</select></div>
               <div class="row">
                 <div class="field"><label for="width">العرض (مم)</label><input id="width" type="number" min="20" max="100" value="${defaultWidth}"></div>
                 <div class="field"><label for="height">الطول (مم)</label><input id="height" type="number" min="15" max="100" value="${defaultHeight}"></div>
