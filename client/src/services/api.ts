@@ -471,6 +471,22 @@ const apiClient = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
+  getHeldPosInvoices: () =>
+    fetch(`${BASE_URL}/sales/pos/held`, { headers: getHeaders() }).then((res) => handleResponse<{ data: any[] }>(res)),
+
+  holdPosInvoice: (data: any) =>
+    fetch(`${BASE_URL}/sales/pos/held`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
+  deleteHeldPosInvoice: (id: string) =>
+    fetch(`${BASE_URL}/sales/pos/held/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    }).then((res) => handleResponse<any>(res)),
+
   createSalesQuotation: (data: any) =>
     fetch(`${BASE_URL}/sales/quotations`, {
       method: 'POST',

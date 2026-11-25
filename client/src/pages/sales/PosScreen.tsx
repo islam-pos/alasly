@@ -16,6 +16,8 @@ import {
   User,
   Package,
   X,
+  Pause,
+  RotateCcw,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -45,6 +47,9 @@ export const PosScreen: React.FC = () => {
   const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [cart, setCart] = useState<any[]>([]);
+  const [heldInvoices, setHeldInvoices] = useState<any[]>([]);
+  const [heldInvoicesOpen, setHeldInvoicesOpen] = useState(false);
+  const [holdingInvoice, setHoldingInvoice] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
@@ -84,6 +89,13 @@ export const PosScreen: React.FC = () => {
       setVehicles(vehiclesRes.data);
     } catch (err) {
       console.error(err);
+    }
+    try {
+      const response = await api.getHeldPosInvoices();
+      setHeldInvoices(response.data);
+    } catch (err: any) {
+      console.error(err);
+      error(err.message || 'تعذر تحميل الفواتير المعلقة');
     }
   };
 
@@ -205,6 +217,11 @@ export const PosScreen: React.FC = () => {
     );
   };
 
+  const updateUnitPrice = (itemId: string, unitPrice: number) => {
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) return;
+    setCart((prev) => prev.map((item) => item.itemId === itemId ? { ...item, unitPrice } : item));
+  };
+
   const removeFromCart = (itemId: string) => {
     setCart((prev) => prev.filter((i) => i.itemId !== itemId));
   };
@@ -214,6 +231,67 @@ export const PosScreen: React.FC = () => {
     setDiscount(0);
     setSelectedCustomerId('');
     setSelectedVehicleId('');
+  };
+
+  const handleHoldInvoice = async () => {
+    if (cart.length === 0) {
+      error('لا توجد أصناف لتعليق الفاتورة');
+      return;
+    }
+    setHoldingInvoice(true);
+    try {
+      const response = await api.holdPosInvoice({
+        customerId: selectedCustomerId || null,
+        vehicleId: selectedVehicleId || null,
+        discount,
+        items: cart.map(({ itemId, quantity, unitPrice }) => ({ itemId, quantity, unitPrice })),
+      });
+      setHeldInvoices((prev) => [response.data, ...prev]);
+      clearCart();
+      success('تم تعليق الفاتورة ويمكن استعادتها لاحقاً');
+    } catch (err: any) {
+      error(err.message || 'تعذر تعليق الفاتورة');
+    } finally {
+      setHoldingInvoice(false);
+    }
+  };
+
+  const handleResumeHeldInvoice = async (heldInvoice: any) => {
+    if (cart.length > 0) {
+      error('علّق الفاتورة الحالية أو أفرغ السلة قبل استعادة فاتورة أخرى');
+      return;
+    }
+
+    const restoredItems = heldInvoice.items.map((heldItem: any) => {
+      const product = items.find((item) => item.id === heldItem.itemId);
+      if (!product) return null;
+      return {
+        itemId: product.id,
+        name: product.nameAr,
+        sku: product.sku,
+        unitPrice: heldItem.unitPrice,
+        costPrice: product.avgCost,
+        quantity: heldItem.quantity,
+        maxAvailable: product.availableQuantity,
+      };
+    });
+    if (restoredItems.some((item: any) => item === null)) {
+      error('تعذر استعادة الفاتورة لاحتوائها على صنف لم يعد متاحاً');
+      return;
+    }
+
+    try {
+      await api.deleteHeldPosInvoice(heldInvoice.id);
+      setCart(restoredItems);
+      setDiscount(heldInvoice.discount);
+      setSelectedCustomerId(heldInvoice.customerId || '');
+      setSelectedVehicleId(heldInvoice.vehicleId || '');
+      setHeldInvoices((prev) => prev.filter((invoice) => invoice.id !== heldInvoice.id));
+      setHeldInvoicesOpen(false);
+      success('تمت استعادة الفاتورة المعلقة');
+    } catch (err: any) {
+      error(err.message || 'تعذر استعادة الفاتورة المعلقة');
+    }
   };
 
   // Calculation
@@ -238,6 +316,7 @@ export const PosScreen: React.FC = () => {
     try {
       const payload = {
         customerId: selectedCustomerId || null,
+        vehicleId: selectedVehicleId || null,
         items: cart.map((i) => ({
           itemId: i.itemId,
           quantity: i.quantity,
@@ -433,16 +512,61 @@ export const PosScreen: React.FC = () => {
               <ShoppingCart className="w-4 h-4 text-brand-600" />
               <span>سلة المبيعات ({cart.length})</span>
             </div>
-            {cart.length > 0 && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={clearCart}
-                className="text-xs text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1"
+                onClick={handleHoldInvoice}
+                disabled={cart.length === 0 || holdingInvoice}
+                className="text-[11px] text-amber-700 hover:text-amber-800 font-bold flex items-center gap-1 disabled:opacity-40"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                تفريغ
+                <Pause className="w-3.5 h-3.5" />
+                تعليق
               </button>
-            )}
+              <button
+                onClick={() => setHeldInvoicesOpen((open) => !open)}
+                className="text-[11px] text-brand-700 hover:text-brand-800 font-bold flex items-center gap-1"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                معلقة ({heldInvoices.length})
+              </button>
+              {cart.length > 0 && (
+                <button
+                  onClick={clearCart}
+                  className="text-[11px] text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  تفريغ
+                </button>
+              )}
+            </div>
           </div>
+
+          {heldInvoicesOpen && (
+            <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2">
+              {heldInvoices.length === 0 ? (
+                <p className="py-2 text-center text-[11px] text-slate-500">لا توجد فواتير معلقة</p>
+              ) : heldInvoices.map((invoice) => {
+                const customerName = customers.find((customer) => customer.id === invoice.customerId)?.name || 'عميل نقدي';
+                const total = invoice.items.reduce(
+                  (sum: number, item: any) => sum + item.unitPrice * item.quantity,
+                  0,
+                ) - invoice.discount;
+                return (
+                  <div key={invoice.id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2 py-1.5">
+                    <div className="min-w-0">
+                      <div className="truncate text-[11px] font-bold text-slate-700">{customerName}</div>
+                      <div className="text-[10px] text-slate-500">{Math.max(0, total).toFixed(2)} ج.م</div>
+                    </div>
+                    <button
+                      onClick={() => handleResumeHeldInvoice(invoice)}
+                      className="shrink-0 rounded-md bg-brand-50 px-2 py-1 text-[10px] font-bold text-brand-700 hover:bg-brand-100"
+                    >
+                      استعادة
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Customer Selection */}
           <div className="relative">
@@ -501,7 +625,19 @@ export const PosScreen: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold text-slate-800 truncate">{it.name}</div>
                   <div className="text-[11px] text-brand-600 font-bold mt-0.5">
-                    {it.unitPrice} ج.م × {it.quantity} ={' '}
+                    <label className="inline-flex items-center gap-1">
+                      <span>السعر:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={it.unitPrice}
+                        aria-label={`سعر ${it.name}`}
+                        onChange={(event) => updateUnitPrice(it.itemId, Number(event.target.value))}
+                        className="w-20 rounded border border-slate-300 bg-white px-1 py-0.5 text-center text-[11px] font-bold text-slate-800"
+                      />
+                    </label>
+                    {' '}ج.م × {it.quantity} ={' '}
                     <span className="text-slate-900 font-black">{it.unitPrice * it.quantity} ج.م</span>
                   </div>
                 </div>

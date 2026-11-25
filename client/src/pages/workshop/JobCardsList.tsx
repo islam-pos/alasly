@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { SearchableSelect } from '../../components/common/SearchableSelect';
 
 export const JobCardsList: React.FC = () => {
   const [jobCards, setJobCards] = useState<any[]>([]);
@@ -31,8 +32,6 @@ export const JobCardsList: React.FC = () => {
   const [employees, setEmployees] = useState<any[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [vehicleSearch, setVehicleSearch] = useState('');
   const [manualCustomerOpen, setManualCustomerOpen] = useState(false);
   const [manualVehicleOpen, setManualVehicleOpen] = useState(false);
   const [manualCustomer, setManualCustomer] = useState({ name: '', phone: '', mobile: '' });
@@ -115,7 +114,6 @@ export const JobCardsList: React.FC = () => {
       setSelectedCustomerId(customer.id);
       setManualCustomerOpen(false);
       setManualCustomer({ name: '', phone: '', mobile: '' });
-      setCustomerSearch(`${customer.name} ${customer.phone}`);
       success('تمت إضافة العميل بنجاح');
     } catch (err: any) {
       error(err.message || 'تعذر إضافة العميل');
@@ -148,7 +146,6 @@ export const JobCardsList: React.FC = () => {
       setOdometer(vehicle.currentOdometer || 0);
       setManualVehicleOpen(false);
       setManualVehicle({ plateNumber: '', make: '', model: '', year: String(new Date().getFullYear()), vin: '', currentOdometer: '0', color: '' });
-      setVehicleSearch(`${vehicle.plateNumber} ${vehicle.make} ${vehicle.model}`);
       success('تمت إضافة السيارة واختيارها للأمر');
     } catch (err: any) {
       error(err.message || 'تعذر إضافة السيارة');
@@ -271,6 +268,39 @@ export const JobCardsList: React.FC = () => {
       jc.customerComplaint.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesStatus && matchesQuery;
   });
+
+  const customerOptions = customers.map((customer) => ({
+    value: customer.id,
+    label: `${customer.name} (${customer.phone})`,
+    searchText: `${customer.mobile || ''} ${customer.phone || ''}`,
+  }));
+  const customerVehicles = vehicles.filter((vehicle) => vehicle.customerId === selectedCustomerId);
+  const vehicleOptions = customerVehicles.map((vehicle) => ({
+    value: vehicle.id,
+    label: `${vehicle.plateNumber} - ${vehicle.make} ${vehicle.model} (${vehicle.year})`,
+    searchText: `${vehicle.plateNumber} ${vehicle.make} ${vehicle.model} ${vehicle.year} ${vehicle.vin || ''}`,
+  }));
+  const technicianOptions = employees
+    .filter((employee) => employee.department === 'الورشة' || employee.job?.name?.includes('فني'))
+    .map((employee) => ({
+      value: employee.id,
+      label: `${employee.name}${employee.job?.name ? ` (${employee.job.name})` : ''}`,
+      searchText: `${employee.code || ''} ${employee.phone || ''} ${employee.department || ''} ${employee.job?.name || ''}`,
+    }));
+  const advisorOptions = employees
+    .filter((employee) => employee.department === 'الاستقبال' || employee.department === 'الإدارة الفنية')
+    .map((employee) => ({
+      value: employee.id,
+      label: employee.name,
+      searchText: `${employee.code || ''} ${employee.phone || ''} ${employee.department || ''} ${employee.job?.name || ''}`,
+    }));
+  const fuelOptions = [
+    { value: '0%', label: 'خزان فارغ (0%)' },
+    { value: '25%', label: 'ربع (25%)' },
+    { value: '50%', label: 'نصف (50%)' },
+    { value: '75%', label: 'ثلاثة أرباع (75%)' },
+    { value: '100%', label: 'خزان ممتلئ (100%)' },
+  ];
 
   return (
     <div className="space-y-6 pb-12">
@@ -471,28 +501,13 @@ export const JobCardsList: React.FC = () => {
                     <label className="block font-bold text-slate-700">العميل *</label>
                     <button type="button" onClick={() => setManualCustomerOpen(true)} className="text-[11px] font-black text-brand-700">+ إضافة عميل يدويًا</button>
                   </div>
-                  <input
-                    value={customerSearch}
-                    onChange={(e) => setCustomerSearch(e.target.value)}
-                    placeholder="ابحث بالاسم أو رقم الهاتف"
-                    className="mb-2 w-full rounded-xl border border-slate-200 bg-white p-2.5"
-                  />
-                  <select
+                  <SearchableSelect
+                    options={customerOptions}
                     value={selectedCustomerId}
-                    onChange={(e) => {
-                      handleCustomerChange(e.target.value);
-                      setVehicleSearch('');
-                    }}
-                    required
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
-                  >
-                    <option value="">-- اختر العميل --</option>
-                    {customers
-                      .filter((c) => !customerSearch.trim() || `${c.name} ${c.phone} ${c.mobile || ''}`.toLowerCase().includes(customerSearch.trim().toLowerCase()))
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>
-                      ))}
-                  </select>
+                    onChange={handleCustomerChange}
+                    placeholder="ابحث واختر العميل *"
+                    allowClear
+                  />
                 </div>
 
                 {/* Vehicle */}
@@ -501,33 +516,18 @@ export const JobCardsList: React.FC = () => {
                     <label className="block font-bold text-slate-700">السيارة *</label>
                     <button type="button" disabled={!selectedCustomerId} onClick={() => setManualVehicleOpen(true)} className="text-[11px] font-black text-brand-700 disabled:text-slate-300">+ إضافة سيارة يدويًا</button>
                   </div>
-                  <input
-                    value={vehicleSearch}
-                    onChange={(e) => setVehicleSearch(e.target.value)}
-                    placeholder="ابحث باللوحة أو الماركة أو الموديل أو VIN"
-                    className="mb-2 w-full rounded-xl border border-slate-200 bg-white p-2.5"
-                  />
-                  <select
+                  <SearchableSelect
+                    options={vehicleOptions}
                     value={selectedVehicleId}
-                    onChange={(e) => {
-                      setSelectedVehicleId(e.target.value);
-                      const veh = vehicles.find((v) => v.id === e.target.value);
+                    onChange={(vehicleId) => {
+                      setSelectedVehicleId(vehicleId);
+                      const veh = vehicles.find((v) => v.id === vehicleId);
                       if (veh) setOdometer(veh.currentOdometer || 0);
                     }}
-                    required
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
-                  >
-                    <option value="">-- اختر السيارة --</option>
-                    {(selectedCustomerId
-                      ? vehicles.filter((v) => v.customerId === selectedCustomerId)
-                      : vehicles
-                    ).filter((v) => !vehicleSearch.trim() || `${v.plateNumber} ${v.make} ${v.model} ${v.year} ${v.vin || ''}`.toLowerCase().includes(vehicleSearch.trim().toLowerCase())
-                    ).map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.plateNumber} - {v.make} {v.model} ({v.year})
-                      </option>
-                    ))}
-                  </select>
+                    placeholder={selectedCustomerId ? 'ابحث باللوحة أو الماركة أو الموديل أو VIN' : 'اختر العميل أولاً'}
+                    disabled={!selectedCustomerId}
+                    allowClear
+                  />
                 </div>
 
                 {/* Current Odometer */}
@@ -546,55 +546,38 @@ export const JobCardsList: React.FC = () => {
                 {/* Fuel Level */}
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">مستوى الوقود</label>
-                  <select
+                  <SearchableSelect
+                    options={fuelOptions}
                     value={fuelLevel}
-                    onChange={(e) => setFuelLevel(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
-                  >
-                    <option value="0%">خزان فارغ (0%)</option>
-                    <option value="25%">ربع (25%)</option>
-                    <option value="50%">نصف (50%)</option>
-                    <option value="75%">ثلاثة أرباع (75%)</option>
-                    <option value="100%">خزان ممتلئ (100%)</option>
-                  </select>
+                    onChange={setFuelLevel}
+                    placeholder="اختر أو اكتب مستوى الوقود"
+                    allowCustom
+                    allowClear
+                  />
                 </div>
 
                 {/* Technician */}
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">الفني المكلف بالعمل</label>
-                  <select
+                  <SearchableSelect
+                    options={technicianOptions}
                     value={technicianId}
-                    onChange={(e) => setTechnicianId(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
-                  >
-                    <option value="">-- تعيين لاحقاً --</option>
-                    {employees
-                      .filter((emp) => emp.department === 'الورشة')
-                      .map((emp) => (
-                        <option key={emp.id} value={emp.id}>
-                          {emp.name} ({emp.job?.name})
-                        </option>
-                      ))}
-                  </select>
+                    onChange={setTechnicianId}
+                    placeholder="ابحث واختر الفني أو عيّنه لاحقاً"
+                    allowClear
+                  />
                 </div>
 
                 {/* Service Advisor */}
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">مهندس الاستقبال</label>
-                  <select
+                  <SearchableSelect
+                    options={advisorOptions}
                     value={serviceAdvisorId}
-                    onChange={(e) => setServiceAdvisorId(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
-                  >
-                    <option value="">-- مهندس الاستقبال --</option>
-                    {employees
-                      .filter((emp) => emp.department === 'الاستقبال' || emp.department === 'الإدارة الفنية')
-                      .map((emp) => (
-                        <option key={emp.id} value={emp.id}>
-                          {emp.name}
-                        </option>
-                      ))}
-                  </select>
+                    onChange={setServiceAdvisorId}
+                    placeholder="ابحث واختر مهندس الاستقبال"
+                    allowClear
+                  />
                 </div>
               </div>
 

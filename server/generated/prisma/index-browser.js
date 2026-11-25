@@ -799,6 +799,15 @@ exports.Prisma.SalesInvoiceItemScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.PosHeldInvoiceScalarFieldEnum = {
+  id: 'id',
+  branchId: 'branchId',
+  createdById: 'createdById',
+  payload: 'payload',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.SalesReturnScalarFieldEnum = {
   id: 'id',
   returnNumber: 'returnNumber',
@@ -1226,6 +1235,7 @@ exports.Prisma.ModelName = {
   SalesInvoice: 'SalesInvoice',
   InvoicePayment: 'InvoicePayment',
   SalesInvoiceItem: 'SalesInvoiceItem',
+  PosHeldInvoice: 'PosHeldInvoice',
   SalesReturn: 'SalesReturn',
   SalesReturnItem: 'SalesReturnItem',
   RepairOrder: 'RepairOrder',
