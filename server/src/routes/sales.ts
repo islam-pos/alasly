@@ -219,6 +219,83 @@ router.get('/invoices/:id', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+router.get('/pos/held', async (req: AuthenticatedRequest, res) => {
+  try {
+    const heldInvoices = await prisma.posHeldInvoice.findMany({
+      where: branchWhere(req),
+      orderBy: { updatedAt: 'desc' },
+    });
+    res.json(heldInvoices.map((invoice) => ({
+      id: invoice.id,
+      createdAt: invoice.createdAt,
+      updatedAt: invoice.updatedAt,
+      ...JSON.parse(invoice.payload),
+    })));
+  } catch (error) {
+    console.error('Failed to load held POS invoices:', error);
+    res.status(500).json({ error: 'تعذر تحميل الفواتير المعلقة' });
+  }
+});
+
+router.post('/pos/held', async (req: AuthenticatedRequest, res) => {
+  const { customerId = null, vehicleId = null, items, discount = 0 } = req.body || {};
+  if (
+    !Array.isArray(items) || items.length === 0 || items.length > 500
+    || items.some((item) => !item || typeof item.itemId !== 'string' || !item.itemId
+      || !Number.isInteger(Number(item.quantity)) || Number(item.quantity) < 1
+      || !Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) < 0)
+    || !Number.isFinite(Number(discount)) || Number(discount) < 0
+    || (customerId !== null && typeof customerId !== 'string')
+    || (vehicleId !== null && typeof vehicleId !== 'string')
+  ) {
+    return res.status(400).json({ error: 'بيانات الفاتورة المعلقة غير مكتملة أو غير صالحة' });
+  }
+
+  try {
+    const heldInvoice = await prisma.posHeldInvoice.create({
+      data: {
+        branchId: req.user?.branchId || null,
+        createdById: req.user?.id || null,
+        payload: JSON.stringify({
+          customerId,
+          vehicleId,
+          discount: Number(discount),
+          items: items.map((item) => ({
+            itemId: item.itemId,
+            quantity: Number(item.quantity),
+            unitPrice: Number(item.unitPrice),
+          })),
+        }),
+      },
+    });
+    res.status(201).json({
+      id: heldInvoice.id,
+      createdAt: heldInvoice.createdAt,
+      updatedAt: heldInvoice.updatedAt,
+      customerId,
+      vehicleId,
+      discount: Number(discount),
+      items,
+    });
+  } catch (error) {
+    console.error('Failed to hold POS invoice:', error);
+    res.status(500).json({ error: 'تعذر تعليق الفاتورة' });
+  }
+});
+
+router.delete('/pos/held/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const result = await prisma.posHeldInvoice.deleteMany({
+      where: { id: req.params.id, ...branchWhere(req) },
+    });
+    if (result.count === 0) return res.status(404).json({ error: 'الفاتورة المعلقة غير موجودة' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to remove held POS invoice:', error);
+    res.status(500).json({ error: 'تعذر حذف الفاتورة المعلقة' });
+  }
+});
+
 // --- Fast POS Checkout ---
 router.post('/pos', async (req, res) => {
   try {
@@ -235,8 +312,16 @@ router.post('/pos', async (req, res) => {
       notes,
     } = req.body;
 
-    if (!items || !items.length) {
-      return res.status(400).json({ error: 'يجب اختيار صنف واحد على الأقل للبيع' });
+    if (
+      !Array.isArray(items) || items.length === 0 || items.length > 500
+      || items.some((item: any) => !item || typeof item.itemId !== 'string' || !item.itemId
+        || !Number.isInteger(Number(item.quantity)) || Number(item.quantity) < 1
+        || !Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) < 0)
+    ) {
+      return res.status(400).json({ error: 'يجب اختيار أصناف صالحة للبيع مع تحديد السعر والكمية' });
+    }
+    if (!Number.isFinite(Number(discount)) || Number(discount) < 0) {
+      return res.status(400).json({ error: 'قيمة الخصم غير صالحة' });
     }
 
     const defaultWarehouse = warehouseId || (await prisma.warehouse.findFirst({ where: { code: 'WH-MAIN' } }))?.id;

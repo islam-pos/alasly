@@ -259,6 +259,11 @@ export type InvoicePayment = $Result.DefaultSelection<Prisma.$InvoicePaymentPayl
  */
 export type SalesInvoiceItem = $Result.DefaultSelection<Prisma.$SalesInvoiceItemPayload>
 /**
+ * Model PosHeldInvoice
+ * 
+ */
+export type PosHeldInvoice = $Result.DefaultSelection<Prisma.$PosHeldInvoicePayload>
+/**
  * Model SalesReturn
  * 
  */
@@ -991,6 +996,16 @@ export class PrismaClient<
     * ```
     */
   get salesInvoiceItem(): Prisma.SalesInvoiceItemDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.posHeldInvoice`: Exposes CRUD operations for the **PosHeldInvoice** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more PosHeldInvoices
+    * const posHeldInvoices = await prisma.posHeldInvoice.findMany()
+    * ```
+    */
+  get posHeldInvoice(): Prisma.PosHeldInvoiceDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.salesReturn`: Exposes CRUD operations for the **SalesReturn** model.
@@ -1731,6 +1746,7 @@ export namespace Prisma {
     SalesInvoice: 'SalesInvoice',
     InvoicePayment: 'InvoicePayment',
     SalesInvoiceItem: 'SalesInvoiceItem',
+    PosHeldInvoice: 'PosHeldInvoice',
     SalesReturn: 'SalesReturn',
     SalesReturnItem: 'SalesReturnItem',
     RepairOrder: 'RepairOrder',
@@ -1774,7 +1790,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "offlineMutationReceipt" | "companySetting" | "numberSequence" | "account" | "accountingJournal" | "journalEntry" | "journalEntryLine" | "notificationIntegration" | "whatsappAuthData" | "telegramAuthSession" | "notificationDelivery" | "branch" | "role" | "user" | "passwordResetRequest" | "auditLog" | "jobTitle" | "employee" | "hrSetting" | "attendance" | "commission" | "payroll" | "supplier" | "customer" | "vehicle" | "maintenanceReminder" | "appointment" | "lead" | "campaign" | "fixedAsset" | "taxSetting" | "etaDocument" | "customerPortalLink" | "itemCategory" | "unit" | "warehouse" | "warehouseLocation" | "item" | "stockBalance" | "stockTransaction" | "purchaseRequest" | "purchaseRequestItem" | "purchaseInvoice" | "purchaseInvoiceItem" | "purchaseReturn" | "purchaseReturnItem" | "salesInvoice" | "invoicePayment" | "salesInvoiceItem" | "salesReturn" | "salesReturnItem" | "repairOrder" | "repairAttachment" | "repairInspection" | "repairEstimate" | "repairEstimateItem" | "repairPart" | "repairLabor" | "warehouseTransfer" | "warehouseTransferItem" | "inventoryCount" | "inventoryCountItem" | "inventoryAdjustment" | "cashbox" | "cashTransaction" | "cashShift" | "bank" | "bankTransaction" | "bankReconciliation" | "bankStatementLine" | "expenseCategory" | "expense" | "revenueCategory" | "revenue"
+      modelProps: "offlineMutationReceipt" | "companySetting" | "numberSequence" | "account" | "accountingJournal" | "journalEntry" | "journalEntryLine" | "notificationIntegration" | "whatsappAuthData" | "telegramAuthSession" | "notificationDelivery" | "branch" | "role" | "user" | "passwordResetRequest" | "auditLog" | "jobTitle" | "employee" | "hrSetting" | "attendance" | "commission" | "payroll" | "supplier" | "customer" | "vehicle" | "maintenanceReminder" | "appointment" | "lead" | "campaign" | "fixedAsset" | "taxSetting" | "etaDocument" | "customerPortalLink" | "itemCategory" | "unit" | "warehouse" | "warehouseLocation" | "item" | "stockBalance" | "stockTransaction" | "purchaseRequest" | "purchaseRequestItem" | "purchaseInvoice" | "purchaseInvoiceItem" | "purchaseReturn" | "purchaseReturnItem" | "salesInvoice" | "invoicePayment" | "salesInvoiceItem" | "posHeldInvoice" | "salesReturn" | "salesReturnItem" | "repairOrder" | "repairAttachment" | "repairInspection" | "repairEstimate" | "repairEstimateItem" | "repairPart" | "repairLabor" | "warehouseTransfer" | "warehouseTransferItem" | "inventoryCount" | "inventoryCountItem" | "inventoryAdjustment" | "cashbox" | "cashTransaction" | "cashShift" | "bank" | "bankTransaction" | "bankReconciliation" | "bankStatementLine" | "expenseCategory" | "expense" | "revenueCategory" | "revenue"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -5404,6 +5420,80 @@ export namespace Prisma {
           }
         }
       }
+      PosHeldInvoice: {
+        payload: Prisma.$PosHeldInvoicePayload<ExtArgs>
+        fields: Prisma.PosHeldInvoiceFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.PosHeldInvoiceFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosHeldInvoicePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.PosHeldInvoiceFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosHeldInvoicePayload>
+          }
+          findFirst: {
+            args: Prisma.PosHeldInvoiceFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosHeldInvoicePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.PosHeldInvoiceFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosHeldInvoicePayload>
+          }
+          findMany: {
+            args: Prisma.PosHeldInvoiceFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosHeldInvoicePayload>[]
+          }
+          create: {
+            args: Prisma.PosHeldInvoiceCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosHeldInvoicePayload>
+          }
+          createMany: {
+            args: Prisma.PosHeldInvoiceCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.PosHeldInvoiceCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosHeldInvoicePayload>[]
+          }
+          delete: {
+            args: Prisma.PosHeldInvoiceDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosHeldInvoicePayload>
+          }
+          update: {
+            args: Prisma.PosHeldInvoiceUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosHeldInvoicePayload>
+          }
+          deleteMany: {
+            args: Prisma.PosHeldInvoiceDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.PosHeldInvoiceUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.PosHeldInvoiceUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosHeldInvoicePayload>[]
+          }
+          upsert: {
+            args: Prisma.PosHeldInvoiceUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosHeldInvoicePayload>
+          }
+          aggregate: {
+            args: Prisma.PosHeldInvoiceAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregatePosHeldInvoice>
+          }
+          groupBy: {
+            args: Prisma.PosHeldInvoiceGroupByArgs<ExtArgs>
+            result: $Utils.Optional<PosHeldInvoiceGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.PosHeldInvoiceCountArgs<ExtArgs>
+            result: $Utils.Optional<PosHeldInvoiceCountAggregateOutputType> | number
+          }
+        }
+      }
       SalesReturn: {
         payload: Prisma.$SalesReturnPayload<ExtArgs>
         fields: Prisma.SalesReturnFieldRefs
@@ -7399,6 +7489,7 @@ export namespace Prisma {
     salesInvoice?: SalesInvoiceOmit
     invoicePayment?: InvoicePaymentOmit
     salesInvoiceItem?: SalesInvoiceItemOmit
+    posHeldInvoice?: PosHeldInvoiceOmit
     salesReturn?: SalesReturnOmit
     salesReturnItem?: SalesReturnItemOmit
     repairOrder?: RepairOrderOmit
@@ -67498,6 +67589,1012 @@ export namespace Prisma {
 
 
   /**
+   * Model PosHeldInvoice
+   */
+
+  export type AggregatePosHeldInvoice = {
+    _count: PosHeldInvoiceCountAggregateOutputType | null
+    _min: PosHeldInvoiceMinAggregateOutputType | null
+    _max: PosHeldInvoiceMaxAggregateOutputType | null
+  }
+
+  export type PosHeldInvoiceMinAggregateOutputType = {
+    id: string | null
+    branchId: string | null
+    createdById: string | null
+    payload: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PosHeldInvoiceMaxAggregateOutputType = {
+    id: string | null
+    branchId: string | null
+    createdById: string | null
+    payload: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PosHeldInvoiceCountAggregateOutputType = {
+    id: number
+    branchId: number
+    createdById: number
+    payload: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type PosHeldInvoiceMinAggregateInputType = {
+    id?: true
+    branchId?: true
+    createdById?: true
+    payload?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PosHeldInvoiceMaxAggregateInputType = {
+    id?: true
+    branchId?: true
+    createdById?: true
+    payload?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PosHeldInvoiceCountAggregateInputType = {
+    id?: true
+    branchId?: true
+    createdById?: true
+    payload?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type PosHeldInvoiceAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PosHeldInvoice to aggregate.
+     */
+    where?: PosHeldInvoiceWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PosHeldInvoices to fetch.
+     */
+    orderBy?: PosHeldInvoiceOrderByWithRelationInput | PosHeldInvoiceOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: PosHeldInvoiceWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PosHeldInvoices from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PosHeldInvoices.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned PosHeldInvoices
+    **/
+    _count?: true | PosHeldInvoiceCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: PosHeldInvoiceMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: PosHeldInvoiceMaxAggregateInputType
+  }
+
+  export type GetPosHeldInvoiceAggregateType<T extends PosHeldInvoiceAggregateArgs> = {
+        [P in keyof T & keyof AggregatePosHeldInvoice]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregatePosHeldInvoice[P]>
+      : GetScalarType<T[P], AggregatePosHeldInvoice[P]>
+  }
+
+
+
+
+  export type PosHeldInvoiceGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PosHeldInvoiceWhereInput
+    orderBy?: PosHeldInvoiceOrderByWithAggregationInput | PosHeldInvoiceOrderByWithAggregationInput[]
+    by: PosHeldInvoiceScalarFieldEnum[] | PosHeldInvoiceScalarFieldEnum
+    having?: PosHeldInvoiceScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: PosHeldInvoiceCountAggregateInputType | true
+    _min?: PosHeldInvoiceMinAggregateInputType
+    _max?: PosHeldInvoiceMaxAggregateInputType
+  }
+
+  export type PosHeldInvoiceGroupByOutputType = {
+    id: string
+    branchId: string | null
+    createdById: string | null
+    payload: string
+    createdAt: Date
+    updatedAt: Date
+    _count: PosHeldInvoiceCountAggregateOutputType | null
+    _min: PosHeldInvoiceMinAggregateOutputType | null
+    _max: PosHeldInvoiceMaxAggregateOutputType | null
+  }
+
+  type GetPosHeldInvoiceGroupByPayload<T extends PosHeldInvoiceGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<PosHeldInvoiceGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof PosHeldInvoiceGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], PosHeldInvoiceGroupByOutputType[P]>
+            : GetScalarType<T[P], PosHeldInvoiceGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type PosHeldInvoiceSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    branchId?: boolean
+    createdById?: boolean
+    payload?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["posHeldInvoice"]>
+
+  export type PosHeldInvoiceSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    branchId?: boolean
+    createdById?: boolean
+    payload?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["posHeldInvoice"]>
+
+  export type PosHeldInvoiceSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    branchId?: boolean
+    createdById?: boolean
+    payload?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["posHeldInvoice"]>
+
+  export type PosHeldInvoiceSelectScalar = {
+    id?: boolean
+    branchId?: boolean
+    createdById?: boolean
+    payload?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type PosHeldInvoiceOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "branchId" | "createdById" | "payload" | "createdAt" | "updatedAt", ExtArgs["result"]["posHeldInvoice"]>
+
+  export type $PosHeldInvoicePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "PosHeldInvoice"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      branchId: string | null
+      createdById: string | null
+      payload: string
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["posHeldInvoice"]>
+    composites: {}
+  }
+
+  type PosHeldInvoiceGetPayload<S extends boolean | null | undefined | PosHeldInvoiceDefaultArgs> = $Result.GetResult<Prisma.$PosHeldInvoicePayload, S>
+
+  type PosHeldInvoiceCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<PosHeldInvoiceFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: PosHeldInvoiceCountAggregateInputType | true
+    }
+
+  export interface PosHeldInvoiceDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['PosHeldInvoice'], meta: { name: 'PosHeldInvoice' } }
+    /**
+     * Find zero or one PosHeldInvoice that matches the filter.
+     * @param {PosHeldInvoiceFindUniqueArgs} args - Arguments to find a PosHeldInvoice
+     * @example
+     * // Get one PosHeldInvoice
+     * const posHeldInvoice = await prisma.posHeldInvoice.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends PosHeldInvoiceFindUniqueArgs>(args: SelectSubset<T, PosHeldInvoiceFindUniqueArgs<ExtArgs>>): Prisma__PosHeldInvoiceClient<$Result.GetResult<Prisma.$PosHeldInvoicePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one PosHeldInvoice that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {PosHeldInvoiceFindUniqueOrThrowArgs} args - Arguments to find a PosHeldInvoice
+     * @example
+     * // Get one PosHeldInvoice
+     * const posHeldInvoice = await prisma.posHeldInvoice.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends PosHeldInvoiceFindUniqueOrThrowArgs>(args: SelectSubset<T, PosHeldInvoiceFindUniqueOrThrowArgs<ExtArgs>>): Prisma__PosHeldInvoiceClient<$Result.GetResult<Prisma.$PosHeldInvoicePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PosHeldInvoice that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosHeldInvoiceFindFirstArgs} args - Arguments to find a PosHeldInvoice
+     * @example
+     * // Get one PosHeldInvoice
+     * const posHeldInvoice = await prisma.posHeldInvoice.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends PosHeldInvoiceFindFirstArgs>(args?: SelectSubset<T, PosHeldInvoiceFindFirstArgs<ExtArgs>>): Prisma__PosHeldInvoiceClient<$Result.GetResult<Prisma.$PosHeldInvoicePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PosHeldInvoice that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosHeldInvoiceFindFirstOrThrowArgs} args - Arguments to find a PosHeldInvoice
+     * @example
+     * // Get one PosHeldInvoice
+     * const posHeldInvoice = await prisma.posHeldInvoice.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends PosHeldInvoiceFindFirstOrThrowArgs>(args?: SelectSubset<T, PosHeldInvoiceFindFirstOrThrowArgs<ExtArgs>>): Prisma__PosHeldInvoiceClient<$Result.GetResult<Prisma.$PosHeldInvoicePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more PosHeldInvoices that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosHeldInvoiceFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all PosHeldInvoices
+     * const posHeldInvoices = await prisma.posHeldInvoice.findMany()
+     * 
+     * // Get first 10 PosHeldInvoices
+     * const posHeldInvoices = await prisma.posHeldInvoice.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const posHeldInvoiceWithIdOnly = await prisma.posHeldInvoice.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends PosHeldInvoiceFindManyArgs>(args?: SelectSubset<T, PosHeldInvoiceFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PosHeldInvoicePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a PosHeldInvoice.
+     * @param {PosHeldInvoiceCreateArgs} args - Arguments to create a PosHeldInvoice.
+     * @example
+     * // Create one PosHeldInvoice
+     * const PosHeldInvoice = await prisma.posHeldInvoice.create({
+     *   data: {
+     *     // ... data to create a PosHeldInvoice
+     *   }
+     * })
+     * 
+     */
+    create<T extends PosHeldInvoiceCreateArgs>(args: SelectSubset<T, PosHeldInvoiceCreateArgs<ExtArgs>>): Prisma__PosHeldInvoiceClient<$Result.GetResult<Prisma.$PosHeldInvoicePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many PosHeldInvoices.
+     * @param {PosHeldInvoiceCreateManyArgs} args - Arguments to create many PosHeldInvoices.
+     * @example
+     * // Create many PosHeldInvoices
+     * const posHeldInvoice = await prisma.posHeldInvoice.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends PosHeldInvoiceCreateManyArgs>(args?: SelectSubset<T, PosHeldInvoiceCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many PosHeldInvoices and returns the data saved in the database.
+     * @param {PosHeldInvoiceCreateManyAndReturnArgs} args - Arguments to create many PosHeldInvoices.
+     * @example
+     * // Create many PosHeldInvoices
+     * const posHeldInvoice = await prisma.posHeldInvoice.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many PosHeldInvoices and only return the `id`
+     * const posHeldInvoiceWithIdOnly = await prisma.posHeldInvoice.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends PosHeldInvoiceCreateManyAndReturnArgs>(args?: SelectSubset<T, PosHeldInvoiceCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PosHeldInvoicePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a PosHeldInvoice.
+     * @param {PosHeldInvoiceDeleteArgs} args - Arguments to delete one PosHeldInvoice.
+     * @example
+     * // Delete one PosHeldInvoice
+     * const PosHeldInvoice = await prisma.posHeldInvoice.delete({
+     *   where: {
+     *     // ... filter to delete one PosHeldInvoice
+     *   }
+     * })
+     * 
+     */
+    delete<T extends PosHeldInvoiceDeleteArgs>(args: SelectSubset<T, PosHeldInvoiceDeleteArgs<ExtArgs>>): Prisma__PosHeldInvoiceClient<$Result.GetResult<Prisma.$PosHeldInvoicePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one PosHeldInvoice.
+     * @param {PosHeldInvoiceUpdateArgs} args - Arguments to update one PosHeldInvoice.
+     * @example
+     * // Update one PosHeldInvoice
+     * const posHeldInvoice = await prisma.posHeldInvoice.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends PosHeldInvoiceUpdateArgs>(args: SelectSubset<T, PosHeldInvoiceUpdateArgs<ExtArgs>>): Prisma__PosHeldInvoiceClient<$Result.GetResult<Prisma.$PosHeldInvoicePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more PosHeldInvoices.
+     * @param {PosHeldInvoiceDeleteManyArgs} args - Arguments to filter PosHeldInvoices to delete.
+     * @example
+     * // Delete a few PosHeldInvoices
+     * const { count } = await prisma.posHeldInvoice.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends PosHeldInvoiceDeleteManyArgs>(args?: SelectSubset<T, PosHeldInvoiceDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PosHeldInvoices.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosHeldInvoiceUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many PosHeldInvoices
+     * const posHeldInvoice = await prisma.posHeldInvoice.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends PosHeldInvoiceUpdateManyArgs>(args: SelectSubset<T, PosHeldInvoiceUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PosHeldInvoices and returns the data updated in the database.
+     * @param {PosHeldInvoiceUpdateManyAndReturnArgs} args - Arguments to update many PosHeldInvoices.
+     * @example
+     * // Update many PosHeldInvoices
+     * const posHeldInvoice = await prisma.posHeldInvoice.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more PosHeldInvoices and only return the `id`
+     * const posHeldInvoiceWithIdOnly = await prisma.posHeldInvoice.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends PosHeldInvoiceUpdateManyAndReturnArgs>(args: SelectSubset<T, PosHeldInvoiceUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PosHeldInvoicePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one PosHeldInvoice.
+     * @param {PosHeldInvoiceUpsertArgs} args - Arguments to update or create a PosHeldInvoice.
+     * @example
+     * // Update or create a PosHeldInvoice
+     * const posHeldInvoice = await prisma.posHeldInvoice.upsert({
+     *   create: {
+     *     // ... data to create a PosHeldInvoice
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the PosHeldInvoice we want to update
+     *   }
+     * })
+     */
+    upsert<T extends PosHeldInvoiceUpsertArgs>(args: SelectSubset<T, PosHeldInvoiceUpsertArgs<ExtArgs>>): Prisma__PosHeldInvoiceClient<$Result.GetResult<Prisma.$PosHeldInvoicePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of PosHeldInvoices.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosHeldInvoiceCountArgs} args - Arguments to filter PosHeldInvoices to count.
+     * @example
+     * // Count the number of PosHeldInvoices
+     * const count = await prisma.posHeldInvoice.count({
+     *   where: {
+     *     // ... the filter for the PosHeldInvoices we want to count
+     *   }
+     * })
+    **/
+    count<T extends PosHeldInvoiceCountArgs>(
+      args?: Subset<T, PosHeldInvoiceCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], PosHeldInvoiceCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a PosHeldInvoice.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosHeldInvoiceAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends PosHeldInvoiceAggregateArgs>(args: Subset<T, PosHeldInvoiceAggregateArgs>): Prisma.PrismaPromise<GetPosHeldInvoiceAggregateType<T>>
+
+    /**
+     * Group by PosHeldInvoice.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosHeldInvoiceGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends PosHeldInvoiceGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: PosHeldInvoiceGroupByArgs['orderBy'] }
+        : { orderBy?: PosHeldInvoiceGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, PosHeldInvoiceGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetPosHeldInvoiceGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the PosHeldInvoice model
+   */
+  readonly fields: PosHeldInvoiceFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for PosHeldInvoice.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__PosHeldInvoiceClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the PosHeldInvoice model
+   */
+  interface PosHeldInvoiceFieldRefs {
+    readonly id: FieldRef<"PosHeldInvoice", 'String'>
+    readonly branchId: FieldRef<"PosHeldInvoice", 'String'>
+    readonly createdById: FieldRef<"PosHeldInvoice", 'String'>
+    readonly payload: FieldRef<"PosHeldInvoice", 'String'>
+    readonly createdAt: FieldRef<"PosHeldInvoice", 'DateTime'>
+    readonly updatedAt: FieldRef<"PosHeldInvoice", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * PosHeldInvoice findUnique
+   */
+  export type PosHeldInvoiceFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosHeldInvoice
+     */
+    select?: PosHeldInvoiceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosHeldInvoice
+     */
+    omit?: PosHeldInvoiceOmit<ExtArgs> | null
+    /**
+     * Filter, which PosHeldInvoice to fetch.
+     */
+    where: PosHeldInvoiceWhereUniqueInput
+  }
+
+  /**
+   * PosHeldInvoice findUniqueOrThrow
+   */
+  export type PosHeldInvoiceFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosHeldInvoice
+     */
+    select?: PosHeldInvoiceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosHeldInvoice
+     */
+    omit?: PosHeldInvoiceOmit<ExtArgs> | null
+    /**
+     * Filter, which PosHeldInvoice to fetch.
+     */
+    where: PosHeldInvoiceWhereUniqueInput
+  }
+
+  /**
+   * PosHeldInvoice findFirst
+   */
+  export type PosHeldInvoiceFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosHeldInvoice
+     */
+    select?: PosHeldInvoiceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosHeldInvoice
+     */
+    omit?: PosHeldInvoiceOmit<ExtArgs> | null
+    /**
+     * Filter, which PosHeldInvoice to fetch.
+     */
+    where?: PosHeldInvoiceWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PosHeldInvoices to fetch.
+     */
+    orderBy?: PosHeldInvoiceOrderByWithRelationInput | PosHeldInvoiceOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PosHeldInvoices.
+     */
+    cursor?: PosHeldInvoiceWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PosHeldInvoices from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PosHeldInvoices.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PosHeldInvoices.
+     */
+    distinct?: PosHeldInvoiceScalarFieldEnum | PosHeldInvoiceScalarFieldEnum[]
+  }
+
+  /**
+   * PosHeldInvoice findFirstOrThrow
+   */
+  export type PosHeldInvoiceFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosHeldInvoice
+     */
+    select?: PosHeldInvoiceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosHeldInvoice
+     */
+    omit?: PosHeldInvoiceOmit<ExtArgs> | null
+    /**
+     * Filter, which PosHeldInvoice to fetch.
+     */
+    where?: PosHeldInvoiceWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PosHeldInvoices to fetch.
+     */
+    orderBy?: PosHeldInvoiceOrderByWithRelationInput | PosHeldInvoiceOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PosHeldInvoices.
+     */
+    cursor?: PosHeldInvoiceWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PosHeldInvoices from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PosHeldInvoices.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PosHeldInvoices.
+     */
+    distinct?: PosHeldInvoiceScalarFieldEnum | PosHeldInvoiceScalarFieldEnum[]
+  }
+
+  /**
+   * PosHeldInvoice findMany
+   */
+  export type PosHeldInvoiceFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosHeldInvoice
+     */
+    select?: PosHeldInvoiceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosHeldInvoice
+     */
+    omit?: PosHeldInvoiceOmit<ExtArgs> | null
+    /**
+     * Filter, which PosHeldInvoices to fetch.
+     */
+    where?: PosHeldInvoiceWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PosHeldInvoices to fetch.
+     */
+    orderBy?: PosHeldInvoiceOrderByWithRelationInput | PosHeldInvoiceOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing PosHeldInvoices.
+     */
+    cursor?: PosHeldInvoiceWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PosHeldInvoices from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PosHeldInvoices.
+     */
+    skip?: number
+    distinct?: PosHeldInvoiceScalarFieldEnum | PosHeldInvoiceScalarFieldEnum[]
+  }
+
+  /**
+   * PosHeldInvoice create
+   */
+  export type PosHeldInvoiceCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosHeldInvoice
+     */
+    select?: PosHeldInvoiceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosHeldInvoice
+     */
+    omit?: PosHeldInvoiceOmit<ExtArgs> | null
+    /**
+     * The data needed to create a PosHeldInvoice.
+     */
+    data: XOR<PosHeldInvoiceCreateInput, PosHeldInvoiceUncheckedCreateInput>
+  }
+
+  /**
+   * PosHeldInvoice createMany
+   */
+  export type PosHeldInvoiceCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many PosHeldInvoices.
+     */
+    data: PosHeldInvoiceCreateManyInput | PosHeldInvoiceCreateManyInput[]
+  }
+
+  /**
+   * PosHeldInvoice createManyAndReturn
+   */
+  export type PosHeldInvoiceCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosHeldInvoice
+     */
+    select?: PosHeldInvoiceSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosHeldInvoice
+     */
+    omit?: PosHeldInvoiceOmit<ExtArgs> | null
+    /**
+     * The data used to create many PosHeldInvoices.
+     */
+    data: PosHeldInvoiceCreateManyInput | PosHeldInvoiceCreateManyInput[]
+  }
+
+  /**
+   * PosHeldInvoice update
+   */
+  export type PosHeldInvoiceUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosHeldInvoice
+     */
+    select?: PosHeldInvoiceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosHeldInvoice
+     */
+    omit?: PosHeldInvoiceOmit<ExtArgs> | null
+    /**
+     * The data needed to update a PosHeldInvoice.
+     */
+    data: XOR<PosHeldInvoiceUpdateInput, PosHeldInvoiceUncheckedUpdateInput>
+    /**
+     * Choose, which PosHeldInvoice to update.
+     */
+    where: PosHeldInvoiceWhereUniqueInput
+  }
+
+  /**
+   * PosHeldInvoice updateMany
+   */
+  export type PosHeldInvoiceUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update PosHeldInvoices.
+     */
+    data: XOR<PosHeldInvoiceUpdateManyMutationInput, PosHeldInvoiceUncheckedUpdateManyInput>
+    /**
+     * Filter which PosHeldInvoices to update
+     */
+    where?: PosHeldInvoiceWhereInput
+    /**
+     * Limit how many PosHeldInvoices to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * PosHeldInvoice updateManyAndReturn
+   */
+  export type PosHeldInvoiceUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosHeldInvoice
+     */
+    select?: PosHeldInvoiceSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosHeldInvoice
+     */
+    omit?: PosHeldInvoiceOmit<ExtArgs> | null
+    /**
+     * The data used to update PosHeldInvoices.
+     */
+    data: XOR<PosHeldInvoiceUpdateManyMutationInput, PosHeldInvoiceUncheckedUpdateManyInput>
+    /**
+     * Filter which PosHeldInvoices to update
+     */
+    where?: PosHeldInvoiceWhereInput
+    /**
+     * Limit how many PosHeldInvoices to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * PosHeldInvoice upsert
+   */
+  export type PosHeldInvoiceUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosHeldInvoice
+     */
+    select?: PosHeldInvoiceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosHeldInvoice
+     */
+    omit?: PosHeldInvoiceOmit<ExtArgs> | null
+    /**
+     * The filter to search for the PosHeldInvoice to update in case it exists.
+     */
+    where: PosHeldInvoiceWhereUniqueInput
+    /**
+     * In case the PosHeldInvoice found by the `where` argument doesn't exist, create a new PosHeldInvoice with this data.
+     */
+    create: XOR<PosHeldInvoiceCreateInput, PosHeldInvoiceUncheckedCreateInput>
+    /**
+     * In case the PosHeldInvoice was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<PosHeldInvoiceUpdateInput, PosHeldInvoiceUncheckedUpdateInput>
+  }
+
+  /**
+   * PosHeldInvoice delete
+   */
+  export type PosHeldInvoiceDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosHeldInvoice
+     */
+    select?: PosHeldInvoiceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosHeldInvoice
+     */
+    omit?: PosHeldInvoiceOmit<ExtArgs> | null
+    /**
+     * Filter which PosHeldInvoice to delete.
+     */
+    where: PosHeldInvoiceWhereUniqueInput
+  }
+
+  /**
+   * PosHeldInvoice deleteMany
+   */
+  export type PosHeldInvoiceDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PosHeldInvoices to delete
+     */
+    where?: PosHeldInvoiceWhereInput
+    /**
+     * Limit how many PosHeldInvoices to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * PosHeldInvoice without action
+   */
+  export type PosHeldInvoiceDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosHeldInvoice
+     */
+    select?: PosHeldInvoiceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosHeldInvoice
+     */
+    omit?: PosHeldInvoiceOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Model SalesReturn
    */
 
@@ -98878,6 +99975,18 @@ export namespace Prisma {
   export type SalesInvoiceItemScalarFieldEnum = (typeof SalesInvoiceItemScalarFieldEnum)[keyof typeof SalesInvoiceItemScalarFieldEnum]
 
 
+  export const PosHeldInvoiceScalarFieldEnum: {
+    id: 'id',
+    branchId: 'branchId',
+    createdById: 'createdById',
+    payload: 'payload',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type PosHeldInvoiceScalarFieldEnum = (typeof PosHeldInvoiceScalarFieldEnum)[keyof typeof PosHeldInvoiceScalarFieldEnum]
+
+
   export const SalesReturnScalarFieldEnum: {
     id: 'id',
     returnNumber: 'returnNumber',
@@ -103817,6 +104926,63 @@ export namespace Prisma {
     itemType?: StringWithAggregatesFilter<"SalesInvoiceItem"> | string
     technicianId?: StringNullableWithAggregatesFilter<"SalesInvoiceItem"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"SalesInvoiceItem"> | Date | string
+  }
+
+  export type PosHeldInvoiceWhereInput = {
+    AND?: PosHeldInvoiceWhereInput | PosHeldInvoiceWhereInput[]
+    OR?: PosHeldInvoiceWhereInput[]
+    NOT?: PosHeldInvoiceWhereInput | PosHeldInvoiceWhereInput[]
+    id?: StringFilter<"PosHeldInvoice"> | string
+    branchId?: StringNullableFilter<"PosHeldInvoice"> | string | null
+    createdById?: StringNullableFilter<"PosHeldInvoice"> | string | null
+    payload?: StringFilter<"PosHeldInvoice"> | string
+    createdAt?: DateTimeFilter<"PosHeldInvoice"> | Date | string
+    updatedAt?: DateTimeFilter<"PosHeldInvoice"> | Date | string
+  }
+
+  export type PosHeldInvoiceOrderByWithRelationInput = {
+    id?: SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdById?: SortOrderInput | SortOrder
+    payload?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PosHeldInvoiceWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: PosHeldInvoiceWhereInput | PosHeldInvoiceWhereInput[]
+    OR?: PosHeldInvoiceWhereInput[]
+    NOT?: PosHeldInvoiceWhereInput | PosHeldInvoiceWhereInput[]
+    branchId?: StringNullableFilter<"PosHeldInvoice"> | string | null
+    createdById?: StringNullableFilter<"PosHeldInvoice"> | string | null
+    payload?: StringFilter<"PosHeldInvoice"> | string
+    createdAt?: DateTimeFilter<"PosHeldInvoice"> | Date | string
+    updatedAt?: DateTimeFilter<"PosHeldInvoice"> | Date | string
+  }, "id">
+
+  export type PosHeldInvoiceOrderByWithAggregationInput = {
+    id?: SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdById?: SortOrderInput | SortOrder
+    payload?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: PosHeldInvoiceCountOrderByAggregateInput
+    _max?: PosHeldInvoiceMaxOrderByAggregateInput
+    _min?: PosHeldInvoiceMinOrderByAggregateInput
+  }
+
+  export type PosHeldInvoiceScalarWhereWithAggregatesInput = {
+    AND?: PosHeldInvoiceScalarWhereWithAggregatesInput | PosHeldInvoiceScalarWhereWithAggregatesInput[]
+    OR?: PosHeldInvoiceScalarWhereWithAggregatesInput[]
+    NOT?: PosHeldInvoiceScalarWhereWithAggregatesInput | PosHeldInvoiceScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"PosHeldInvoice"> | string
+    branchId?: StringNullableWithAggregatesFilter<"PosHeldInvoice"> | string | null
+    createdById?: StringNullableWithAggregatesFilter<"PosHeldInvoice"> | string | null
+    payload?: StringWithAggregatesFilter<"PosHeldInvoice"> | string
+    createdAt?: DateTimeWithAggregatesFilter<"PosHeldInvoice"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"PosHeldInvoice"> | Date | string
   }
 
   export type SalesReturnWhereInput = {
@@ -111195,6 +112361,69 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type PosHeldInvoiceCreateInput = {
+    id?: string
+    branchId?: string | null
+    createdById?: string | null
+    payload: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PosHeldInvoiceUncheckedCreateInput = {
+    id?: string
+    branchId?: string | null
+    createdById?: string | null
+    payload: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PosHeldInvoiceUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdById?: NullableStringFieldUpdateOperationsInput | string | null
+    payload?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PosHeldInvoiceUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdById?: NullableStringFieldUpdateOperationsInput | string | null
+    payload?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PosHeldInvoiceCreateManyInput = {
+    id?: string
+    branchId?: string | null
+    createdById?: string | null
+    payload: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PosHeldInvoiceUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdById?: NullableStringFieldUpdateOperationsInput | string | null
+    payload?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PosHeldInvoiceUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdById?: NullableStringFieldUpdateOperationsInput | string | null
+    payload?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type SalesReturnCreateInput = {
     id?: string
     returnNumber: string
@@ -117066,6 +118295,33 @@ export namespace Prisma {
     taxRate?: SortOrder
     taxAmount?: SortOrder
     total?: SortOrder
+  }
+
+  export type PosHeldInvoiceCountOrderByAggregateInput = {
+    id?: SortOrder
+    branchId?: SortOrder
+    createdById?: SortOrder
+    payload?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PosHeldInvoiceMaxOrderByAggregateInput = {
+    id?: SortOrder
+    branchId?: SortOrder
+    createdById?: SortOrder
+    payload?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PosHeldInvoiceMinOrderByAggregateInput = {
+    id?: SortOrder
+    branchId?: SortOrder
+    createdById?: SortOrder
+    payload?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
   }
 
   export type SalesReturnCountOrderByAggregateInput = {

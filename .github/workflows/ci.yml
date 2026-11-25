@@ -34,6 +34,7 @@ jobs:
       - run: npm --prefix server run prisma:seed:production
         env:
           DATABASE_URL: file:/tmp/alasly-ci.db
+          INITIAL_ADMIN_PASSWORD: CiAdmin1234
       - run: npm --prefix server run db:migrate
         env:
           DATABASE_URL: file:/tmp/alasly-ci.db

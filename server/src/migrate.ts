@@ -315,6 +315,25 @@ const migrations: { id: string; apply: () => Promise<void> }[] = [
       await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "PasswordResetRequest_status_expiresAt_idx" ON "PasswordResetRequest"("status", "expiresAt")`;
     },
   },
+  {
+    id: '0006-pos-held-invoices',
+    apply: async () => {
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "PosHeldInvoice" (
+          "id" TEXT NOT NULL PRIMARY KEY,
+          "branchId" TEXT,
+          "createdById" TEXT,
+          "payload" TEXT NOT NULL,
+          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `;
+      await prisma.$executeRaw`
+        CREATE INDEX IF NOT EXISTS "PosHeldInvoice_branchId_updatedAt_idx"
+        ON "PosHeldInvoice"("branchId", "updatedAt")
+      `;
+    },
+  },
 ];
 
 const runMigrations = async () => {

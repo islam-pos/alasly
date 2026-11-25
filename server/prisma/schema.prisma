@@ -857,6 +857,17 @@ model SalesInvoiceItem {
   createdAt    DateTime     @default(now())
 }
 
+model PosHeldInvoice {
+  id          String   @id @default(uuid())
+  branchId    String?
+  createdById String?
+  payload     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([branchId, updatedAt])
+}
+
 model SalesReturn {
   id             String            @id @default(uuid())
   returnNumber   String            @unique
