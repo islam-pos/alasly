@@ -18,6 +18,8 @@ test('parseAssistantMessages enforces message and conversation limits', () => {
 
 test('local help gives workflow guidance without needing an external provider', () => {
   assert.match(answerLocalHelp('كيف أسجل بيع POS؟'), /شاشة POS/);
+  assert.match(answerLocalHelp('كيف أعلق فاتورة لخدمة عميل آخر؟'), /الفاتورة الحالية مؤقتًا/);
+  assert.match(answerLocalHelp('كيف أضيف بند حر؟'), /الرصيد الافتتاحي الفعلي/);
   assert.match(answerLocalHelp('عايز أفتح أمر إصلاح'), /أوامر الإصلاح/);
   assert.match(answerLocalHelp('كيف أضيف صيانة دورية للسيارة؟'), /أمر إصلاح/);
   assert.match(answerLocalHelp('ازاي اعمل نسخة احتياطية'), /النسخ الاحتياطي/);

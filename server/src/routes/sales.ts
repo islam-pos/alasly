@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -7,6 +8,7 @@ import { nextInvoiceNumber, withInvoiceTransaction } from '../services/documentN
 import { postJournalEntry } from '../services/accounting';
 import { branchWhere } from '../services/branchScope';
 import { buildSalesReturnSnapshot } from '../services/salesReturns';
+import { isValidPosLines } from '../services/posLineValidation';
 
 const router = Router();
 
@@ -240,10 +242,7 @@ router.get('/pos/held', async (req: AuthenticatedRequest, res) => {
 router.post('/pos/held', async (req: AuthenticatedRequest, res) => {
   const { customerId = null, vehicleId = null, items, discount = 0 } = req.body || {};
   if (
-    !Array.isArray(items) || items.length === 0 || items.length > 500
-    || items.some((item) => !item || typeof item.itemId !== 'string' || !item.itemId
-      || !Number.isInteger(Number(item.quantity)) || Number(item.quantity) < 1
-      || !Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) < 0)
+    !isValidPosLines(items)
     || !Number.isFinite(Number(discount)) || Number(discount) < 0
     || (customerId !== null && typeof customerId !== 'string')
     || (vehicleId !== null && typeof vehicleId !== 'string')
@@ -262,6 +261,10 @@ router.post('/pos/held', async (req: AuthenticatedRequest, res) => {
           discount: Number(discount),
           items: items.map((item) => ({
             itemId: item.itemId,
+            ...(item.itemId === null ? {
+              description: String(item.description).trim(),
+              itemType: 'LABOR',
+            } : {}),
             quantity: Number(item.quantity),
             unitPrice: Number(item.unitPrice),
           })),
@@ -275,7 +278,12 @@ router.post('/pos/held', async (req: AuthenticatedRequest, res) => {
       customerId,
       vehicleId,
       discount: Number(discount),
-      items,
+      items: items.map((item) => ({
+        itemId: item.itemId,
+        ...(item.itemId === null ? { description: String(item.description).trim(), itemType: 'LABOR' } : {}),
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+      })),
     });
   } catch (error) {
     console.error('Failed to hold POS invoice:', error);
@@ -296,6 +304,102 @@ router.delete('/pos/held/:id', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+router.post('/pos/items', async (req: AuthenticatedRequest, res) => {
+  const hasPermission = (permission: string) =>
+    req.authenticatedRole === 'admin' || req.rolePermissions?.includes(permission) === true;
+  if (!hasPermission('manage_items') || !hasPermission('manage_item_prices')) {
+    return res.status(403).json({ error: 'إضافة صنف للمخزون من نقطة البيع تتطلب صلاحية إدارة الأصناف والأسعار' });
+  }
+
+  const nameAr = typeof req.body?.nameAr === 'string' ? req.body.nameAr.trim() : '';
+  const categoryId = typeof req.body?.categoryId === 'string' ? req.body.categoryId.trim() : '';
+  const unitId = typeof req.body?.unitId === 'string' ? req.body.unitId.trim() : '';
+  const sellPrice = Number(req.body?.sellPrice);
+  const purchasePrice = Number(req.body?.purchasePrice ?? 0);
+  const initialStock = Number(req.body?.initialStock);
+  const saleQuantity = Number(req.body?.saleQuantity);
+  if (
+    !nameAr || nameAr.length > 200 || !categoryId || !unitId
+    || !Number.isFinite(sellPrice) || sellPrice < 0
+    || !Number.isFinite(purchasePrice) || purchasePrice < 0
+    || !Number.isSafeInteger(initialStock) || initialStock < 1
+    || !Number.isSafeInteger(saleQuantity) || saleQuantity < 1 || initialStock < saleQuantity
+  ) {
+    return res.status(400).json({ error: 'بيانات الصنف أو رصيده الافتتاحي غير صالحة؛ يجب أن يغطي الرصيد كمية البيع' });
+  }
+
+  const warehouse = await prisma.warehouse.findFirst({ where: { code: 'WH-MAIN', active: true } });
+  if (!warehouse) return res.status(400).json({ error: 'لا يوجد مخزن رئيسي نشط لإضافة الصنف' });
+
+  const normalizeName = (value: string) => value
+    .normalize('NFKC')
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[آأإ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase();
+
+  try {
+    const item = await prisma.$transaction(async (tx) => {
+      const category = await tx.itemCategory.findUnique({ where: { id: categoryId } });
+      if (!category?.active) throw new Error('التصنيف غير موجود أو غير نشط');
+      const unit = await tx.unit.findUnique({ where: { id: unitId } });
+      if (!unit) throw new Error('وحدة القياس غير موجودة');
+
+      const categoryItems = await tx.item.findMany({ where: { categoryId }, select: { nameAr: true } });
+      if (categoryItems.some((candidate) => normalizeName(candidate.nameAr) === normalizeName(nameAr))) {
+        throw new Error('يوجد صنف بهذا الاسم في التصنيف؛ ابحث عنه وأضفه من قائمة الأصناف');
+      }
+
+      const createdItem = await tx.item.create({
+        data: {
+          nameAr,
+          sku: `POS-${randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`,
+          categoryId,
+          unitId,
+          purchasePrice,
+          avgCost: purchasePrice,
+          sellPrice,
+          specialSellPrice: sellPrice * 0.9,
+          minStock: 5,
+          maxStock: 100,
+        },
+      });
+      await tx.stockBalance.create({
+        data: { itemId: createdItem.id, warehouseId: warehouse.id, quantity: initialStock },
+      });
+      await tx.stockTransaction.create({
+        data: {
+          itemId: createdItem.id,
+          warehouseId: warehouse.id,
+          type: 'ADJUSTMENT',
+          quantity: initialStock,
+          unitCost: purchasePrice,
+          totalCost: initialStock * purchasePrice,
+          referenceType: 'Initial',
+          notes: 'رصيد افتتاحي عند تعريف الصنف من نقطة البيع',
+          createdById: req.user?.id,
+        },
+      });
+      return createdItem;
+    });
+
+    await logAudit({
+      userId: req.user?.id,
+      action: 'CREATE',
+      entity: 'Item',
+      entityId: item.id,
+      details: `إضافة صنف من نقطة البيع: ${item.nameAr} (${item.sku}) برصيد افتتاحي ${initialStock}`,
+      ipAddress: req.ip,
+    });
+    res.status(201).json({ ...item, availableQuantity: initialStock, totalQuantity: initialStock });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'تعذر إضافة الصنف للمخزون';
+    res.status(message.includes('يوجد صنف') ? 409 : 400).json({ error: message });
+  }
+});
+
 // --- Fast POS Checkout ---
 router.post('/pos', async (req, res) => {
   try {
@@ -313,10 +417,7 @@ router.post('/pos', async (req, res) => {
     } = req.body;
 
     if (
-      !Array.isArray(items) || items.length === 0 || items.length > 500
-      || items.some((item: any) => !item || typeof item.itemId !== 'string' || !item.itemId
-        || !Number.isInteger(Number(item.quantity)) || Number(item.quantity) < 1
-        || !Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) < 0)
+      !isValidPosLines(items)
     ) {
       return res.status(400).json({ error: 'يجب اختيار أصناف صالحة للبيع مع تحديد السعر والكمية' });
     }
@@ -328,6 +429,7 @@ router.post('/pos', async (req, res) => {
 
     // Check stock availability
     for (const it of items) {
+      if (it.itemId === null) continue;
       const balance = await prisma.stockBalance.findUnique({
         where: {
           itemId_warehouseId: {
@@ -337,7 +439,7 @@ router.post('/pos', async (req, res) => {
         },
       });
 
-      if (!balance || balance.quantity < it.quantity) {
+      if (!balance || balance.quantity < Number(it.quantity)) {
         const itemObj = await prisma.item.findUnique({ where: { id: it.itemId } });
         return res.status(400).json({
           error: `الكمية المتوفرة من الصنف (${itemObj?.nameAr || it.itemId}) غير كافية! المتوفر: ${balance?.quantity || 0}، المطلوب: ${it.quantity}`,
@@ -403,13 +505,28 @@ router.post('/pos', async (req, res) => {
           items: {
             create: await Promise.all(
               items.map(async (it: any) => {
+                if (it.itemId === null) {
+                  return {
+                    itemId: null,
+                    description: String(it.description).trim(),
+                    quantity: Number(it.quantity),
+                    unitPrice: Number(it.unitPrice),
+                    costPrice: 0,
+                    discount: 0,
+                    taxRate: 0,
+                    taxAmount: 0,
+                    total: Number(it.unitPrice) * Number(it.quantity),
+                    itemType: 'LABOR',
+                  };
+                }
                 const itemObj = await tx.item.findUnique({ where: { id: it.itemId } });
-                const itemTotal = parseFloat(it.unitPrice) * parseInt(it.quantity);
+                if (!itemObj || !itemObj.active) throw new Error(`الصنف ${it.itemId} غير موجود أو غير نشط`);
+                const itemTotal = Number(it.unitPrice) * Number(it.quantity);
                 return {
                   itemId: it.itemId,
                   description: itemObj?.nameAr || null,
-                  quantity: parseInt(it.quantity),
-                  unitPrice: parseFloat(it.unitPrice),
+                  quantity: Number(it.quantity),
+                  unitPrice: Number(it.unitPrice),
                   costPrice: itemObj?.avgCost || 0,
                   discount: parseFloat(it.discount) || 0,
                   taxRate: 0,
@@ -427,7 +544,8 @@ router.post('/pos', async (req, res) => {
       // 2. Deduct stock & create transactions
       let costOfGoods = 0;
       for (const it of items) {
-        const qty = parseInt(it.quantity);
+        if (it.itemId === null) continue;
+        const qty = Number(it.quantity);
         const itemObj = await tx.item.findUnique({ where: { id: it.itemId } });
 
         await tx.stockBalance.update({

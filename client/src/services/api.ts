@@ -471,6 +471,13 @@ const apiClient = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
+  createPosInventoryItem: (data: any) =>
+    fetch(`${BASE_URL}/sales/pos/items`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    }).then((res) => handleResponse<any>(res)),
+
   getHeldPosInvoices: () =>
     fetch(`${BASE_URL}/sales/pos/held`, { headers: getHeaders() }).then((res) => handleResponse<{ data: any[] }>(res)),
 

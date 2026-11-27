@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { printSalesInvoice } from '../../utils/invoicePrint';
 import { getSmartUpsellSuggestions } from '../../utils/smartUpsell';
 
@@ -42,6 +43,7 @@ const matchesVehicleFitment = (fitment: string | null | undefined, vehicle: any)
 export const PosScreen: React.FC = () => {
   const [items, setItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,6 +54,16 @@ export const PosScreen: React.FC = () => {
   const [heldInvoices, setHeldInvoices] = useState<any[]>([]);
   const [heldInvoicesOpen, setHeldInvoicesOpen] = useState(false);
   const [holdingInvoice, setHoldingInvoice] = useState(false);
+  const [freeLineModalOpen, setFreeLineModalOpen] = useState(false);
+  const [freeLineName, setFreeLineName] = useState('');
+  const [freeLineUnitPrice, setFreeLineUnitPrice] = useState(0);
+  const [freeLineQuantity, setFreeLineQuantity] = useState(1);
+  const [freeLineAddToInventory, setFreeLineAddToInventory] = useState(false);
+  const [freeLineCategoryId, setFreeLineCategoryId] = useState('');
+  const [freeLineUnitId, setFreeLineUnitId] = useState('');
+  const [freeLineInitialStock, setFreeLineInitialStock] = useState(1);
+  const [freeLineCostPrice, setFreeLineCostPrice] = useState(0);
+  const [savingFreeLine, setSavingFreeLine] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
@@ -65,6 +77,8 @@ export const PosScreen: React.FC = () => {
   const [company, setCompany] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
+  const { hasPermission } = useAuth();
+  const canRegisterInventoryItem = hasPermission('manage_items') && hasPermission('manage_item_prices');
   const { success, error } = useToast();
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -91,6 +105,14 @@ export const PosScreen: React.FC = () => {
       setVehicles(vehiclesRes.data);
     } catch (err) {
       console.error(err);
+    }
+    if (canRegisterInventoryItem) {
+      try {
+        const unitsRes = await api.getUnits();
+        setUnits(unitsRes.data);
+      } catch (err) {
+        console.error('Could not load units for POS inventory creation:', err);
+      }
     }
     try {
       const response = await api.getHeldPosInvoices();
@@ -120,6 +142,7 @@ export const PosScreen: React.FC = () => {
       return [
         ...prev,
         {
+          cartId: item.id,
           itemId: item.id,
           name: item.nameAr,
           sku: item.sku,
@@ -127,6 +150,7 @@ export const PosScreen: React.FC = () => {
           costPrice: item.avgCost,
           quantity: 1,
           maxAvailable: item.availableQuantity,
+          itemType: 'PART',
         },
       ];
     });
@@ -200,15 +224,15 @@ export const PosScreen: React.FC = () => {
     setCameraScannerOpen(false);
   };
 
-  const updateQuantity = (itemId: string, newQty: number) => {
+  const updateQuantity = (cartId: string, newQty: number) => {
     if (newQty <= 0) {
-      removeFromCart(itemId);
+      removeFromCart(cartId);
       return;
     }
     setCart((prev) =>
       prev.map((i) => {
-        if (i.itemId === itemId) {
-          if (newQty > i.maxAvailable) {
+        if (i.cartId === cartId) {
+          if (i.itemId && newQty > i.maxAvailable) {
             error(`الكمية المطلوبة تتجاوز المتاح بالمخزن (${i.maxAvailable})`);
             return i;
           }
@@ -219,13 +243,13 @@ export const PosScreen: React.FC = () => {
     );
   };
 
-  const updateUnitPrice = (itemId: string, unitPrice: number) => {
+  const updateUnitPrice = (cartId: string, unitPrice: number) => {
     if (!Number.isFinite(unitPrice) || unitPrice < 0) return;
-    setCart((prev) => prev.map((item) => item.itemId === itemId ? { ...item, unitPrice } : item));
+    setCart((prev) => prev.map((item) => item.cartId === cartId ? { ...item, unitPrice } : item));
   };
 
-  const removeFromCart = (itemId: string) => {
-    setCart((prev) => prev.filter((i) => i.itemId !== itemId));
+  const removeFromCart = (cartId: string) => {
+    setCart((prev) => prev.filter((i) => i.cartId !== cartId));
   };
 
   const clearCart = () => {
@@ -246,7 +270,12 @@ export const PosScreen: React.FC = () => {
         customerId: selectedCustomerId || null,
         vehicleId: selectedVehicleId || null,
         discount,
-        items: cart.map(({ itemId, quantity, unitPrice }) => ({ itemId, quantity, unitPrice })),
+        items: cart.map(({ itemId, name, quantity, unitPrice }) => ({
+          itemId: itemId || null,
+          ...(itemId ? {} : { description: name, itemType: 'LABOR' }),
+          quantity,
+          unitPrice,
+        })),
       });
       setHeldInvoices((prev) => [response.data, ...prev]);
       clearCart();
@@ -264,10 +293,24 @@ export const PosScreen: React.FC = () => {
       return;
     }
 
-    const restoredItems = heldInvoice.items.map((heldItem: any) => {
+    const restoredItems = heldInvoice.items.map((heldItem: any, index: number) => {
+      if (heldItem.itemId === null) {
+        return {
+          cartId: `held-${heldInvoice.id}-${index}`,
+          itemId: null,
+          name: heldItem.description,
+          sku: '',
+          unitPrice: heldItem.unitPrice,
+          costPrice: 0,
+          quantity: heldItem.quantity,
+          maxAvailable: null,
+          itemType: 'LABOR',
+        };
+      }
       const product = items.find((item) => item.id === heldItem.itemId);
-      if (!product) return null;
+      if (!product || product.availableQuantity < heldItem.quantity) return null;
       return {
+        cartId: product.id,
         itemId: product.id,
         name: product.nameAr,
         sku: product.sku,
@@ -275,10 +318,11 @@ export const PosScreen: React.FC = () => {
         costPrice: product.avgCost,
         quantity: heldItem.quantity,
         maxAvailable: product.availableQuantity,
+        itemType: 'PART',
       };
     });
     if (restoredItems.some((item: any) => item === null)) {
-      error('تعذر استعادة الفاتورة لاحتوائها على صنف لم يعد متاحاً');
+      error('تعذر استعادة الفاتورة لعدم كفاية مخزون أحد أصنافها أو عدم توفره');
       return;
     }
 
@@ -296,13 +340,122 @@ export const PosScreen: React.FC = () => {
     }
   };
 
+  const openFreeLineDialog = () => {
+    setFreeLineName('');
+    setFreeLineUnitPrice(0);
+    setFreeLineQuantity(1);
+    setFreeLineAddToInventory(false);
+    setFreeLineInitialStock(1);
+    setFreeLineCostPrice(0);
+    setFreeLineCategoryId(categories[0]?.id || '');
+    setFreeLineUnitId(units[0]?.id || '');
+    setFreeLineModalOpen(true);
+  };
+
+  const handleAddFreeLine = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = freeLineName.trim();
+    if (!name) {
+      error('أدخل وصف البند الحر');
+      return;
+    }
+    if (!Number.isSafeInteger(freeLineQuantity) || freeLineQuantity < 1) {
+      error('الكمية يجب أن تكون عددًا صحيحًا موجبًا');
+      return;
+    }
+    if (!Number.isFinite(freeLineUnitPrice) || freeLineUnitPrice < 0) {
+      error('سعر الوحدة غير صالح');
+      return;
+    }
+
+    if (!freeLineAddToInventory) {
+      setCart((previous) => [...previous, {
+        cartId: `free-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        itemId: null,
+        name,
+        sku: '',
+        unitPrice: freeLineUnitPrice,
+        costPrice: 0,
+        quantity: freeLineQuantity,
+        maxAvailable: null,
+        itemType: 'LABOR',
+      }]);
+      setFreeLineModalOpen(false);
+      success('تمت إضافة البند الحر إلى الفاتورة');
+      return;
+    }
+
+    if (!canRegisterInventoryItem) {
+      error('لا تملك صلاحية تسجيل صنف جديد بالمخزون؛ اطلب صلاحية إدارة الأصناف والأسعار');
+      return;
+    }
+    if (!freeLineCategoryId || !freeLineUnitId) {
+      error('اختر تصنيف الصنف ووحدة القياس');
+      return;
+    }
+    if (
+      !Number.isSafeInteger(freeLineInitialStock)
+      || freeLineInitialStock < freeLineQuantity
+      || !Number.isFinite(freeLineCostPrice)
+      || freeLineCostPrice < 0
+    ) {
+      error('الرصيد الافتتاحي يجب أن يكون عددًا صحيحًا يغطي كمية البيع، والتكلفة غير سالبة');
+      return;
+    }
+
+    const normalizeName = (value: string) => value
+      .normalize('NFKC')
+      .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+      .replace(/[آأإ]/g, 'ا')
+      .replace(/ى/g, 'ي')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLocaleLowerCase();
+    if (items.some((item) => item.categoryId === freeLineCategoryId && normalizeName(item.nameAr) === normalizeName(name))) {
+      error('يوجد صنف بهذا الاسم في التصنيف؛ ابحث عنه في قائمة الأصناف وأضفه منها');
+      return;
+    }
+
+    setSavingFreeLine(true);
+    try {
+      const response = await api.createPosInventoryItem({
+        nameAr: name,
+        categoryId: freeLineCategoryId,
+        unitId: freeLineUnitId,
+        sellPrice: freeLineUnitPrice,
+        purchasePrice: freeLineCostPrice,
+        initialStock: freeLineInitialStock,
+        saleQuantity: freeLineQuantity,
+      });
+      const product = response.data;
+      setItems((previous) => [product, ...previous]);
+      setCart((previous) => [...previous, {
+        cartId: product.id,
+        itemId: product.id,
+        name: product.nameAr,
+        sku: product.sku,
+        unitPrice: freeLineUnitPrice,
+        costPrice: product.avgCost ?? freeLineCostPrice,
+        quantity: freeLineQuantity,
+        maxAvailable: product.availableQuantity ?? freeLineInitialStock,
+        itemType: 'PART',
+      }]);
+      setFreeLineModalOpen(false);
+      success(`تم تسجيل ${product.nameAr} بالمخزون وإضافته إلى الفاتورة`);
+    } catch (err: any) {
+      error(err.message || 'تعذر إضافة الصنف إلى المخزون');
+    } finally {
+      setSavingFreeLine(false);
+    }
+  };
+
   // Calculation
   const subtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const taxable = Math.max(0, subtotal - discount);
   const grandTotal = taxable;
   const smartUpsells = getSmartUpsellSuggestions(
     items,
-    cart.map((item) => ({ itemId: item.itemId, name: item.name, sku: item.sku })),
+    cart.filter((item) => item.itemId).map((item) => ({ itemId: item.itemId, name: item.name, sku: item.sku })),
     3,
   );
 
@@ -325,7 +478,8 @@ export const PosScreen: React.FC = () => {
         customerId: selectedCustomerId || null,
         vehicleId: selectedVehicleId || null,
         items: cart.map((i) => ({
-          itemId: i.itemId,
+          itemId: i.itemId || null,
+          ...(i.itemId ? {} : { description: i.name, itemType: 'LABOR' }),
           quantity: i.quantity,
           unitPrice: i.unitPrice,
         })),
@@ -519,10 +673,21 @@ export const PosScreen: React.FC = () => {
               <ShoppingCart className="w-4 h-4 text-brand-600" />
               <span>سلة المبيعات ({cart.length})</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
               <button
+                type="button"
+                onClick={openFreeLineDialog}
+                title="إضافة بند غير مسجل إلى الفاتورة"
+                className="text-[11px] text-violet-700 hover:text-violet-800 font-bold flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                بند حر
+              </button>
+              <button
+                type="button"
                 onClick={handleHoldInvoice}
                 disabled={cart.length === 0 || holdingInvoice}
+                title="احفظ الفاتورة الحالية مؤقتاً لخدمة عميل آخر ثم استعدها لاحقاً"
                 className="text-[11px] text-amber-700 hover:text-amber-800 font-bold flex items-center gap-1 disabled:opacity-40"
               >
                 <Pause className="w-3.5 h-3.5" />
@@ -547,6 +712,10 @@ export const PosScreen: React.FC = () => {
             </div>
           </div>
 
+          <p className="text-[10px] text-slate-500">
+            علّق الفاتورة الحالية لبدء بيع جديد، ثم استعدها من قائمة الفواتير المعلقة.
+          </p>
+
           {heldInvoicesOpen && (
             <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2">
               {heldInvoices.length === 0 ? (
@@ -562,6 +731,9 @@ export const PosScreen: React.FC = () => {
                     <div className="min-w-0">
                       <div className="truncate text-[11px] font-bold text-slate-700">{customerName}</div>
                       <div className="text-[10px] text-slate-500">{Math.max(0, total).toFixed(2)} ج.م</div>
+                      <div className="text-[9px] text-slate-400">
+                        {invoice.items.length} بند · {new Date(invoice.createdAt).toLocaleString('ar-EG')}
+                      </div>
                     </div>
                     <button
                       onClick={() => handleResumeHeldInvoice(invoice)}
@@ -626,7 +798,7 @@ export const PosScreen: React.FC = () => {
           ) : (
             cart.map((it) => (
               <div
-                key={it.itemId}
+                key={it.cartId}
                 className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between gap-2"
               >
                 <div className="flex-1 min-w-0">
@@ -640,7 +812,7 @@ export const PosScreen: React.FC = () => {
                         step="0.01"
                         value={it.unitPrice}
                         aria-label={`سعر ${it.name}`}
-                        onChange={(event) => updateUnitPrice(it.itemId, Number(event.target.value))}
+                        onChange={(event) => updateUnitPrice(it.cartId, Number(event.target.value))}
                         className="w-20 rounded border border-slate-300 bg-white px-1 py-0.5 text-center text-[11px] font-bold text-slate-800"
                       />
                     </label>
@@ -652,14 +824,14 @@ export const PosScreen: React.FC = () => {
                 {/* Qty controls */}
                 <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-slate-200">
                   <button
-                    onClick={() => updateQuantity(it.itemId, it.quantity - 1)}
+                    onClick={() => updateQuantity(it.cartId, it.quantity - 1)}
                     className="w-5 h-5 rounded flex items-center justify-center text-slate-500 hover:bg-slate-100"
                   >
                     <Minus className="w-3 h-3" />
                   </button>
                   <span className="text-xs font-bold w-6 text-center font-mono">{it.quantity}</span>
                   <button
-                    onClick={() => updateQuantity(it.itemId, it.quantity + 1)}
+                    onClick={() => updateQuantity(it.cartId, it.quantity + 1)}
                     className="w-5 h-5 rounded flex items-center justify-center text-slate-500 hover:bg-slate-100"
                   >
                     <Plus className="w-3 h-3" />
@@ -667,7 +839,7 @@ export const PosScreen: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => removeFromCart(it.itemId)}
+                  onClick={() => removeFromCart(it.cartId)}
                   className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
                 >
                   <X className="w-4 h-4" />
@@ -864,6 +1036,153 @@ export const PosScreen: React.FC = () => {
               )}
             </button>
           </div>
+        </div>
+      )}
+
+      {freeLineModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <form onSubmit={handleAddFreeLine} className="max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-base font-black text-slate-900">إضافة بند حر للفاتورة</h2>
+                <p className="mt-1 text-xs text-slate-500">استخدمه لخدمة أو صنف غير مسجل في قائمة المخزون.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFreeLineModalOpen(false)}
+                aria-label="إغلاق نافذة البند الحر"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <label className="block space-y-1 text-xs font-bold text-slate-700">
+              <span>وصف البند</span>
+              <input
+                autoFocus
+                required
+                maxLength={200}
+                value={freeLineName}
+                onChange={(event) => setFreeLineName(event.target.value)}
+                placeholder="مثال: خدمة تركيب أو قطعة غير مسجلة"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+              />
+            </label>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1 text-xs font-bold text-slate-700">
+                <span>سعر الوحدة (ج.م)</span>
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={freeLineUnitPrice}
+                  onChange={(event) => setFreeLineUnitPrice(Number(event.target.value))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500"
+                />
+              </label>
+              <label className="space-y-1 text-xs font-bold text-slate-700">
+                <span>الكمية</span>
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={freeLineQuantity}
+                  onChange={(event) => setFreeLineQuantity(Number(event.target.value))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500"
+                />
+              </label>
+            </div>
+
+            <label className={`flex items-start gap-2 rounded-xl border p-3 text-xs ${canRegisterInventoryItem ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+              <input
+                type="checkbox"
+                checked={freeLineAddToInventory}
+                disabled={!canRegisterInventoryItem}
+                onChange={(event) => setFreeLineAddToInventory(event.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-emerald-700"
+              />
+              <span>
+                <strong className="block">تسجيله صنفًا جديدًا بالمخزون</strong>
+                {canRegisterInventoryItem
+                  ? 'ينشئ الصنف ورصيده الافتتاحي بالمخزن الرئيسي؛ ويخصم النظام كمية البيع عند إصدار الفاتورة.'
+                  : 'تتطلب هذه الخطوة صلاحية إدارة الأصناف والأسعار؛ ما زال بإمكانك إضافة البند للفاتورة فقط.'}
+              </span>
+            </label>
+
+            {freeLineAddToInventory && (
+              <div className="space-y-3 rounded-xl border border-emerald-100 bg-white p-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="space-y-1 text-xs font-bold text-slate-700">
+                    <span>التصنيف</span>
+                    <select
+                      required
+                      value={freeLineCategoryId}
+                      onChange={(event) => setFreeLineCategoryId(event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs"
+                    >
+                      <option value="">اختر التصنيف</option>
+                      {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-xs font-bold text-slate-700">
+                    <span>وحدة القياس</span>
+                    <select
+                      required
+                      value={freeLineUnitId}
+                      onChange={(event) => setFreeLineUnitId(event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs"
+                    >
+                      <option value="">اختر الوحدة</option>
+                      {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name} ({unit.symbol})</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="space-y-1 text-xs font-bold text-slate-700">
+                    <span>الرصيد الافتتاحي الفعلي</span>
+                    <input
+                      required
+                      type="number"
+                      min={freeLineQuantity}
+                      step="1"
+                      value={freeLineInitialStock}
+                      onChange={(event) => setFreeLineInitialStock(Number(event.target.value))}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs font-bold text-slate-700">
+                    <span>تكلفة الوحدة (ج.م)</span>
+                    <input
+                      required
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={freeLineCostPrice}
+                      onChange={(event) => setFreeLineCostPrice(Number(event.target.value))}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 border-t border-slate-100 pt-3">
+              <button type="button" onClick={() => setFreeLineModalOpen(false)} className="flex-1 rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200">
+                إلغاء
+              </button>
+              <button
+                type="submit"
+                disabled={savingFreeLine || (freeLineAddToInventory && !canRegisterInventoryItem)}
+                className="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {savingFreeLine ? 'جارٍ الإضافة...' : freeLineAddToInventory ? 'إنشاء الصنف وإضافته' : 'إضافة للفاتورة'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
