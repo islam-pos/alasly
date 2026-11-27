@@ -66,30 +66,32 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6 pb-12">
       {/* 1. Page Header & Quick Welcome */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-l from-slate-950 via-[#12335a] to-brand-800 p-6 shadow-xl shadow-slate-900/10">
+        <div className="pointer-events-none absolute -left-10 -top-16 h-48 w-48 rounded-full border border-white/10" />
+        <div className="pointer-events-none absolute -left-2 -top-8 h-32 w-32 rounded-full border border-white/10" />
         <div>
-          <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
+          <h1 className="relative flex items-center gap-2 text-xl font-black text-white">
             <span>لوحة التحكم الرئيسية والمؤشرات الحية</span>
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+            <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5 text-xs font-bold text-emerald-100">
               مباشر • Live
             </span>
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="relative mt-2 text-xs text-blue-100">
             نظرة شاملة ومترابطة على المبيعات، صيانة الورشة، حركة المخزون، والسيولة النقدية.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="relative flex flex-wrap items-center gap-2">
           <Link
             to="/workshop/job-cards?action=new"
-            className="flex items-center gap-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20 transition-all hover:scale-105"
+            className="flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs font-black text-brand-900 shadow-lg transition-all hover:-translate-y-0.5 hover:bg-blue-50"
           >
             <Wrench className="w-4 h-4" />
             <span>فتح أمر إصلاح جديد</span>
           </Link>
           <Link
             to="/pos"
-            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 transition-all hover:scale-105"
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-400 px-4 py-2.5 text-xs font-black text-emerald-950 shadow-lg transition-all hover:-translate-y-0.5 hover:bg-emerald-300"
           >
             <DollarSign className="w-4 h-4" />
             <span>كاشير بيع سريع POS</span>

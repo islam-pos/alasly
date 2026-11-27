@@ -18,6 +18,7 @@ import {
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { SearchableSelect } from '../../components/common/SearchableSelect';
+import { getWorkshopEmployeesForRole, toWorkshopEmployeeOption } from '../../utils/workshopEmployees';
 
 export const JobCardsList: React.FC = () => {
   const [jobCards, setJobCards] = useState<any[]>([]);
@@ -30,6 +31,7 @@ export const JobCardsList: React.FC = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
+  const [employeeLoadError, setEmployeeLoadError] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [manualCustomerOpen, setManualCustomerOpen] = useState(false);
@@ -71,17 +73,22 @@ export const JobCardsList: React.FC = () => {
   };
 
   const loadLookups = async () => {
-    try {
-      const [cusRes, vehRes, empRes] = await Promise.all([
-        api.getCustomers(),
-        api.getVehicles(),
-        api.getEmployees(),
-      ]);
-      setCustomers(cusRes.data);
-      setVehicles(vehRes.data);
-      setEmployees(empRes.data);
-    } catch (err) {
-      console.error(err);
+    const [cusRes, vehRes, empRes] = await Promise.allSettled([
+      api.getCustomers(),
+      api.getVehicles(),
+      api.getWorkshopEmployees(),
+    ]);
+    if (cusRes.status === 'fulfilled') setCustomers(cusRes.value.data || []);
+    else console.error('Could not load workshop customers:', cusRes.reason);
+    if (vehRes.status === 'fulfilled') setVehicles(vehRes.value.data || []);
+    else console.error('Could not load workshop vehicles:', vehRes.reason);
+    if (empRes.status === 'fulfilled') {
+      setEmployees(Array.isArray(empRes.value.data) ? empRes.value.data : []);
+      setEmployeeLoadError('');
+    } else {
+      console.error('Could not load workshop employees:', empRes.reason);
+      setEmployees([]);
+      setEmployeeLoadError('تعذر تحميل قائمة الموظفين. يمكنك فتح أمر الإصلاح دون إسناد، ثم مراجعة الاتصال أو صلاحية الموظفين.');
     }
   };
 
@@ -280,20 +287,10 @@ export const JobCardsList: React.FC = () => {
     label: `${vehicle.plateNumber} - ${vehicle.make} ${vehicle.model} (${vehicle.year})`,
     searchText: `${vehicle.plateNumber} ${vehicle.make} ${vehicle.model} ${vehicle.year} ${vehicle.vin || ''}`,
   }));
-  const technicianOptions = employees
-    .filter((employee) => employee.department === 'الورشة' || employee.job?.name?.includes('فني'))
-    .map((employee) => ({
-      value: employee.id,
-      label: `${employee.name}${employee.job?.name ? ` (${employee.job.name})` : ''}`,
-      searchText: `${employee.code || ''} ${employee.phone || ''} ${employee.department || ''} ${employee.job?.name || ''}`,
-    }));
-  const advisorOptions = employees
-    .filter((employee) => employee.department === 'الاستقبال' || employee.department === 'الإدارة الفنية')
-    .map((employee) => ({
-      value: employee.id,
-      label: employee.name,
-      searchText: `${employee.code || ''} ${employee.phone || ''} ${employee.department || ''} ${employee.job?.name || ''}`,
-    }));
+  const technicianRoster = getWorkshopEmployeesForRole(employees, 'technician');
+  const advisorRoster = getWorkshopEmployeesForRole(employees, 'serviceAdvisor');
+  const technicianOptions = technicianRoster.employees.map(toWorkshopEmployeeOption);
+  const advisorOptions = advisorRoster.employees.map(toWorkshopEmployeeOption);
   const fuelOptions = [
     { value: '0%', label: 'خزان فارغ (0%)' },
     { value: '25%', label: 'ربع (25%)' },
@@ -563,9 +560,10 @@ export const JobCardsList: React.FC = () => {
                     options={technicianOptions}
                     value={technicianId}
                     onChange={setTechnicianId}
-                    placeholder="ابحث واختر الفني أو عيّنه لاحقاً"
+                    placeholder={technicianOptions.length ? 'ابحث واختر الفني أو عيّنه لاحقاً' : 'لا يوجد موظفون نشطون للاختيار'}
                     allowClear
                   />
+                  {technicianRoster.usedFallback && <p className="mt-1 text-[10px] leading-4 text-amber-700">لم يُعثر على مسمى فني واضح؛ تظهر كل الأسماء النشطة كحل بديل. يُفضّل تحديث المسمى أو القسم في ملف الموظف.</p>}
                 </div>
 
                 {/* Service Advisor */}
@@ -575,11 +573,14 @@ export const JobCardsList: React.FC = () => {
                     options={advisorOptions}
                     value={serviceAdvisorId}
                     onChange={setServiceAdvisorId}
-                    placeholder="ابحث واختر مهندس الاستقبال"
+                    placeholder={advisorOptions.length ? 'ابحث واختر مهندس الاستقبال' : 'لا يوجد موظفون نشطون للاختيار'}
                     allowClear
                   />
+                  {advisorRoster.usedFallback && <p className="mt-1 text-[10px] leading-4 text-amber-700">لم يُعثر على مسمى استقبال واضح؛ تظهر كل الأسماء النشطة كحل بديل. يُفضّل تحديث المسمى أو القسم في ملف الموظف.</p>}
                 </div>
               </div>
+              {employeeLoadError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">{employeeLoadError}</p>}
+              {!employeeLoadError && technicianRoster.employees.length === 0 && advisorRoster.employees.length === 0 && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">لا توجد سجلات موظفين نشطة. يمكنك إسناد الفني ومهندس الاستقبال بعد إنشاء أمر الإصلاح.</p>}
 
               {/* Customer Complaint */}
               <div>

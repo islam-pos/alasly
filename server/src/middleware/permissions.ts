@@ -29,6 +29,7 @@ export const getRequiredPermissions = (path: string, method: string): string[] |
   if (path.startsWith('/hr/')) return ['manage_employees'];
   if (path.startsWith('/master/company')) return method === 'GET' ? null : ['manage_settings'];
   if (path.startsWith('/master/branches')) return method === 'GET' ? ['manage_settings', 'manage_employees'] : ['manage_settings'];
+  if (path.startsWith('/master/workshop-employees')) return ['manage_workshop'];
   if (path.startsWith('/master/categories') || path.startsWith('/master/units')) {
     return method === 'GET' ? ['manage_items', 'manage_inventory', 'view_reports'] : ['manage_items', 'manage_settings'];
   }

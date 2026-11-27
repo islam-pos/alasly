@@ -546,6 +546,30 @@ router.patch('/vehicles/:id/reminders/:reminderId', async (req, res) => {
 });
 
 // --- Employees & Jobs ---
+router.get('/workshop-employees', async (req: AuthenticatedRequest, res) => {
+  try {
+    const branchId = req.user?.branchId;
+    const employees = await prisma.employee.findMany({
+      where: {
+        active: true,
+        ...(branchId ? { OR: [{ branchId }, { branchId: null }] } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        department: true,
+        active: true,
+        job: { select: { name: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+    res.json(employees);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/employees', async (req, res) => {
   try {
     const employees = await prisma.employee.findMany({

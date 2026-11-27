@@ -23,6 +23,7 @@ import publicPurchaseRequestsRouter from './routes/publicPurchaseRequests';
 import publicRepairApprovalsRouter from './routes/publicRepairApprovals';
 import publicCustomerPortalRouter from './routes/publicCustomerPortal';
 import operationalRouter from './routes/operational';
+import assistantRouter from './routes/assistant';
 import backupsRouter from './routes/backups';
 import { authenticate } from './middleware/auth';
 import { authorizeApiPermission } from './middleware/permissions';
@@ -107,6 +108,7 @@ app.use('/api/profits', profitsRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/operational', operationalRouter);
+app.use('/api/assistant', assistantRouter);
 
 const clientDistPath = path.resolve(__dirname, '../../client/dist');
 const isStaticAssetRequest = (reqPath: string) => {

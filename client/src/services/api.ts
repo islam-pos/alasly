@@ -545,6 +545,18 @@ const apiClient = {
       body: JSON.stringify(data),
     }).then((res) => handleResponse<any>(res)),
 
+  getWorkshopEmployees: () =>
+    fetch(`${BASE_URL}/master/workshop-employees`, { headers: getHeaders() })
+      .then((res) => handleResponse<any>(res)),
+
+  assistantChat: (messages: { role: 'user' | 'assistant'; content: string }[]) =>
+    globalThis.fetch(`${BASE_URL}/assistant/chat`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ messages }),
+      cache: 'no-store',
+    }).then((res) => handleResponse<any>(res)),
+
   updateJobCardStatus: (id: string, status: string, notes?: string) =>
     fetch(`${BASE_URL}/workshop/job-cards/${id}/status`, {
       method: 'PATCH',

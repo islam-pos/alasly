@@ -18,10 +18,12 @@ import {
   X,
   Pause,
   RotateCcw,
+  Sparkles,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { printSalesInvoice } from '../../utils/invoicePrint';
+import { getSmartUpsellSuggestions } from '../../utils/smartUpsell';
 
 const matchesVehicleFitment = (fitment: string | null | undefined, vehicle: any) => {
   if (!fitment || !vehicle) return false;
@@ -298,6 +300,11 @@ export const PosScreen: React.FC = () => {
   const subtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const taxable = Math.max(0, subtotal - discount);
   const grandTotal = taxable;
+  const smartUpsells = getSmartUpsellSuggestions(
+    items,
+    cart.map((item) => ({ itemId: item.itemId, name: item.name, sku: item.sku })),
+    3,
+  );
 
   // Open payment modal
   const openPaymentModal = () => {
@@ -667,6 +674,34 @@ export const PosScreen: React.FC = () => {
                 </button>
               </div>
             ))
+          )}
+          {smartUpsells.length > 0 && (
+            <section aria-label="اقتراحات البيع الذكي" className="mt-3 rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white p-3">
+              <div className="mb-2 flex items-center gap-2 text-xs font-black text-violet-900">
+                <Sparkles className="h-4 w-4 text-violet-600" />
+                اقتراحات بيع من الأصناف المتاحة
+              </div>
+              <div className="space-y-2">
+                {smartUpsells.map(({ item, reason }) => (
+                  <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl border border-violet-100 bg-white px-2.5 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] font-bold text-slate-800">{item.nameAr}</p>
+                      <p className="truncate text-[9px] text-slate-500">{reason}</p>
+                      <p className="mt-0.5 text-[10px] font-black text-brand-700">{item.sellPrice.toLocaleString()} ج.م · متاح {item.availableQuantity}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => addToCart(item)}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-800 transition hover:bg-violet-200"
+                      aria-label={`إضافة ${item.nameAr} إلى السلة`}
+                      title="إضافة إلى السلة"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
         </div>
 

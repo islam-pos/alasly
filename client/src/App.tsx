@@ -31,6 +31,7 @@ import { EscapeNavigation } from './components/layout/EscapeNavigation';
 import { OfflineStatusBanner } from './components/layout/OfflineStatusBanner';
 import { OperationalHub } from './pages/OperationalHub';
 import { CustomerPortal } from './pages/CustomerPortal';
+import { AiAssistantWidget } from './components/layout/AiAssistantWidget';
 
 const LoadingScreen: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50" role="status">
@@ -54,7 +55,7 @@ const ProtectedLayout: React.FC = () => {
   if (user.mustChangePassword) return <Navigate to="/change-password" replace />;
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50">
+    <div dir="rtl" className="min-h-screen bg-[#f4f7fc]">
       <Navbar />
       <OfflineStatusBanner />
       <SmartSearchSuggestions />
@@ -64,6 +65,7 @@ const ProtectedLayout: React.FC = () => {
           <Outlet />
         </main>
       </div>
+      <AiAssistantWidget />
     </div>
   );
 };

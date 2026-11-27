@@ -403,6 +403,20 @@ router.post('/job-cards', async (req, res) => {
       return res.status(400).json({ error: 'السيارة غير مسجلة على العميل المحدد' });
     }
 
+    for (const assignment of [
+      { id: technicianId, label: 'الفني المكلف' },
+      { id: serviceAdvisorId, label: 'مهندس الاستقبال' },
+    ]) {
+      if (!assignment.id) continue;
+      const employee = await prisma.employee.findUnique({
+        where: { id: assignment.id },
+        select: { id: true, active: true },
+      });
+      if (!employee || !employee.active) {
+        return res.status(400).json({ error: `${assignment.label} غير موجود أو غير نشط؛ اختر موظفًا نشطًا أو اترك الحقل فارغًا.` });
+      }
+    }
+
     const odometer = parseOdometerReading(currentOdometer) ?? vehicle.currentOdometer;
     if (odometer < vehicle.currentOdometer) {
       return res.status(400).json({ error: 'قراءة العداد لا يمكن أن تقل عن آخر قراءة مسجلة' });
